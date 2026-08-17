@@ -18,6 +18,7 @@ router
 router
   .route("/:id")
   .get(validate(getDealerSchema), dealerController.getDealer)
-  .patch(validate(updateDealerSchema), dealerController.updateDealer);
+  .patch(validate(updateDealerSchema), dealerController.updateDealer)
+  .delete(validate(getDealerSchema), dealerController.deleteDealer);
 
 export default router;

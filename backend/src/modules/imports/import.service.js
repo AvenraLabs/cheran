@@ -5,6 +5,7 @@ import GovernmentImportRow from "./import-row.model.js";
 import Dealer from "../dealers/dealer.model.js";
 import GovernmentProject from "../projects/project.model.js";
 import { createDealer } from "../dealers/dealer.service.js";
+import { normalizeDealerName } from "../../utils/normalization.js";
 import AppError from "../../shared/appError.js";
 
 export async function listImports({ page = 1, limit = 20, status } = {}) {
@@ -57,7 +58,7 @@ export async function getImportRows(importId, { page = 1, limit = 50, action, re
   }
 
   const where = { import_id: importId };
-  if (action) where.action = action;
+  if (action && action !== "ALL") where.action = action;
   if (resolution_status) where.resolution_status = resolution_status;
 
   const offset = (page - 1) * limit;
@@ -87,6 +88,39 @@ export async function getImportRows(importId, { page = 1, limit = 50, action, re
   };
 }
 
+export async function getUnresolvedDealersSummary(importId) {
+  const importRecord = await GovernmentImport.findByPk(importId);
+  if (!importRecord) {
+    throw new AppError(`Import with ID ${importId} not found`, 404);
+  }
+
+  const summary = await GovernmentImportRow.findAll({
+    where: {
+      import_id: importId,
+      action: "DEALER_RESOLUTION_REQUIRED",
+      resolution_status: "PENDING",
+    },
+    attributes: [
+      "dealer_name",
+      [db.fn("COUNT", db.col("id")), "count"],
+      [db.fn("MIN", db.col("row_number")), "first_row_number"],
+    ],
+    group: ["dealer_name"],
+    order: [[db.literal("count"), "DESC"]],
+    raw: true,
+  });
+
+  return {
+    importId,
+    totalUnresolvedDealers: summary.length,
+    unresolvedDealers: summary.map((s) => ({
+      dealer_name: s.dealer_name || "Unknown",
+      count: parseInt(s.count, 10),
+      first_row_number: s.first_row_number,
+    })),
+  };
+}
+
 export async function resolveImportDealer(importId, { row_id, dealer_name, resolution_type, dealer_id, new_dealer }) {
   const importRecord = await GovernmentImport.findByPk(importId);
   if (!importRecord) {
@@ -95,6 +129,15 @@ export async function resolveImportDealer(importId, { row_id, dealer_name, resol
 
   if (importRecord.status !== "PREVIEW") {
     throw new AppError(`Cannot resolve dealers for an import in '${importRecord.status}' state`, 400);
+  }
+
+  // Determine target dealer_name
+  let targetDealerName = dealer_name;
+  if (!targetDealerName && row_id) {
+    const row = await GovernmentImportRow.findByPk(row_id);
+    if (row && row.dealer_name) {
+      targetDealerName = row.dealer_name;
+    }
   }
 
   let resolvedDealerId = null;
@@ -109,35 +152,41 @@ export async function resolveImportDealer(importId, { row_id, dealer_name, resol
     }
     resolvedDealerId = dealer.id;
   } else if (resolution_type === "CREATE_NEW") {
-    if (!new_dealer || !new_dealer.name) {
-      throw new AppError("new_dealer with name is required when creating a new dealer", 400);
+    const dealerNameToCreate = new_dealer?.name || targetDealerName;
+    if (!dealerNameToCreate) {
+      throw new AppError("Dealer name is required when creating a new dealer", 400);
     }
     const created = await createDealer({
-      name: new_dealer.name,
-      commission_percentage: new_dealer.commission_percentage,
-      commission_basis: new_dealer.commission_basis,
+      name: dealerNameToCreate,
+      commission_percentage: new_dealer?.commission_percentage,
+      commission_basis: new_dealer?.commission_basis,
     });
     resolvedDealerId = created.id;
   } else {
     throw new AppError("resolution_type must be either SELECT_EXISTING or CREATE_NEW", 400);
   }
 
-  // Find target rows to update
-  const where = { import_id: importId };
-  if (row_id) {
-    where.id = row_id;
-  } else if (dealer_name) {
-    where.dealer_name = dealer_name;
-  } else {
-    throw new AppError("Either row_id or dealer_name must be specified to resolve dealer", 400);
+  // Find all matching rows in this import (by row_id or matching dealer_name case-insensitively)
+  let rowsToResolve = [];
+  if (targetDealerName) {
+    rowsToResolve = await GovernmentImportRow.findAll({
+      where: {
+        import_id: importId,
+        dealer_name: {
+          [Op.iLike]: targetDealerName.trim(),
+        },
+      },
+    });
+  } else if (row_id) {
+    const row = await GovernmentImportRow.findByPk(row_id);
+    if (row) rowsToResolve = [row];
   }
 
-  const rowsToResolve = await GovernmentImportRow.findAll({ where });
   if (rowsToResolve.length === 0) {
     throw new AppError("No matching staged rows found for resolution", 404);
   }
 
-  // Update rows
+  // Bulk update matching rows to resolve ALL of them at once
   for (const row of rowsToResolve) {
     let newAction = "NEW_PROJECT";
     if (row.matched_project_id) {
@@ -172,7 +221,96 @@ export async function resolveImportDealer(importId, { row_id, dealer_name, resol
 
   return {
     resolvedRowsCount: rowsToResolve.length,
+    resolvedDealerName: targetDealerName,
     resolvedDealerId,
     remainingPendingResolutions: remainingCount,
+  };
+}
+
+export async function autoCreateAllUnresolvedDealers(importId) {
+  const importRecord = await GovernmentImport.findByPk(importId);
+  if (!importRecord) {
+    throw new AppError(`Import with ID ${importId} not found`, 404);
+  }
+
+  if (importRecord.status !== "PREVIEW") {
+    throw new AppError(`Cannot resolve dealers for an import in '${importRecord.status}' state`, 400);
+  }
+
+  // Find all pending rows
+  const pendingRows = await GovernmentImportRow.findAll({
+    where: {
+      import_id: importId,
+      action: "DEALER_RESOLUTION_REQUIRED",
+      resolution_status: "PENDING",
+    },
+  });
+
+  if (pendingRows.length === 0) {
+    return {
+      message: "No pending dealer resolutions found",
+      createdDealersCount: 0,
+      resolvedRowsCount: 0,
+    };
+  }
+
+  // Group by dealer_name
+  const dealerGroups = new Map();
+  pendingRows.forEach((row) => {
+    const rawName = row.dealer_name ? row.dealer_name.trim() : "Default Dealer";
+    const norm = normalizeDealerName(rawName);
+    if (!dealerGroups.has(norm)) {
+      dealerGroups.set(norm, { name: rawName, rows: [] });
+    }
+    dealerGroups.get(norm).rows.push(row);
+  });
+
+  let createdDealersCount = 0;
+  let totalResolvedRows = 0;
+
+  for (const [norm, group] of dealerGroups.entries()) {
+    // Check or create dealer
+    let dealer = await Dealer.findOne({ where: { normalized_name: norm } });
+    if (!dealer) {
+      dealer = await Dealer.create({
+        name: group.name,
+        normalized_name: norm,
+        is_active: true,
+      });
+      createdDealersCount++;
+    }
+
+    // Resolve all rows in this group
+    for (const row of group.rows) {
+      let newAction = "NEW_PROJECT";
+      if (row.matched_project_id) {
+        const proj = await GovernmentProject.findByPk(row.matched_project_id);
+        if (proj && proj.current_status !== row.imported_status) {
+          newAction = "STATUS_CHANGE";
+        } else {
+          newAction = "UNCHANGED";
+        }
+      }
+
+      await row.update({
+        matched_dealer_id: dealer.id,
+        resolution_status: "RESOLVED",
+        action: newAction,
+        error_message: null,
+      });
+      totalResolvedRows++;
+    }
+  }
+
+  // Update import record
+  await importRecord.update({
+    dealer_resolutions_count: 0,
+  });
+
+  return {
+    message: `Successfully resolved ${totalResolvedRows} rows across ${dealerGroups.size} unique dealers`,
+    createdDealersCount,
+    resolvedRowsCount: totalResolvedRows,
+    remainingPendingResolutions: 0,
   };
 }

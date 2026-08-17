@@ -88,7 +88,7 @@ export async function updateDealer(id, { name, commission_percentage, commission
   }
 
   const updates = {};
-  if (name !== undefined) {
+  if (name !== undefined && name !== null) {
     updates.name = name.trim();
     updates.normalized_name = normalizeDealerName(name);
   }
@@ -98,4 +98,31 @@ export async function updateDealer(id, { name, commission_percentage, commission
 
   await dealer.update(updates);
   return dealer;
+}
+
+export async function deleteDealer(id) {
+  const dealer = await Dealer.findByPk(id);
+  if (!dealer) {
+    throw new AppError(`Dealer not found with ID ${id}`, 404);
+  }
+
+  const linkedProjectsCount = await GovernmentProject.count({
+    where: { dealer_id: id },
+  });
+
+  // Disassociate linked projects safely
+  if (linkedProjectsCount > 0) {
+    await GovernmentProject.update(
+      { dealer_id: null },
+      { where: { dealer_id: id } }
+    );
+  }
+
+  await dealer.destroy();
+
+  return {
+    id,
+    deleted: true,
+    disassociatedProjectsCount: linkedProjectsCount,
+  };
 }

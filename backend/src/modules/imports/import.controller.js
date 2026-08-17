@@ -46,11 +46,28 @@ export const getImportRows = asyncHandler(async (req, res) => {
   });
 });
 
+export const getUnresolvedDealers = asyncHandler(async (req, res) => {
+  const result = await importService.getUnresolvedDealersSummary(req.params.id);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
 export const resolveDealer = asyncHandler(async (req, res) => {
   const result = await importService.resolveImportDealer(req.params.id, req.body);
   res.status(200).json({
     status: "success",
     message: "Dealer mapping resolved successfully",
+    data: result,
+  });
+});
+
+export const autoCreateDealers = asyncHandler(async (req, res) => {
+  const result = await importService.autoCreateAllUnresolvedDealers(req.params.id);
+  res.status(200).json({
+    status: "success",
+    message: result.message,
     data: result,
   });
 });

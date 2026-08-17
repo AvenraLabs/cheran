@@ -23,8 +23,14 @@ router.get("/:id", validate(getImportSchema), importController.getImport);
 // Get staged rows
 router.get("/:id/rows", validate(getImportRowsSchema), importController.getImportRows);
 
-// Resolve dealer
+// Get unresolved dealers summary (grouped unique names & counts)
+router.get("/:id/unresolved-dealers", validate(getImportSchema), importController.getUnresolvedDealers);
+
+// Resolve dealer (resolves all matching rows for that dealer name)
 router.post("/:id/resolve-dealer", validate(resolveDealerSchema), importController.resolveDealer);
+
+// Auto create and resolve all remaining unmatched dealers in one click
+router.post("/:id/auto-create-dealers", validate(getImportSchema), importController.autoCreateDealers);
 
 // Commit import to production
 router.post("/:id/commit", validate(commitImportSchema), importController.commit);

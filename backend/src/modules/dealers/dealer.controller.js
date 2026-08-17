@@ -34,3 +34,12 @@ export const updateDealer = asyncHandler(async (req, res) => {
     data: { dealer },
   });
 });
+
+export const deleteDealer = asyncHandler(async (req, res) => {
+  const result = await dealerService.deleteDealer(req.params.id);
+  res.status(200).json({
+    status: "success",
+    message: "Dealer deleted successfully",
+    data: result,
+  });
+});

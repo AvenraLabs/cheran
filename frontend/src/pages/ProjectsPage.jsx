@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Filter, ChevronLeft, ChevronRight, Eye, RefreshCw } from "lucide-react";
+import { Search, Filter, Eye, RefreshCw } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import StatusBadge from "../components/common/StatusBadge.jsx";
 import Button from "../components/common/Button.jsx";
+import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 
 export function ProjectsPage() {
@@ -21,12 +22,12 @@ export function ProjectsPage() {
   const [district, setDistrict] = useState("");
   const [block, setBlock] = useState("");
 
-  const fetchProjects = async (page = 1) => {
+  const fetchProjects = async (page = 1, limit = pagination.limit) => {
     try {
       setLoading(true);
       const params = {
         page,
-        limit: 20,
+        limit,
         ...(search ? { search } : {}),
         ...(selectedStatus ? { status: selectedStatus } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
@@ -36,7 +37,7 @@ export function ProjectsPage() {
 
       const res = await api.get("/government/projects", { params });
       setProjects(res.data?.projects || []);
-      setPagination(res.data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 });
+      setPagination(res.data?.pagination || { page, limit, total: 0, totalPages: 1 });
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     } finally {
@@ -45,12 +46,11 @@ export function ProjectsPage() {
   };
 
   useEffect(() => {
-    // Initial fetch of statuses & dealers
     async function fetchMetadata() {
       try {
         const [statRes, dealRes] = await Promise.all([
           api.get("/government/statuses"),
-          api.get("/dealers?limit=100"),
+          api.get("/dealers?limit=250"),
         ]);
         setStatuses(statRes.data?.statuses || []);
         setDealers(dealRes.data?.dealers || []);
@@ -59,12 +59,12 @@ export function ProjectsPage() {
       }
     }
     fetchMetadata();
-    fetchProjects(1);
+    fetchProjects(1, 20);
   }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchProjects(1);
+    fetchProjects(1, pagination.limit);
   };
 
   const handleResetFilters = () => {
@@ -73,7 +73,7 @@ export function ProjectsPage() {
     setSelectedDealer("");
     setDistrict("");
     setBlock("");
-    fetchProjects(1);
+    fetchProjects(1, pagination.limit);
   };
 
   return (
@@ -82,7 +82,7 @@ export function ProjectsPage() {
         title="Government Projects"
         subtitle={`Tracking ${pagination.total.toLocaleString()} government horticulture applications`}
         actions={
-          <Button variant="secondary" icon={RefreshCw} onClick={() => fetchProjects(pagination.page)}>
+          <Button variant="secondary" icon={RefreshCw} onClick={() => fetchProjects(pagination.page, pagination.limit)}>
             Refresh
           </Button>
         }
@@ -233,34 +233,16 @@ export function ProjectsPage() {
                 </table>
               </div>
 
-              {/* Pagination Bar */}
-              <div className="px-6 py-3 border-t border-[#EDEAE1] bg-[#FAFAF8] flex items-center justify-between">
-                <div className="text-xs text-[#52607D]">
-                  Showing Page <span className="font-semibold text-[#14213D]">{pagination.page}</span> of{" "}
-                  <span className="font-semibold text-[#14213D]">{pagination.totalPages || 1}</span> (
-                  {pagination.total} total projects)
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={pagination.page <= 1}
-                    onClick={() => fetchProjects(pagination.page - 1)}
-                    icon={ChevronLeft}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={pagination.page >= pagination.totalPages}
-                    onClick={() => fetchProjects(pagination.page + 1)}
-                  >
-                    Next <ChevronRight size={14} className="ml-1" />
-                  </Button>
-                </div>
-              </div>
+              {/* Reusable Pagination Component */}
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.total}
+                limit={pagination.limit}
+                limitOptions={[20, 50, 100, 250]}
+                onPageChange={(newPage) => fetchProjects(newPage, pagination.limit)}
+                onLimitChange={(newLimit) => fetchProjects(1, newLimit)}
+              />
             </>
           )}
         </div>

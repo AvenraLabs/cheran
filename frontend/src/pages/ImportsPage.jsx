@@ -8,7 +8,8 @@ import {
   Play,
   RotateCcw,
   Clock,
-  Eye,
+  Sparkles,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
@@ -16,23 +17,47 @@ import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import StatusBadge from "../components/common/StatusBadge.jsx";
-import { SkeletonLoader } from "../components/common/SkeletonLoader.jsx";
+import Pagination from "../components/common/Pagination.jsx";
+import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 
 export function ImportsPage() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+
+  // Staged Rows & Server Pagination
   const [stagedRows, setStagedRows] = useState([]);
+  const [loadingRows, setLoadingRows] = useState(false);
   const [rowActionFilter, setRowActionFilter] = useState("ALL");
+  const [stagedPagination, setStagedPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 1,
+  });
+
+  // Unresolved Dealers Summary
+  const [unresolvedDealers, setUnresolvedDealers] = useState([]);
+  const [loadingUnresolved, setLoadingUnresolved] = useState(false);
+  const [autoCreatingAll, setAutoCreatingAll] = useState(false);
+
+  // Commit State
   const [committing, setCommitting] = useState(false);
 
-  // Past Imports History
+  // Past Imports History & Pagination
   const [pastImports, setPastImports] = useState([]);
+  const [historyPagination, setHistoryPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+  });
   const [loadingHistory, setLoadingHistory] = useState(true);
 
-  // Dealer Resolution State
+  // Dealer Resolution Modal State
   const [resolutionModalOpen, setResolutionModalOpen] = useState(false);
-  const [selectedRowForResolution, setSelectedRowForResolution] = useState(null);
+  const [targetDealerNameToResolve, setTargetDealerNameToResolve] = useState("");
+  const [targetDealerRowCount, setTargetDealerRowCount] = useState(0);
   const [dealersList, setDealersList] = useState([]);
   const [resolutionMode, setResolutionMode] = useState("SELECT_EXISTING"); // or CREATE_NEW
   const [selectedExistingDealerId, setSelectedExistingDealerId] = useState("");
@@ -40,11 +65,14 @@ export function ImportsPage() {
   const [newDealerCommission, setNewDealerCommission] = useState("");
   const [resolving, setResolving] = useState(false);
 
-  const fetchPastImports = async () => {
+  const fetchPastImports = async (page = 1, limit = 10) => {
     try {
       setLoadingHistory(true);
-      const res = await api.get("/government/imports?limit=10");
+      const res = await api.get("/government/imports", { params: { page, limit } });
       setPastImports(res.data?.imports || []);
+      setHistoryPagination(
+        res.data?.pagination || { page: 1, limit, total: 0, totalPages: 1 }
+      );
     } catch (err) {
       console.error("Error fetching past imports:", err);
     } finally {
@@ -54,15 +82,47 @@ export function ImportsPage() {
 
   const fetchDealers = async () => {
     try {
-      const res = await api.get("/dealers?limit=100");
+      const res = await api.get("/dealers?limit=250");
       setDealersList(res.data?.dealers || []);
     } catch (err) {
       console.error("Failed to load dealers:", err);
     }
   };
 
+  const fetchStagedRows = async (importId, page = 1, limit = 50, action = "ALL") => {
+    if (!importId) return;
+    try {
+      setLoadingRows(true);
+      const params = { page, limit };
+      if (action && action !== "ALL") params.action = action;
+
+      const res = await api.get(`/government/imports/${importId}/rows`, { params });
+      setStagedRows(res.data?.rows || []);
+      setStagedPagination(
+        res.data?.pagination || { page: 1, limit, total: 0, totalPages: 1 }
+      );
+    } catch (err) {
+      console.error("Error fetching staged rows:", err);
+    } finally {
+      setLoadingRows(false);
+    }
+  };
+
+  const fetchUnresolvedDealersSummary = async (importId) => {
+    if (!importId) return;
+    try {
+      setLoadingUnresolved(true);
+      const res = await api.get(`/government/imports/${importId}/unresolved-dealers`);
+      setUnresolvedDealers(res.data?.unresolvedDealers || []);
+    } catch (err) {
+      console.error("Failed to load unresolved dealers summary:", err);
+    } finally {
+      setLoadingUnresolved(false);
+    }
+  };
+
   useEffect(() => {
-    fetchPastImports();
+    fetchPastImports(1, 10);
     fetchDealers();
   }, []);
 
@@ -92,10 +152,9 @@ export function ImportsPage() {
       setPreviewData(res.data);
       toast.success("Excel parsed and preview staged successfully!");
 
-      // Fetch all staged rows for this import
-      const rowsRes = await api.get(`/government/imports/${res.data.importId}/rows?limit=100`);
-      setStagedRows(rowsRes.data?.rows || []);
-      fetchPastImports();
+      fetchStagedRows(res.data.importId, 1, stagedPagination.limit, "ALL");
+      fetchUnresolvedDealersSummary(res.data.importId);
+      fetchPastImports(1, historyPagination.limit);
     } catch (err) {
       toast.error(err.message || "Failed to parse and preview Excel file");
     } finally {
@@ -103,22 +162,24 @@ export function ImportsPage() {
     }
   };
 
-  const openDealerResolution = (row) => {
-    setSelectedRowForResolution(row);
-    setNewDealerName(row.dealer_name || "");
+  const openDealerResolutionForName = (dealerName, count = 1) => {
+    setTargetDealerNameToResolve(dealerName || "");
+    setTargetDealerRowCount(count);
+    setNewDealerName(dealerName || "");
     setSelectedExistingDealerId("");
+    setNewDealerCommission("");
     setResolutionMode("SELECT_EXISTING");
     setResolutionModalOpen(true);
   };
 
   const handleResolveDealerSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedRowForResolution || !previewData?.importId) return;
+    if (!targetDealerNameToResolve || !previewData?.importId) return;
 
     try {
       setResolving(true);
       const payload = {
-        dealer_name: selectedRowForResolution.dealer_name,
+        dealer_name: targetDealerNameToResolve,
         resolution_type: resolutionMode,
         ...(resolutionMode === "SELECT_EXISTING"
           ? { dealer_id: selectedExistingDealerId }
@@ -130,32 +191,62 @@ export function ImportsPage() {
             }),
       };
 
-      await api.post(`/government/imports/${previewData.importId}/resolve-dealer`, payload);
+      const res = await api.post(
+        `/government/imports/${previewData.importId}/resolve-dealer`,
+        payload
+      );
 
-      toast.success("Dealer resolved successfully!");
+      toast.success(
+        `Resolved all ${res.data?.resolvedRowsCount} rows matching dealer '${targetDealerNameToResolve}'!`
+      );
       setResolutionModalOpen(false);
 
-      // Refresh staged rows & summary
-      const rowsRes = await api.get(`/government/imports/${previewData.importId}/rows?limit=100`);
-      setStagedRows(rowsRes.data?.rows || []);
+      // Refresh data
+      fetchStagedRows(previewData.importId, stagedPagination.page, stagedPagination.limit, rowActionFilter);
+      fetchUnresolvedDealersSummary(previewData.importId);
 
-      // Refresh import summary
-      const importRes = await api.get(`/government/imports/${previewData.importId}`);
-      if (importRes.data?.import) {
-        setPreviewData((prev) => ({
-          ...prev,
-          summary: {
-            ...prev.summary,
-            dealerResolutionsRequired: importRes.data.import.dealer_resolutions_count,
-          },
-        }));
-      }
+      // Update remaining counter in preview summary
+      setPreviewData((prev) => ({
+        ...prev,
+        summary: {
+          ...prev.summary,
+          dealerResolutionsRequired: res.data?.remainingPendingResolutions ?? 0,
+        },
+      }));
 
       fetchDealers();
     } catch (err) {
       toast.error(err.message || "Failed to resolve dealer");
     } finally {
       setResolving(false);
+    }
+  };
+
+  const handleAutoCreateAllDealers = async () => {
+    if (!previewData?.importId) return;
+
+    try {
+      setAutoCreatingAll(true);
+      const res = await api.post(`/government/imports/${previewData.importId}/auto-create-dealers`);
+      toast.success(res.data?.message || "All unmatched dealers created and resolved!");
+
+      // Refresh data
+      fetchStagedRows(previewData.importId, 1, stagedPagination.limit, rowActionFilter);
+      fetchUnresolvedDealersSummary(previewData.importId);
+
+      setPreviewData((prev) => ({
+        ...prev,
+        summary: {
+          ...prev.summary,
+          dealerResolutionsRequired: 0,
+        },
+      }));
+
+      fetchDealers();
+    } catch (err) {
+      toast.error(err.message || "Failed to auto-create dealers");
+    } finally {
+      setAutoCreatingAll(false);
     }
   };
 
@@ -176,7 +267,8 @@ export function ImportsPage() {
       setPreviewData(null);
       setFile(null);
       setStagedRows([]);
-      fetchPastImports();
+      setUnresolvedDealers([]);
+      fetchPastImports(1, historyPagination.limit);
     } catch (err) {
       toast.error(err.message || "Failed to commit import to production database");
     } finally {
@@ -184,16 +276,18 @@ export function ImportsPage() {
     }
   };
 
-  const filteredRows = stagedRows.filter((r) => {
-    if (rowActionFilter === "ALL") return true;
-    return r.action === rowActionFilter;
-  });
+  const handleFilterChange = (newAction) => {
+    setRowActionFilter(newAction);
+    if (previewData?.importId) {
+      fetchStagedRows(previewData.importId, 1, stagedPagination.limit, newAction);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Government Excel Imports"
-        subtitle="Safe, two-step idempotent Excel import with staged dealer verification"
+        subtitle="Safe, two-step idempotent Excel import with high-performance pagination and bulk dealer resolution"
       />
 
       <main className="p-8 space-y-8 flex-1 overflow-y-auto">
@@ -224,251 +318,364 @@ export function ImportsPage() {
 
         {/* Live Staged Preview Section */}
         {previewData && (
-          <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-4">
-              <div>
-                <h3 className="text-base font-bold font-display text-[#14213D]">
-                  Staged Import Preview ({previewData.fileName})
-                </h3>
-                <p className="text-xs text-[#52607D]">
-                  SHA-256: <code className="font-mono text-[10px]">{previewData.fileHash.slice(0, 16)}...</code>
-                </p>
+          <div className="space-y-6">
+            {/* Summary Card */}
+            <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-4">
+                <div>
+                  <h3 className="text-base font-bold font-display text-[#14213D]">
+                    Staged Import Preview ({previewData.fileName})
+                  </h3>
+                  <p className="text-xs text-[#52607D]">
+                    SHA-256: <code className="font-mono text-[10px]">{previewData.fileHash.slice(0, 16)}...</code>
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setPreviewData(null);
+                      setStagedRows([]);
+                      setUnresolvedDealers([]);
+                    }}
+                    icon={RotateCcw}
+                  >
+                    Discard
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    loading={committing}
+                    disabled={previewData.summary?.dealerResolutionsRequired > 0}
+                    onClick={handleCommitImport}
+                    icon={Play}
+                  >
+                    Commit Import to Production
+                  </Button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setPreviewData(null);
-                    setStagedRows([]);
-                  }}
-                  icon={RotateCcw}
-                >
-                  Discard
-                </Button>
-
-                <Button
-                  size="sm"
-                  loading={committing}
-                  disabled={previewData.summary?.dealerResolutionsRequired > 0}
-                  onClick={handleCommitImport}
-                  icon={Play}
-                >
-                  Commit Import to Production
-                </Button>
+              {/* Preview Metric Badges */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
+                <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
+                  <span className="text-[10px] uppercase font-bold text-[#52607D]">Total Rows</span>
+                  <div className="text-lg font-bold font-display text-[#14213D]">
+                    {previewData.summary.totalRows.toLocaleString()}
+                  </div>
+                </div>
+                <div className="p-3 bg-[#EAF3F0] border border-[#D3E6E0] rounded-[8px]">
+                  <span className="text-[10px] uppercase font-bold text-[#2F6F5E]">New Projects</span>
+                  <div className="text-lg font-bold font-display text-[#2F6F5E]">
+                    {previewData.summary.newProjects.toLocaleString()}
+                  </div>
+                </div>
+                <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
+                  <span className="text-[10px] uppercase font-bold text-[#14213D]">Existing</span>
+                  <div className="text-lg font-bold font-display text-[#14213D]">
+                    {previewData.summary.existingProjects.toLocaleString()}
+                  </div>
+                </div>
+                <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
+                  <span className="text-[10px] uppercase font-bold text-[#B8860B]">Status Changes</span>
+                  <div className="text-lg font-bold font-display text-[#B8860B]">
+                    {previewData.summary.statusChanges.toLocaleString()}
+                  </div>
+                </div>
+                <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
+                  <span className="text-[10px] uppercase font-bold text-[#52607D]">Unchanged</span>
+                  <div className="text-lg font-bold font-display text-[#52607D]">
+                    {previewData.summary.unchanged.toLocaleString()}
+                  </div>
+                </div>
+                <div className="p-3 bg-[#FDF2F1] border border-[#F8D7D5] rounded-[8px]">
+                  <span className="text-[10px] uppercase font-bold text-[#B0403A]">Duplicates</span>
+                  <div className="text-lg font-bold font-display text-[#B0403A]">
+                    {previewData.summary.duplicateRows.toLocaleString()}
+                  </div>
+                </div>
+                <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
+                  <span className="text-[10px] uppercase font-bold text-[#B8860B]">Dealer Needs Action</span>
+                  <div className="text-lg font-bold font-display text-[#B8860B]">
+                    {previewData.summary.dealerResolutionsRequired.toLocaleString()}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Preview Metric Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
-              <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
-                <span className="text-[10px] uppercase font-bold text-[#52607D]">Total Rows</span>
-                <div className="text-lg font-bold font-display text-[#14213D]">
-                  {previewData.summary.totalRows}
-                </div>
-              </div>
-              <div className="p-3 bg-[#EAF3F0] border border-[#D3E6E0] rounded-[8px]">
-                <span className="text-[10px] uppercase font-bold text-[#2F6F5E]">New Projects</span>
-                <div className="text-lg font-bold font-display text-[#2F6F5E]">
-                  {previewData.summary.newProjects}
-                </div>
-              </div>
-              <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
-                <span className="text-[10px] uppercase font-bold text-[#14213D]">Existing</span>
-                <div className="text-lg font-bold font-display text-[#14213D]">
-                  {previewData.summary.existingProjects}
-                </div>
-              </div>
-              <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
-                <span className="text-[10px] uppercase font-bold text-[#B8860B]">Status Changes</span>
-                <div className="text-lg font-bold font-display text-[#B8860B]">
-                  {previewData.summary.statusChanges}
-                </div>
-              </div>
-              <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
-                <span className="text-[10px] uppercase font-bold text-[#52607D]">Unchanged</span>
-                <div className="text-lg font-bold font-display text-[#52607D]">
-                  {previewData.summary.unchanged}
-                </div>
-              </div>
-              <div className="p-3 bg-[#FDF2F1] border border-[#F8D7D5] rounded-[8px]">
-                <span className="text-[10px] uppercase font-bold text-[#B0403A]">Duplicates</span>
-                <div className="text-lg font-bold font-display text-[#B0403A]">
-                  {previewData.summary.duplicateRows}
-                </div>
-              </div>
-              <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
-                <span className="text-[10px] uppercase font-bold text-[#B8860B]">Dealer Needs Action</span>
-                <div className="text-lg font-bold font-display text-[#B8860B]">
-                  {previewData.summary.dealerResolutionsRequired}
-                </div>
-              </div>
-            </div>
+            {/* UNRESOLVED DEALERS SUMMARY & BULK RESOLUTION CARD */}
+            {unresolvedDealers.length > 0 && (
+              <div className="bg-white border-2 border-[#F7E7C4] rounded-[10px] p-6 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Users size={18} className="text-[#B8860B]" />
+                      <h3 className="text-base font-bold font-display text-[#14213D]">
+                        Unmatched Dealer Names ({unresolvedDealers.length} Unique Dealers Across{" "}
+                        {previewData.summary.dealerResolutionsRequired} Rows)
+                      </h3>
+                    </div>
+                    <p className="text-xs text-[#52607D] mt-0.5">
+                      Resolving a dealer name once will automatically map and resolve all matching rows across the entire import file.
+                    </p>
+                  </div>
 
-            {/* Filter Tabs for Staged Rows */}
-            <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-2">
-              <span className="text-xs font-semibold text-[#52607D] mr-2">Filter Rows:</span>
-              {[
-                { id: "ALL", label: "All Staged" },
-                { id: "DEALER_RESOLUTION_REQUIRED", label: "Dealer Needs Action" },
-                { id: "NEW_PROJECT", label: "New Projects" },
-                { id: "STATUS_CHANGE", label: "Status Changes" },
-                { id: "UNCHANGED", label: "Unchanged" },
-                { id: "ERROR", label: "Errors" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setRowActionFilter(tab.id)}
-                  className={`text-xs px-2.5 py-1 rounded-[6px] font-medium transition-colors cursor-pointer ${
-                    rowActionFilter === tab.id
-                      ? "bg-[#2F6F5E] text-white"
-                      : "bg-[#FAFAF8] text-[#52607D] hover:bg-[#EDEAE1]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+                  <Button
+                    size="sm"
+                    loading={autoCreatingAll}
+                    onClick={handleAutoCreateAllDealers}
+                    icon={Sparkles}
+                    className="bg-[#2F6F5E] text-white shrink-0"
+                  >
+                    Auto-Create & Resolve All Remaining
+                  </Button>
+                </div>
 
-            {/* Staged Rows Table */}
-            <div className="overflow-x-auto border border-[#E4E1D8] rounded-[8px]">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
-                  <tr>
-                    <th className="py-2.5 px-3">Row #</th>
-                    <th className="py-2.5 px-3">Application ID</th>
-                    <th className="py-2.5 px-3">Imported Status</th>
-                    <th className="py-2.5 px-3">Imported Dealer</th>
-                    <th className="py-2.5 px-3">Staged Action</th>
-                    <th className="py-2.5 px-3 text-right">Action Required</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EDEAE1]">
-                  {filteredRows.map((r) => (
-                    <tr key={r.id} className="hover:bg-[#FAFAF8]">
-                      <td className="py-2.5 px-3 font-mono text-[#52607D]">{r.row_number}</td>
-                      <td className="py-2.5 px-3 font-mono font-medium text-[#14213D]">
-                        {r.application_id || "—"}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <StatusBadge status={r.imported_status} size="sm" />
-                      </td>
-                      <td className="py-2.5 px-3 text-[#14213D]">
-                        {r.dealer_name || "—"}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            r.action === "NEW_PROJECT"
-                              ? "bg-[#EAF3F0] text-[#2F6F5E]"
-                              : r.action === "STATUS_CHANGE"
-                              ? "bg-[#FDF8EC] text-[#B8860B]"
-                              : r.action === "DEALER_RESOLUTION_REQUIRED"
-                              ? "bg-[#FDF8EC] text-[#B8860B] border border-[#F7E7C4]"
-                              : r.action === "UNCHANGED"
-                              ? "bg-[#FAFAF8] text-[#52607D]"
-                              : "bg-[#FDF2F1] text-[#B0403A]"
-                          }`}
-                        >
-                          {r.action.replace(/_/g, " ")}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right">
-                        {r.action === "DEALER_RESOLUTION_REQUIRED" && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => openDealerResolution(r)}
-                            icon={Users}
-                          >
-                            Resolve Dealer
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {unresolvedDealers.map((d) => (
+                    <div
+                      key={d.dealer_name}
+                      className="p-3 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-xs text-[#14213D] truncate" title={d.dealer_name}>
+                          {d.dealer_name}
+                        </div>
+                        <div className="text-[11px] text-[#52607D]">
+                          <strong className="text-[#B8860B]">{d.count}</strong> rows in file
+                        </div>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => openDealerResolutionForName(d.dealer_name, d.count)}
+                        className="text-xs px-2.5 py-1 shrink-0"
+                      >
+                        Resolve All {d.count}
+                      </Button>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
+            )}
+
+            {/* STAGED ROWS TABLE WITH FILTER & PAGINATION */}
+            <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
+              <div className="p-4 border-b border-[#EDEAE1] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+                  <span className="text-xs font-semibold text-[#52607D] mr-2">Filter Staged Rows:</span>
+                  {[
+                    { id: "ALL", label: "All Rows" },
+                    { id: "DEALER_RESOLUTION_REQUIRED", label: "Dealer Needs Action" },
+                    { id: "NEW_PROJECT", label: "New Projects" },
+                    { id: "STATUS_CHANGE", label: "Status Changes" },
+                    { id: "UNCHANGED", label: "Unchanged" },
+                    { id: "ERROR", label: "Errors" },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => handleFilterChange(tab.id)}
+                      className={`text-xs px-3 py-1.5 rounded-[6px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                        rowActionFilter === tab.id
+                          ? "bg-[#2F6F5E] text-white shadow-xs"
+                          : "bg-[#FAFAF8] text-[#52607D] hover:bg-[#EDEAE1]"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {loadingRows ? (
+                <div className="p-6">
+                  <SkeletonLoader rows={8} />
+                </div>
+              ) : stagedRows.length === 0 ? (
+                <EmptyState
+                  title="No staged rows match this filter"
+                  description="Try selecting a different action filter above."
+                />
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
+                        <tr>
+                          <th className="py-2.5 px-3">Row #</th>
+                          <th className="py-2.5 px-3">Application ID</th>
+                          <th className="py-2.5 px-3">Imported Status</th>
+                          <th className="py-2.5 px-3">Imported Dealer</th>
+                          <th className="py-2.5 px-3">Staged Action</th>
+                          <th className="py-2.5 px-3 text-right">Action Required</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#EDEAE1]">
+                        {stagedRows.map((r) => (
+                          <tr key={r.id} className="hover:bg-[#FAFAF8]">
+                            <td className="py-2.5 px-3 font-mono text-[#52607D]">{r.row_number}</td>
+                            <td className="py-2.5 px-3 font-mono font-medium text-[#14213D]">
+                              {r.application_id || "—"}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <StatusBadge status={r.imported_status} size="sm" />
+                            </td>
+                            <td className="py-2.5 px-3 text-[#14213D]">
+                              {r.dealer_name || "—"}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                  r.action === "NEW_PROJECT"
+                                    ? "bg-[#EAF3F0] text-[#2F6F5E]"
+                                    : r.action === "STATUS_CHANGE"
+                                    ? "bg-[#FDF8EC] text-[#B8860B]"
+                                    : r.action === "DEALER_RESOLUTION_REQUIRED"
+                                    ? "bg-[#FDF8EC] text-[#B8860B] border border-[#F7E7C4]"
+                                    : r.action === "UNCHANGED"
+                                    ? "bg-[#FAFAF8] text-[#52607D]"
+                                    : "bg-[#FDF2F1] text-[#B0403A]"
+                                }`}
+                              >
+                                {r.action.replace(/_/g, " ")}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              {r.action === "DEALER_RESOLUTION_REQUIRED" && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => openDealerResolutionForName(r.dealer_name, 1)}
+                                  icon={Users}
+                                >
+                                  Resolve Dealer
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Reusable Pagination for Staged Rows */}
+                  <Pagination
+                    page={stagedPagination.page}
+                    totalPages={stagedPagination.totalPages}
+                    totalItems={stagedPagination.total}
+                    limit={stagedPagination.limit}
+                    limitOptions={[50, 100, 250, 500]}
+                    onPageChange={(newPage) =>
+                      fetchStagedRows(previewData.importId, newPage, stagedPagination.limit, rowActionFilter)
+                    }
+                    onLimitChange={(newLimit) =>
+                      fetchStagedRows(previewData.importId, 1, newLimit, rowActionFilter)
+                    }
+                  />
+                </>
+              )}
             </div>
           </div>
         )}
 
-        {/* Past Imports Batch History */}
-        <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
-          <h2 className="text-base font-bold font-display text-[#14213D]">
-            Recent Import Batches
-          </h2>
+        {/* Past Imports Batch History & Pagination */}
+        <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
+          <div className="p-6 border-b border-[#EDEAE1]">
+            <h2 className="text-base font-bold font-display text-[#14213D]">
+              Recent Import Batches
+            </h2>
+          </div>
 
           {loadingHistory ? (
-            <SkeletonLoader rows={4} />
+            <div className="p-6">
+              <SkeletonLoader rows={4} />
+            </div>
           ) : pastImports.length === 0 ? (
-            <div className="text-xs text-[#52607D] py-6 text-center">
+            <div className="text-xs text-[#52607D] py-8 text-center">
               No historical imports recorded yet.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
-                  <tr>
-                    <th className="py-2.5 px-3">File Name</th>
-                    <th className="py-2.5 px-3">Uploaded At</th>
-                    <th className="py-2.5 px-3 text-right">Total Rows</th>
-                    <th className="py-2.5 px-3 text-right">New Projects</th>
-                    <th className="py-2.5 px-3 text-right">Status Changes</th>
-                    <th className="py-2.5 px-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EDEAE1]">
-                  {pastImports.map((imp) => (
-                    <tr key={imp.id} className="hover:bg-[#FAFAF8]">
-                      <td className="py-2.5 px-3 font-semibold text-[#14213D]">{imp.file_name}</td>
-                      <td className="py-2.5 px-3 text-[#52607D]">
-                        {new Date(imp.uploaded_at).toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-medium text-[#14213D]">
-                        {imp.total_rows}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-[#2F6F5E] font-medium">
-                        {imp.new_projects_count}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-[#B8860B] font-medium">
-                        {imp.status_changes_count}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            imp.status === "COMPLETED"
-                              ? "bg-[#EAF3F0] text-[#2F6F5E]"
-                              : imp.status === "FAILED"
-                              ? "bg-[#FDF2F1] text-[#B0403A]"
-                              : "bg-[#FDF8EC] text-[#B8860B]"
-                          }`}
-                        >
-                          {imp.status}
-                        </span>
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
+                    <tr>
+                      <th className="py-2.5 px-4">File Name</th>
+                      <th className="py-2.5 px-4">Uploaded At</th>
+                      <th className="py-2.5 px-4 text-right">Total Rows</th>
+                      <th className="py-2.5 px-4 text-right">New Projects</th>
+                      <th className="py-2.5 px-4 text-right">Status Changes</th>
+                      <th className="py-2.5 px-4">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-[#EDEAE1]">
+                    {pastImports.map((imp) => (
+                      <tr key={imp.id} className="hover:bg-[#FAFAF8]">
+                        <td className="py-3 px-4 font-semibold text-[#14213D]">{imp.file_name}</td>
+                        <td className="py-3 px-4 text-[#52607D]">
+                          {new Date(imp.uploaded_at).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-right font-medium text-[#14213D]">
+                          {imp.total_rows.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-right text-[#2F6F5E] font-medium">
+                          {imp.new_projects_count.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-right text-[#B8860B] font-medium">
+                          {imp.status_changes_count.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              imp.status === "COMPLETED"
+                                ? "bg-[#EAF3F0] text-[#2F6F5E]"
+                                : imp.status === "FAILED"
+                                ? "bg-[#FDF2F1] text-[#B0403A]"
+                                : "bg-[#FDF8EC] text-[#B8860B]"
+                            }`}
+                          >
+                            {imp.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination
+                page={historyPagination.page}
+                totalPages={historyPagination.totalPages}
+                totalItems={historyPagination.total}
+                limit={historyPagination.limit}
+                limitOptions={[10, 25, 50]}
+                onPageChange={(newPage) => fetchPastImports(newPage, historyPagination.limit)}
+                onLimitChange={(newLimit) => fetchPastImports(1, newLimit)}
+              />
+            </>
           )}
         </div>
       </main>
 
-      {/* Dealer Resolution Modal */}
+      {/* Bulk / Single Dealer Resolution Modal */}
       <Modal
         isOpen={resolutionModalOpen}
         onClose={() => setResolutionModalOpen(false)}
-        title="Resolve Unmatched Dealer"
+        title={`Resolve Dealer: ${targetDealerNameToResolve}`}
       >
         <form onSubmit={handleResolveDealerSubmit} className="space-y-4 text-xs">
           <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
             <span className="text-[#52607D]">Imported Dealer Name:</span>
             <p className="text-sm font-bold text-[#14213D] mt-0.5">
-              {selectedRowForResolution?.dealer_name}
+              {targetDealerNameToResolve}
             </p>
+            {targetDealerRowCount > 1 && (
+              <p className="text-[11px] text-[#2F6F5E] font-semibold mt-1">
+                ⚡ Action will automatically update and resolve all {targetDealerRowCount} matching rows in this import.
+              </p>
+            )}
           </div>
 
           <div className="flex border-b border-[#EDEAE1] gap-4">
@@ -505,7 +712,7 @@ export function ImportsPage() {
                 required
                 className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E]"
               >
-                <option value="">-- Choose a Dealer --</option>
+                <option value="">-- Choose a Registered Dealer --</option>
                 {dealersList.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} {d.commission_percentage ? `(${d.commission_percentage}%)` : ""}
@@ -549,7 +756,7 @@ export function ImportsPage() {
               Cancel
             </Button>
             <Button type="submit" size="sm" loading={resolving}>
-              Confirm Mapping
+              Confirm Mapping ({targetDealerRowCount} rows)
             </Button>
           </div>
         </form>
