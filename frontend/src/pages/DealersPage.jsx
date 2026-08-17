@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Users, Search, RefreshCw, Edit2, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Users, Search, RefreshCw, Edit2, Trash2, GitMerge, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
+import CustomSelect from "../components/common/CustomSelect.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 
 export function DealersPage() {
   const [dealers, setDealers] = useState([]);
+  const [allDealersForSelect, setAllDealersForSelect] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
@@ -18,7 +20,6 @@ export function DealersPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [commissionPercentage, setCommissionPercentage] = useState("");
-  const [commissionBasis, setCommissionBasis] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Edit Modal State
@@ -26,7 +27,6 @@ export function DealersPage() {
   const [editingDealer, setEditingDealer] = useState(null);
   const [editName, setEditName] = useState("");
   const [editCommission, setEditCommission] = useState("");
-  const [editCommissionBasis, setEditCommissionBasis] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -34,6 +34,12 @@ export function DealersPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingDealer, setDeletingDealer] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Merge Dealers Modal State
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [targetDealerId, setTargetDealerId] = useState("");
+  const [sourceDealerId, setSourceDealerId] = useState("");
+  const [merging, setMerging] = useState(false);
 
   const fetchDealers = async (page = 1, limit = pagination.limit) => {
     try {
@@ -48,9 +54,22 @@ export function DealersPage() {
     }
   };
 
+  const fetchAllDealersForMerge = async () => {
+    try {
+      const res = await api.get("/dealers", { params: { limit: 500 } });
+      setAllDealersForSelect(res.data?.dealers || []);
+    } catch (err) {
+      console.error("Failed to load dealers list:", err);
+    }
+  };
+
   useEffect(() => {
     fetchDealers(1, pagination.limit);
   }, [search]);
+
+  useEffect(() => {
+    fetchAllDealersForMerge();
+  }, []);
 
   const handleCreateDealer = async (e) => {
     e.preventDefault();
@@ -59,15 +78,14 @@ export function DealersPage() {
       await api.post("/dealers", {
         name,
         commission_percentage: commissionPercentage ? parseFloat(commissionPercentage) : null,
-        commission_basis: commissionBasis || null,
       });
 
       toast.success(`Dealer '${name}' registered successfully`);
       setCreateModalOpen(false);
       setName("");
       setCommissionPercentage("");
-      setCommissionBasis("");
       fetchDealers(1, pagination.limit);
+      fetchAllDealersForMerge();
     } catch (err) {
       toast.error(err.message || "Failed to create dealer");
     } finally {
@@ -79,7 +97,6 @@ export function DealersPage() {
     setEditingDealer(dealer);
     setEditName(dealer.name || "");
     setEditCommission(dealer.commission_percentage || "");
-    setEditCommissionBasis(dealer.commission_basis || "");
     setEditIsActive(dealer.is_active !== false);
     setEditModalOpen(true);
   };
@@ -93,13 +110,13 @@ export function DealersPage() {
       await api.patch(`/dealers/${editingDealer.id}`, {
         name: editName,
         commission_percentage: editCommission !== "" ? parseFloat(editCommission) : null,
-        commission_basis: editCommissionBasis || null,
         is_active: editIsActive,
       });
 
       toast.success(`Dealer '${editName}' updated successfully`);
       setEditModalOpen(false);
       fetchDealers(pagination.page, pagination.limit);
+      fetchAllDealersForMerge();
     } catch (err) {
       toast.error(err.message || "Failed to update dealer");
     } finally {
@@ -121,6 +138,7 @@ export function DealersPage() {
       toast.success(`Dealer '${deletingDealer.name}' deleted successfully`);
       setDeleteModalOpen(false);
       fetchDealers(pagination.page, pagination.limit);
+      fetchAllDealersForMerge();
     } catch (err) {
       toast.error(err.message || "Failed to delete dealer");
     } finally {
@@ -128,15 +146,61 @@ export function DealersPage() {
     }
   };
 
+  const openMergeModal = () => {
+    setTargetDealerId("");
+    setSourceDealerId("");
+    setMergeModalOpen(true);
+  };
+
+  const handleMergeDealers = async (e) => {
+    e.preventDefault();
+    if (!targetDealerId || !sourceDealerId) {
+      toast.error("Please select both the primary dealer to keep and the duplicate dealer to merge.");
+      return;
+    }
+
+    if (targetDealerId === sourceDealerId) {
+      toast.error("Primary dealer and duplicate dealer cannot be the same.");
+      return;
+    }
+
+    try {
+      setMerging(true);
+      const res = await api.post("/dealers/merge", {
+        target_dealer_id: targetDealerId,
+        source_dealer_ids: [sourceDealerId],
+      });
+
+      toast.success(res.data?.message || "Dealers merged and records reassigned successfully!");
+      setMergeModalOpen(false);
+      setTargetDealerId("");
+      setSourceDealerId("");
+      fetchDealers(pagination.page, pagination.limit);
+      fetchAllDealersForMerge();
+    } catch (err) {
+      toast.error(err.message || "Failed to merge dealers");
+    } finally {
+      setMerging(false);
+    }
+  };
+
+  const targetDealerObj = allDealersForSelect.find((d) => d.id === targetDealerId);
+  const sourceDealerObj = allDealersForSelect.find((d) => d.id === sourceDealerId);
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Dealers Directory"
-        subtitle="Manage verified micro-irrigation dealers, distributors, and commissions"
+        subtitle="Manage verified micro-irrigation dealers, deduplicate entries, and set commissions"
         actions={
-          <Button icon={Plus} onClick={() => setCreateModalOpen(true)}>
-            Add Dealer
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" icon={GitMerge} onClick={openMergeModal}>
+              Merge / Deduplicate
+            </Button>
+            <Button icon={Plus} onClick={() => setCreateModalOpen(true)}>
+              Add Dealer
+            </Button>
+          </div>
         }
       />
 
@@ -150,7 +214,7 @@ export function DealersPage() {
               placeholder="Search dealer by name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
             />
           </div>
 
@@ -189,7 +253,6 @@ export function DealersPage() {
                       <th className="py-3 px-4">Dealer Name</th>
                       <th className="py-3 px-4">Normalized Key</th>
                       <th className="py-3 px-4">Commission %</th>
-                      <th className="py-3 px-4">Commission Basis</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Registered Date</th>
                       <th className="py-3 px-4 text-right">Actions</th>
@@ -205,7 +268,6 @@ export function DealersPage() {
                         <td className="py-3 px-4 font-medium text-[#14213D]">
                           {d.commission_percentage ? `${d.commission_percentage}%` : "—"}
                         </td>
-                        <td className="py-3 px-4 text-[#52607D]">{d.commission_basis || "—"}</td>
                         <td className="py-3 px-4">
                           <span
                             className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -265,6 +327,100 @@ export function DealersPage() {
         </div>
       </main>
 
+      {/* MERGE / DEDUPLICATE DEALERS MODAL */}
+      <Modal
+        isOpen={mergeModalOpen}
+        onClose={() => setMergeModalOpen(false)}
+        title="Merge & Deduplicate Dealers"
+      >
+        <form onSubmit={handleMergeDealers} className="space-y-4 text-xs">
+          <div className="space-y-4">
+            {/* Target Dealer to Preserve */}
+            <div>
+              <label className="font-semibold text-[#14213D] block mb-1">
+                1. Select Correct / Primary Dealer (To Keep):
+              </label>
+              <CustomSelect
+                options={allDealersForSelect
+                  .filter((d) => d.id !== sourceDealerId)
+                  .map((d) => ({
+                    value: d.id,
+                    label: d.name,
+                    badge: d.commission_percentage ? `${d.commission_percentage}%` : null,
+                  }))}
+                value={targetDealerId}
+                onChange={(val) => setTargetDealerId(val)}
+                placeholder="-- Choose Master Dealer to Preserve --"
+                searchable={true}
+              />
+            </div>
+
+            {/* Source Duplicate Dealer to Merge */}
+            <div>
+              <label className="font-semibold text-[#14213D] block mb-1">
+                2. Select Misspelled / Duplicate Dealer (To Merge & Remove):
+              </label>
+              <CustomSelect
+                options={allDealersForSelect
+                  .filter((d) => d.id !== targetDealerId)
+                  .map((d) => ({
+                    value: d.id,
+                    label: d.name,
+                    badge: d.commission_percentage ? `${d.commission_percentage}%` : null,
+                  }))}
+                value={sourceDealerId}
+                onChange={(val) => setSourceDealerId(val)}
+                placeholder="-- Choose Duplicate Dealer to Merge --"
+                searchable={true}
+              />
+            </div>
+          </div>
+
+          {/* Merge Preview Flow */}
+          {targetDealerObj && sourceDealerObj && (
+            <div className="p-3 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] flex items-center justify-between gap-3 text-center">
+              <div className="flex-1 p-2 bg-[#FDF2F1] border border-[#F8D7D5] rounded-[6px]">
+                <span className="text-[10px] text-[#B0403A] font-bold uppercase block">Duplicate</span>
+                <span className="font-bold text-xs text-[#14213D] truncate block">
+                  {sourceDealerObj.name}
+                </span>
+                <span className="text-[10px] text-[#52607D] block">(Will be deleted)</span>
+              </div>
+
+              <ArrowRight size={18} className="text-[#2F6F5E] shrink-0" />
+
+              <div className="flex-1 p-2 bg-[#EAF3F0] border border-[#D3E6E0] rounded-[6px]">
+                <span className="text-[10px] text-[#2F6F5E] font-bold uppercase block">Master Dealer</span>
+                <span className="font-bold text-xs text-[#2F6F5E] truncate block">
+                  {targetDealerObj.name}
+                </span>
+                <span className="text-[10px] text-[#52607D] block">(Will receive all records)</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setMergeModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              loading={merging}
+              disabled={!targetDealerId || !sourceDealerId || targetDealerId === sourceDealerId}
+              icon={GitMerge}
+            >
+              Confirm Merge & Reassign
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Add Dealer Modal */}
       <Modal
         isOpen={createModalOpen}
@@ -292,17 +448,6 @@ export function DealersPage() {
               placeholder="e.g. 12.5"
               value={commissionPercentage}
               onChange={(e) => setCommissionPercentage(e.target.value)}
-              className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
-            />
-          </div>
-
-          <div>
-            <label className="font-semibold text-[#14213D]">Commission Basis (Optional)</label>
-            <input
-              type="text"
-              placeholder="e.g. Subsidy Value / Invoice Value"
-              value={commissionBasis}
-              onChange={(e) => setCommissionBasis(e.target.value)}
               className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
             />
           </div>
@@ -348,16 +493,6 @@ export function DealersPage() {
               step="0.01"
               value={editCommission}
               onChange={(e) => setEditCommission(e.target.value)}
-              className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
-            />
-          </div>
-
-          <div>
-            <label className="font-semibold text-[#14213D]">Commission Basis</label>
-            <input
-              type="text"
-              value={editCommissionBasis}
-              onChange={(e) => setEditCommissionBasis(e.target.value)}
               className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
             />
           </div>

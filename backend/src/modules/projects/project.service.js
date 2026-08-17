@@ -94,7 +94,7 @@ export async function getProjectById(id) {
       {
         model: Dealer,
         as: "dealer",
-        attributes: ["id", "name", "normalized_name", "commission_percentage", "commission_basis"],
+        attributes: ["id", "name", "normalized_name", "commission_percentage"],
       },
       {
         model: GovernmentProjectStatusHistory,

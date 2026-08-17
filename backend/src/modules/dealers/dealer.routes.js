@@ -3,6 +3,7 @@ import validate from "../../shared/middlewares/validate.js";
 import {
   createDealerSchema,
   updateDealerSchema,
+  mergeDealersSchema,
   getDealerSchema,
   listDealerSchema,
 } from "./dealer.schema.js";
@@ -14,6 +15,9 @@ router
   .route("/")
   .get(validate(listDealerSchema), dealerController.listDealers)
   .post(validate(createDealerSchema), dealerController.createDealer);
+
+// Merge duplicate dealers into a target dealer
+router.post("/merge", validate(mergeDealersSchema), dealerController.mergeDealers);
 
 router
   .route("/:id")

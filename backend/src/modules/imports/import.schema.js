@@ -31,7 +31,6 @@ export const resolveDealerSchema = z.object({
       .object({
         name: z.string().min(1, "Dealer name is required"),
         commission_percentage: z.number().optional().nullable(),
-        commission_basis: z.string().optional().nullable(),
       })
       .optional(),
   }),

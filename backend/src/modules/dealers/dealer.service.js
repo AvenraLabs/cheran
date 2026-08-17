@@ -1,6 +1,8 @@
 import { Op } from "sequelize";
+import db from "../../config/db.js";
 import Dealer from "./dealer.model.js";
 import GovernmentProject from "../projects/project.model.js";
+import GovernmentImportRow from "../imports/import-row.model.js";
 import { normalizeDealerName } from "../../utils/normalization.js";
 import AppError from "../../shared/appError.js";
 
@@ -61,7 +63,7 @@ export async function getDealerById(id) {
   };
 }
 
-export async function createDealer({ name, commission_percentage, commission_basis, is_active = true }) {
+export async function createDealer({ name, commission_percentage, is_active = true }) {
   const normalized_name = normalizeDealerName(name);
 
   // Check if existing dealer with same normalized name
@@ -74,14 +76,13 @@ export async function createDealer({ name, commission_percentage, commission_bas
     name: name.trim(),
     normalized_name,
     commission_percentage: commission_percentage || null,
-    commission_basis: commission_basis || null,
     is_active,
   });
 
   return dealer;
 }
 
-export async function updateDealer(id, { name, commission_percentage, commission_basis, is_active }) {
+export async function updateDealer(id, { name, commission_percentage, is_active }) {
   const dealer = await Dealer.findByPk(id);
   if (!dealer) {
     throw new AppError(`Dealer not found with ID ${id}`, 404);
@@ -93,7 +94,6 @@ export async function updateDealer(id, { name, commission_percentage, commission
     updates.normalized_name = normalizeDealerName(name);
   }
   if (commission_percentage !== undefined) updates.commission_percentage = commission_percentage;
-  if (commission_basis !== undefined) updates.commission_basis = commission_basis;
   if (is_active !== undefined) updates.is_active = is_active;
 
   await dealer.update(updates);
@@ -125,4 +125,70 @@ export async function deleteDealer(id) {
     deleted: true,
     disassociatedProjectsCount: linkedProjectsCount,
   };
+}
+
+export async function mergeDealers({ targetDealerId, sourceDealerIds }) {
+  if (!targetDealerId) {
+    throw new AppError("target_dealer_id is required", 400);
+  }
+  if (!Array.isArray(sourceDealerIds) || sourceDealerIds.length === 0) {
+    throw new AppError("source_dealer_ids must be a non-empty array of dealer IDs", 400);
+  }
+
+  // Ensure target is not inside sources
+  const cleanedSourceIds = sourceDealerIds.filter((id) => id !== targetDealerId);
+  if (cleanedSourceIds.length === 0) {
+    throw new AppError("Target dealer cannot be merged into itself", 400);
+  }
+
+  const targetDealer = await Dealer.findByPk(targetDealerId);
+  if (!targetDealer) {
+    throw new AppError(`Target dealer with ID ${targetDealerId} not found`, 404);
+  }
+
+  // Run atomic transaction
+  return await db.transaction(async (t) => {
+    // 1. Reassign all government projects
+    const [reassignedProjectsCount] = await GovernmentProject.update(
+      { dealer_id: targetDealerId },
+      {
+        where: {
+          dealer_id: {
+            [Op.in]: cleanedSourceIds,
+          },
+        },
+        transaction: t,
+      }
+    );
+
+    // 2. Reassign all historical staged import rows
+    const [reassignedImportRowsCount] = await GovernmentImportRow.update(
+      { matched_dealer_id: targetDealerId },
+      {
+        where: {
+          matched_dealer_id: {
+            [Op.in]: cleanedSourceIds,
+          },
+        },
+        transaction: t,
+      }
+    );
+
+    // 3. Delete merged source dealer records
+    const deletedCount = await Dealer.destroy({
+      where: {
+        id: {
+          [Op.in]: cleanedSourceIds,
+        },
+      },
+      transaction: t,
+    });
+
+    return {
+      targetDealer: targetDealer.toJSON(),
+      reassignedProjectsCount,
+      reassignedImportRowsCount,
+      mergedDealersCount: deletedCount,
+    };
+  });
 }

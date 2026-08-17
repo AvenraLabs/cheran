@@ -43,3 +43,16 @@ export const deleteDealer = asyncHandler(async (req, res) => {
     data: result,
   });
 });
+
+export const mergeDealers = asyncHandler(async (req, res) => {
+  const result = await dealerService.mergeDealers({
+    targetDealerId: req.body.target_dealer_id,
+    sourceDealerIds: req.body.source_dealer_ids,
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: `Successfully merged into '${result.targetDealer.name}'. Reassigned ${result.reassignedProjectsCount} projects.`,
+    data: result,
+  });
+});

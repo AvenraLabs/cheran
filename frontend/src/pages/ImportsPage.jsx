@@ -17,6 +17,7 @@ import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import StatusBadge from "../components/common/StatusBadge.jsx";
+import CustomSelect from "../components/common/CustomSelect.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 
@@ -706,19 +707,17 @@ export function ImportsPage() {
           {resolutionMode === "SELECT_EXISTING" ? (
             <div className="space-y-2">
               <label className="font-semibold text-[#14213D]">Select Existing Registered Dealer:</label>
-              <select
+              <CustomSelect
+                options={dealersList.map((d) => ({
+                  value: d.id,
+                  label: d.name,
+                  badge: d.commission_percentage ? `${d.commission_percentage}%` : null,
+                }))}
                 value={selectedExistingDealerId}
-                onChange={(e) => setSelectedExistingDealerId(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E]"
-              >
-                <option value="">-- Choose a Registered Dealer --</option>
-                {dealersList.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} {d.commission_percentage ? `(${d.commission_percentage}%)` : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedExistingDealerId(val)}
+                placeholder="-- Choose a Registered Dealer --"
+                searchable={true}
+              />
             </div>
           ) : (
             <div className="space-y-3">

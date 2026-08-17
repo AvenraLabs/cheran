@@ -56,14 +56,6 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      {/* System Status Footer */}
-      <div className="p-4 border-t border-[#EDEAE1] bg-[#FAFAF8]">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-[#2F6F5E] animate-pulse" />
-          <span className="text-xs font-medium text-[#52607D]">TN Horti DB Connected</span>
-        </div>
-      </div>
     </aside>
   );
 }

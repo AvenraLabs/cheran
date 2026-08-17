@@ -159,7 +159,6 @@ export async function resolveImportDealer(importId, { row_id, dealer_name, resol
     const created = await createDealer({
       name: dealerNameToCreate,
       commission_percentage: new_dealer?.commission_percentage,
-      commission_basis: new_dealer?.commission_basis,
     });
     resolvedDealerId = created.id;
   } else {

@@ -21,10 +21,6 @@ const Dealer = db.define(
       type: DataTypes.DECIMAL(5, 2),
       allowNull: true,
     },
-    commission_basis: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-    },
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

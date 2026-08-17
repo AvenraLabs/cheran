@@ -4,7 +4,6 @@ export const createDealerSchema = z.object({
   body: z.object({
     name: z.string().min(1, "Dealer name is required").max(255),
     commission_percentage: z.number().min(0).max(100).optional().nullable(),
-    commission_basis: z.string().max(50).optional().nullable(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -16,8 +15,14 @@ export const updateDealerSchema = z.object({
   body: z.object({
     name: z.string().min(1).max(255).optional(),
     commission_percentage: z.number().min(0).max(100).optional().nullable(),
-    commission_basis: z.string().max(50).optional().nullable(),
     is_active: z.boolean().optional(),
+  }),
+});
+
+export const mergeDealersSchema = z.object({
+  body: z.object({
+    target_dealer_id: z.string().uuid("Invalid target dealer ID"),
+    source_dealer_ids: z.array(z.string().uuid()).min(1, "At least one source dealer must be selected to merge"),
   }),
 });
 

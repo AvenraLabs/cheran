@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Search, Filter, Eye, RefreshCw } from "lucide-react";
+import { Search, Eye, RefreshCw, X } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import StatusBadge from "../components/common/StatusBadge.jsx";
 import Button from "../components/common/Button.jsx";
+import CustomSelect from "../components/common/CustomSelect.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 
@@ -20,7 +21,8 @@ export function ProjectsPage() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedDealer, setSelectedDealer] = useState("");
   const [district, setDistrict] = useState("");
-  const [block, setBlock] = useState("");
+
+  const debounceTimerRef = useRef(null);
 
   const fetchProjects = async (page = 1, limit = pagination.limit) => {
     try {
@@ -28,11 +30,10 @@ export function ProjectsPage() {
       const params = {
         page,
         limit,
-        ...(search ? { search } : {}),
+        ...(search ? { search: search.trim() } : {}),
         ...(selectedStatus ? { status: selectedStatus } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
-        ...(district ? { district } : {}),
-        ...(block ? { block } : {}),
+        ...(district ? { district: district.trim() } : {}),
       };
 
       const res = await api.get("/government/projects", { params });
@@ -45,6 +46,7 @@ export function ProjectsPage() {
     }
   };
 
+  // Load Metadata (statuses, dealers) on mount
   useEffect(() => {
     async function fetchMetadata() {
       try {
@@ -59,22 +61,47 @@ export function ProjectsPage() {
       }
     }
     fetchMetadata();
-    fetchProjects(1, 20);
   }, []);
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    fetchProjects(1, pagination.limit);
-  };
+  // Live dynamic filtering with debounce for text inputs & immediate for dropdowns
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      fetchProjects(1, pagination.limit);
+    }, 280);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [search, selectedStatus, selectedDealer, district]);
+
+  const hasActiveFilters = Boolean(search || selectedStatus || selectedDealer || district);
 
   const handleResetFilters = () => {
     setSearch("");
     setSelectedStatus("");
     setSelectedDealer("");
     setDistrict("");
-    setBlock("");
-    fetchProjects(1, pagination.limit);
   };
+
+  const statusOptions = [
+    { value: "", label: "All Statuses" },
+    ...statuses.map((s) => ({ value: s.name, label: s.name })),
+  ];
+
+  const dealerOptions = [
+    { value: "", label: "All Dealers" },
+    ...dealers.map((d) => ({
+      value: d.id,
+      label: d.name,
+      badge: d.commission_percentage ? `${d.commission_percentage}%` : null,
+    })),
+  ];
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -89,80 +116,85 @@ export function ProjectsPage() {
       />
 
       <main className="p-8 space-y-6 flex-1 overflow-y-auto">
-        {/* Search & Filter Bar */}
+        {/* Dynamic Live Filter Bar (No manual filter button needed) */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
-          <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
             {/* Search Input */}
-            <div className="relative lg:col-span-2">
+            <div className="relative lg:col-span-4">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52607D]" />
               <input
                 type="text"
                 placeholder="Search Application ID, Farmer, Mobile..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] placeholder:text-[#8C97AB]"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8C97AB] hover:text-[#14213D] p-0.5 cursor-pointer"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Custom Status Dropdown */}
+            <div className="lg:col-span-3">
+              <CustomSelect
+                options={statusOptions}
+                value={selectedStatus}
+                onChange={(val) => setSelectedStatus(val)}
+                placeholder="All Statuses"
+                searchable={true}
               />
             </div>
 
-            {/* Status Filter */}
-            <div>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              >
-                <option value="">All Statuses</option>
-                {statuses.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Dealer Filter */}
-            <div>
-              <select
+            {/* Custom Dealer Dropdown */}
+            <div className="lg:col-span-3">
+              <CustomSelect
+                options={dealerOptions}
                 value={selectedDealer}
-                onChange={(e) => setSelectedDealer(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              >
-                <option value="">All Dealers</option>
-                {dealers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedDealer(val)}
+                placeholder="All Dealers"
+                searchable={true}
+              />
             </div>
 
             {/* District Filter */}
-            <div>
-              <input
-                type="text"
-                placeholder="District..."
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
-              />
-            </div>
+            <div className="relative lg:col-span-2 flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="District..."
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] placeholder:text-[#8C97AB]"
+                />
+                {district && (
+                  <button
+                    onClick={() => setDistrict("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8C97AB] hover:text-[#14213D] p-0.5 cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
 
-            {/* Submit & Reset Buttons */}
-            <div className="flex items-center gap-2">
-              <Button type="submit" size="sm" className="w-full">
-                Filter
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleResetFilters}
-                className="px-2.5"
-              >
-                Reset
-              </Button>
+              {hasActiveFilters && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleResetFilters}
+                  className="px-2.5 shrink-0"
+                  title="Clear all active filters"
+                >
+                  Clear
+                </Button>
+              )}
             </div>
-          </form>
+          </div>
         </div>
 
         {/* Data Table Container */}
@@ -174,7 +206,18 @@ export function ProjectsPage() {
           ) : projects.length === 0 ? (
             <EmptyState
               title="No matching government projects found"
-              description="Try adjusting your search terms or filter criteria."
+              description={
+                hasActiveFilters
+                  ? "Try clearing or relaxing your search filters."
+                  : "No projects recorded yet. Upload an Excel import to get started."
+              }
+              action={
+                hasActiveFilters ? (
+                  <Button size="sm" variant="secondary" onClick={handleResetFilters}>
+                    Clear Filters
+                  </Button>
+                ) : null
+              }
             />
           ) : (
             <>
