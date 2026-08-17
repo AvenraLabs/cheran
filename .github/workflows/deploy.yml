@@ -1,0 +1,63 @@
+name: Deploy Cheran Plast App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: nessi
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            echo "=== [1/5] Pulling Latest Changes ==="
+            cd ~/cheran
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "=== [2/5] Installing Backend Dependencies & Running Migrations ==="
+            cd ~/cheran/backend
+            npm ci
+
+            echo "=== [3/5] Restarting Backend Service via PM2 ==="
+            pm2 restart cheran-backend || pm2 start src/server.js --name cheran-backend
+            pm2 save
+
+            echo "=== [4/5] Verifying Backend Health ==="
+            HEALTH_URL="http://127.0.0.1:5000/api/health"
+            HEALTHY=0
+            for i in $(seq 1 6); do
+              echo "Checking backend health (attempt $i/6)..."
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "Backend is healthy (HTTP 200)!"
+                HEALTHY=1
+                break
+              fi
+              echo "Health check returned HTTP $HTTP_CODE, retrying in 3s..."
+              sleep 3
+            done
+
+            if [ "$HEALTHY" -ne 1 ]; then
+              echo "::error::Backend health check failed! Dumping last 50 lines of PM2 logs:"
+              pm2 logs cheran-backend --lines 50 --nostream
+              exit 1
+            fi
+
+            echo "=== [5/5] Building Frontend App ==="
+            cd ~/cheran/frontend
+            npm ci
+            npm run build
+
+            echo "=== Deployment Finished Successfully! ==="

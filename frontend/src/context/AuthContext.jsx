@@ -1,0 +1,72 @@
+import React, { createContext, useContext, useState, useEffect } from "react";
+import api from "../api/client.js";
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem("cheran_auth_user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState(() => localStorage.getItem("cheran_auth_token") || null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const verifyAuth = async () => {
+      const savedToken = localStorage.getItem("cheran_auth_token");
+      if (savedToken) {
+        try {
+          const res = await api.get("/auth/me");
+          if (res.data?.user) {
+            setUser(res.data.user);
+            localStorage.setItem("cheran_auth_user", JSON.stringify(res.data.user));
+          }
+        } catch (err) {
+          console.warn("Session verification failed, logging out:", err.message);
+          logout();
+        }
+      }
+      setLoading(false);
+    };
+
+    verifyAuth();
+  }, []);
+
+  const login = async (username, password) => {
+    const res = await api.post("/auth/login", { username, password });
+    const { user: authUser, token: authToken } = res.data;
+
+    setUser(authUser);
+    setToken(authToken);
+    localStorage.setItem("cheran_auth_token", authToken);
+    localStorage.setItem("cheran_auth_user", JSON.stringify(authUser));
+    return authUser;
+  };
+
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem("cheran_auth_token");
+    localStorage.removeItem("cheran_auth_user");
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, token, loading, login, logout, isAuthenticated: !!user }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}
+
+export default AuthContext;

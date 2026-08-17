@@ -17,4 +17,27 @@ router
   .route("/:id/status-history")
   .get(validate(getProjectSchema), projectController.getProjectStatusHistory);
 
+// Follow-ups
+router
+  .route("/:id/followups")
+  .get(validate(getProjectSchema), projectController.listFollowups)
+  .post(validate(getProjectSchema), projectController.createFollowup);
+
+// Documents
+router
+  .route("/:id/documents")
+  .get(validate(getProjectSchema), projectController.listDocuments)
+  .post(validate(getProjectSchema), projectController.addDocument);
+
+// Project Invoices & Dispatched Materials
+router.get("/:id/invoices", validate(getProjectSchema), async (req, res, next) => {
+  const { getProjectInvoices } = await import("../invoices/invoice.service.js");
+  try {
+    const result = await getProjectInvoices(req.params.id);
+    res.status(200).json({ status: "success", data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

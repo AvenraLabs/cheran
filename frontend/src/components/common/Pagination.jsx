@@ -61,14 +61,17 @@ export function Pagination({
         {onLimitChange && (
           <div className="flex items-center gap-1.5 ml-2 border-l border-[#E4E1D8] pl-3">
             <span>Per page:</span>
-            <CustomSelect
-              options={limitOptions.map((opt) => ({ value: opt, label: String(opt) }))}
+            <select
               value={limit}
-              onChange={(val) => onLimitChange(parseInt(val, 10))}
-              searchable={false}
-              size="sm"
-              className="w-20"
-            />
+              onChange={(e) => onLimitChange(parseInt(e.target.value, 10))}
+              className="px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-semibold focus:outline-none focus:border-[#2F6F5E] focus:ring-1 focus:ring-[#2F6F5E] cursor-pointer shadow-2xs"
+            >
+              {limitOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </div>
         )}
       </div>

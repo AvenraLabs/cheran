@@ -10,7 +10,7 @@ export const createDealerSchema = z.object({
 
 export const updateDealerSchema = z.object({
   params: z.object({
-    id: z.string().uuid("Invalid dealer ID format"),
+    id: z.string().min(1, "Invalid dealer ID format"),
   }),
   body: z.object({
     name: z.string().min(1).max(255).optional(),
@@ -21,14 +21,14 @@ export const updateDealerSchema = z.object({
 
 export const mergeDealersSchema = z.object({
   body: z.object({
-    target_dealer_id: z.string().uuid("Invalid target dealer ID"),
-    source_dealer_ids: z.array(z.string().uuid()).min(1, "At least one source dealer must be selected to merge"),
+    target_dealer_id: z.string().min(1, "Invalid target dealer ID"),
+    source_dealer_ids: z.array(z.string().min(1)).min(1, "At least one source dealer must be selected to merge"),
   }),
 });
 
 export const getDealerSchema = z.object({
   params: z.object({
-    id: z.string().uuid("Invalid dealer ID format"),
+    id: z.string().min(1, "Invalid dealer ID format"),
   }),
 });
 

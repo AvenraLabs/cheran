@@ -7,6 +7,7 @@ export function CustomSelect({
   onChange,
   placeholder = "Select an option",
   searchable = true,
+  clearable = false,
   disabled = false,
   className = "",
   size = "md",
@@ -122,7 +123,7 @@ export function CustomSelect({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          {value && value !== "" && !disabled && (
+          {clearable && value && value !== "" && !disabled && (
             <span
               onClick={handleClear}
               className="p-0.5 hover:bg-[#EDEAE1] text-[#8C97AB] hover:text-[#14213D] rounded-full transition-colors cursor-pointer"

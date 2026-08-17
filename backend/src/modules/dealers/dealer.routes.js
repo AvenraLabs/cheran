@@ -8,8 +8,26 @@ import {
   listDealerSchema,
 } from "./dealer.schema.js";
 import * as dealerController from "./dealer.controller.js";
+import * as commissionController from "./dealer-commission.controller.js";
+import {
+  createCommissionSchema,
+  updateCommissionStatusSchema,
+  listCommissionsSchema,
+} from "./dealer-commission.schema.js";
 
 const router = Router();
+
+// Commission endpoints
+router
+  .route("/commissions")
+  .get(validate(listCommissionsSchema), commissionController.listCommissions)
+  .post(validate(createCommissionSchema), commissionController.createCommission);
+
+router.patch(
+  "/commissions/:id",
+  validate(updateCommissionStatusSchema),
+  commissionController.updateCommissionStatus
+);
 
 router
   .route("/")

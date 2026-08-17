@@ -6,20 +6,72 @@ import {
   UploadCloud,
   Users,
   Sprout,
+  Boxes,
+  ClipboardList,
+  Package,
+  Scale,
+  Truck,
+  ShoppingCart,
+  UserCheck,
+  Receipt,
+  UserCog,
+  DollarSign,
+  BarChart3,
+  Sliders,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export function Sidebar() {
-  const navItems = [
-    { label: "Dashboard", path: "/", icon: LayoutDashboard },
-    { label: "Government Projects", path: "/projects", icon: FileSpreadsheet },
-    { label: "Excel Imports", path: "/imports", icon: UploadCloud },
-    { label: "Dealers Directory", path: "/dealers", icon: Users },
+  const { user, logout } = useAuth();
+  const navigationSections = [
+    {
+      title: "Operations & Govt",
+      items: [
+        { label: "Dashboard", path: "/", icon: LayoutDashboard },
+        { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+        { label: "Excel Imports", path: "/imports", icon: UploadCloud },
+        { label: "Dealers Directory", path: "/dealers", icon: Users },
+      ],
+    },
+    {
+      title: "Inventory & Materials",
+      items: [
+        { label: "Stock On-Hand", path: "/inventory", icon: Boxes },
+        { label: "Purchase Receipts", path: "/inventory/receipts", icon: ClipboardList },
+        { label: "Item Master", path: "/items", icon: Package },
+        { label: "Units of Measure", path: "/units", icon: Scale },
+        { label: "Suppliers / Vendors", path: "/suppliers", icon: Truck },
+      ],
+    },
+    {
+      title: "Sales & Commercial",
+      items: [
+        { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
+        { label: "Customers", path: "/customers", icon: UserCheck },
+        { label: "Expenses", path: "/expenses", icon: Receipt },
+      ],
+    },
+    {
+      title: "Human Resources",
+      items: [
+        { label: "Staff & Attendance", path: "/employees", icon: UserCog },
+        { label: "Payroll / Salary", path: "/salary", icon: DollarSign },
+      ],
+    },
+    {
+      title: "Reports & Configuration",
+      items: [
+        { label: "Reports & Analytics", path: "/reports", icon: BarChart3 },
+        { label: "Business Settings", path: "/settings", icon: Sliders },
+      ],
+    },
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-[#E4E1D8] flex flex-col h-screen sticky top-0 shrink-0 select-none">
+    <aside className="w-64 bg-white border-r border-[#E4E1D8] flex flex-col h-screen sticky top-0 shrink-0 select-none shadow-[1px_0_2px_rgba(20,33,61,0.02)]">
       {/* Brand Header */}
-      <div className="h-16 px-6 border-b border-[#EDEAE1] flex items-center gap-3">
+      <div className="h-16 px-6 border-b border-[#EDEAE1] flex items-center gap-3 shrink-0">
         <div className="w-9 h-9 rounded-[8px] bg-[#2F6F5E] text-white flex items-center justify-center font-bold font-display shadow-xs">
           <Sprout size={20} />
         </div>
@@ -27,35 +79,65 @@ export function Sidebar() {
           <div className="text-sm font-bold font-display tracking-tight text-[#14213D]">
             CHERAN PLAST
           </div>
-          <div className="text-[11px] font-medium text-[#52607D]">
-            Horticulture Govt Projects
+          <div className="text-[10px] font-medium text-[#52607D]">
+            Enterprise School / ERP
           </div>
         </div>
       </div>
 
       {/* Nav Menu */}
-      <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-[#8C97AB] px-3 py-2">
-          Management
-        </div>
+      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        {navigationSections.map((section, idx) => (
+          <div key={idx} className="space-y-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#8C97AB] px-3 py-1">
+              {section.title}
+            </div>
 
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-[8px] text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-[#EAF3F0] text-[#2F6F5E] font-semibold"
-                  : "text-[#52607D] hover:bg-[#FAFAF8] hover:text-[#14213D]"
-              }`
-            }
-          >
-            <item.icon size={18} />
-            <span>{item.label}</span>
-          </NavLink>
+            {section.items.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.path === "/" || item.path === "/inventory"}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-3 py-2 rounded-[7px] text-xs font-medium transition-colors ${
+                    isActive
+                      ? "bg-[#EAF3F0] text-[#2F6F5E] font-bold shadow-xs"
+                      : "text-[#52607D] hover:bg-[#FAFAF8] hover:text-[#14213D]"
+                  }`
+                }
+              >
+                <item.icon size={15} />
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
+
+      {/* User Session Footer */}
+      <div className="p-3 border-t border-[#EDEAE1] bg-[#FAFAF8] flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-[#2F6F5E]/15 text-[#2F6F5E] flex items-center justify-center font-bold text-xs shrink-0 font-mono">
+            {user?.name?.slice(0, 1) || user?.username?.slice(0, 1)?.toUpperCase() || "A"}
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-[#14213D] truncate">
+              {user?.name || user?.username || "Admin"}
+            </div>
+            <div className="text-[10px] text-[#52607D] truncate uppercase font-mono font-medium">
+              {user?.role || "Administrator"}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={logout}
+          title="Sign out"
+          className="p-1.5 text-[#8C97AB] hover:text-[#B0403A] hover:bg-[#FDF2F1] rounded-[6px] transition-colors cursor-pointer"
+        >
+          <LogOut size={16} />
+        </button>
+      </div>
     </aside>
   );
 }

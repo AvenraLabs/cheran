@@ -6,7 +6,7 @@ export const listProjectsSchema = z.object({
     district: z.string().optional(),
     block: z.string().optional(),
     village: z.string().optional(),
-    dealer_id: z.string().uuid().optional(),
+    dealer_id: z.string().optional(),
     year: z.string().optional(),
     farmer_name: z.string().optional(),
     application_id: z.string().optional(),
@@ -20,6 +20,6 @@ export const listProjectsSchema = z.object({
 
 export const getProjectSchema = z.object({
   params: z.object({
-    id: z.string().uuid("Invalid project ID format"),
+    id: z.string().min(1, "Invalid project ID format"),
   }),
 });

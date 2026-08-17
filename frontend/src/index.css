@@ -36,6 +36,30 @@
   h1, h2, h3, h4, h5, h6, .font-display {
     font-family: var(--font-display);
   }
+
+  /* Global Brand Teak Controls & Focus Rings */
+  input[type="checkbox"], input[type="radio"] {
+    accent-color: #2F6F5E !important;
+    cursor: pointer;
+  }
+
+  select:focus, input:focus, textarea:focus {
+    border-color: #2F6F5E !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(47, 111, 94, 0.2) !important;
+  }
+}
+
+/* Globally disable up/down arrow marks (spinners) on all number inputs */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
 }
 
 /* Custom Scrollbar */

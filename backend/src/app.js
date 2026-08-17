@@ -8,14 +8,27 @@ import env from "./config/env.js";
 import errorHandler from "./shared/errorHandler.js";
 import AppError from "./shared/appError.js";
 
-// Initialize models and associations
+// Initialize all models and associations
 import "./models/initModels.js";
 
-// Routes
+// Domain Routes
 import dealerRoutes from "./modules/dealers/dealer.routes.js";
 import statusRoutes from "./modules/statuses/status.routes.js";
 import projectRoutes from "./modules/projects/project.routes.js";
 import importRoutes from "./modules/imports/import.routes.js";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
+import unitRoutes from "./modules/units/unit.routes.js";
+import itemRoutes from "./modules/items/item.routes.js";
+import supplierRoutes from "./modules/suppliers/supplier.routes.js";
+import inventoryRoutes from "./modules/inventory/inventory.routes.js";
+import settingRoutes from "./modules/settings/setting.routes.js";
+import expenseRoutes from "./modules/expenses/expense.routes.js";
+import employeeRoutes from "./modules/employees/employee.routes.js";
+import customerRoutes from "./modules/customers/customer.routes.js";
+import saleRoutes from "./modules/sales/sale.routes.js";
+import invoiceRoutes from "./modules/invoices/invoice.routes.js";
+import reportRoutes from "./modules/reports/report.routes.js";
+import authRoutes from "./modules/auth/auth.routes.js";
 
 const app = express();
 
@@ -56,17 +69,30 @@ app.use("/api", limiter);
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "success",
-    message: "Cheran Plast Horticulture Backend API is running smoothly",
+    message: "Cheran Plast Horticulture & ERP Backend API is running smoothly",
     timestamp: new Date().toISOString(),
     environment: env.NODE_ENV,
   });
 });
 
 // Mount Domain Routes
+app.use("/api/auth", authRoutes);
 app.use("/api/dealers", dealerRoutes);
 app.use("/api/government/statuses", statusRoutes);
 app.use("/api/government/projects", projectRoutes);
 app.use("/api/government/imports", importRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/units", unitRoutes);
+app.use("/api/items", itemRoutes);
+app.use("/api/suppliers", supplierRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/settings", settingRoutes);
+app.use("/api/expenses", expenseRoutes);
+app.use("/api/employees", employeeRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/sales", saleRoutes);
+app.use("/api/invoices", invoiceRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Catch-all 404 handler
 app.use((req, res, next) => {

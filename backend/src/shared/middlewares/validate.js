@@ -38,9 +38,10 @@ export const validate = (schema) => (req, res, next) => {
 
     next();
   } catch (err) {
-    if (err.errors) {
-      const errorDetails = err.errors.map((e) => ({
-        field: e.path.join("."),
+    const issues = err.issues || err.errors;
+    if (issues && Array.isArray(issues)) {
+      const errorDetails = issues.map((e) => ({
+        field: e.path ? e.path.join(".") : "field",
         message: e.message,
       }));
       const messageStr = errorDetails.map((e) => `${e.field}: ${e.message}`).join(", ");
