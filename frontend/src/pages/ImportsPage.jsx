@@ -291,7 +291,7 @@ export function ImportsPage() {
         subtitle="Safe, two-step idempotent Excel import with high-performance pagination and bulk dealer resolution"
       />
 
-      <main className="p-8 space-y-8 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 flex-1 overflow-y-auto">
         {/* Upload Card */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
           <h2 className="text-base font-bold font-display text-[#14213D] mb-2">

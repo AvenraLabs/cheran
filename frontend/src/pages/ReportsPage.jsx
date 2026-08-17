@@ -62,9 +62,9 @@ export function ReportsPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-[#E4E1D8] pb-3">
+        <div className="flex items-center gap-2 border-b border-[#E4E1D8] pb-3 overflow-x-auto">
           <button
             onClick={() => setActiveTab("dealers")}
             className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors cursor-pointer ${

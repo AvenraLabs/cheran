@@ -115,7 +115,7 @@ export function ProjectsPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {/* Dynamic Live Filter Bar (No manual filter button needed) */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">

@@ -76,7 +76,7 @@ export function SettingsPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto max-w-4xl">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto max-w-4xl">
         {successMsg && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-[8px] flex items-center gap-2">
             <CheckCircle2 size={16} /> {successMsg}

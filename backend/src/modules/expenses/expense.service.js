@@ -43,6 +43,24 @@ export async function updateExpenseCategory(id, { name, is_active }) {
   return category;
 }
 
+export async function deleteExpenseCategory(id) {
+  const category = await ExpenseCategory.findByPk(id);
+  if (!category) {
+    throw new AppError(`Expense category not found with ID ${id}`, 404);
+  }
+
+  const count = await Expense.count({ where: { category_id: id } });
+  if (count > 0) {
+    throw new AppError(
+      `Cannot delete category '${category.name}' because it has ${count} associated expense records.`,
+      400
+    );
+  }
+
+  await category.destroy();
+  return { success: true };
+}
+
 // Expenses CRUD
 export async function createExpense({
   category_id,

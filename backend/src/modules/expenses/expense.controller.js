@@ -26,6 +26,14 @@ export const updateCategory = asyncHandler(async (req, res) => {
   });
 });
 
+export const deleteCategory = asyncHandler(async (req, res) => {
+  await expenseService.deleteExpenseCategory(req.params.id);
+  res.status(200).json({
+    status: "success",
+    message: "Expense category deleted successfully",
+  });
+});
+
 // Expenses
 export const listExpenses = asyncHandler(async (req, res) => {
   const result = await expenseService.listExpenses(req.query);

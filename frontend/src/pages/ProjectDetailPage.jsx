@@ -164,7 +164,7 @@ export function ProjectDetailPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {/* Top Status Header Card */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">

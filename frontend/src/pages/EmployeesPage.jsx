@@ -240,7 +240,7 @@ export function EmployeesPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {/* KPI Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard

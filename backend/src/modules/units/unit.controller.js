@@ -32,3 +32,12 @@ export const updateUnit = asyncHandler(async (req, res) => {
     data: { unit },
   });
 });
+
+export const deleteUnit = asyncHandler(async (req, res) => {
+  await unitService.deleteUnit(req.params.id);
+  res.status(200).json({
+    status: "success",
+    message: "Unit deleted successfully",
+  });
+});
+

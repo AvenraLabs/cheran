@@ -8,6 +8,7 @@ import {
   Calendar,
   Layers,
   ArrowUpRight,
+  Trash2,
 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -144,13 +145,31 @@ export function ExpensesPage() {
     try {
       setSavingCat(true);
       setCatError("");
-      await api.post("/expenses/categories", { name: newCatName.trim() });
+      const res = await api.post("/expenses/categories", { name: newCatName.trim() });
       setNewCatName("");
-      fetchCategories();
+      await fetchCategories();
+      if (res.data?.data?.category?.id) {
+        setCategoryId(res.data.data.category.id);
+      }
     } catch (err) {
       setCatError(err.response?.data?.message || "Failed to create category.");
     } finally {
       setSavingCat(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete category "${name}"?`)) {
+      return;
+    }
+    try {
+      setCatError("");
+      await api.delete(`/expenses/categories/${id}`);
+      if (categoryId === id) setCategoryId("");
+      if (selectedCategory === id) setSelectedCategory("");
+      fetchCategories();
+    } catch (err) {
+      setCatError(err.response?.data?.message || "Failed to delete category.");
     }
   };
 
@@ -184,7 +203,7 @@ export function ExpensesPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <MetricCard
@@ -321,14 +340,23 @@ export function ExpensesPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Category <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[#14213D]">
+                  Category <span className="text-rose-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCatModalOpen(true)}
+                  className="text-[11px] text-[#2F6F5E] hover:underline font-medium flex items-center gap-0.5"
+                >
+                  <Plus size={12} /> Add Category
+                </button>
+              </div>
               <CustomSelect
                 options={categorySelectOptions}
                 value={categoryId}
                 onChange={(val) => setCategoryId(val)}
-                placeholder="Select Category"
+                placeholder={categories.length === 0 ? "No categories (click Add Category)" : "Select Category"}
               />
             </div>
 
@@ -432,23 +460,41 @@ export function ExpensesPage() {
           <form onSubmit={handleCreateCategory} className="flex gap-2">
             <input
               type="text"
-              placeholder="New category name (e.g. Generator Fuel)"
+              placeholder="New category name (e.g. Generator Fuel, Rent, Office Supplies)"
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
               className="flex-1 px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
             />
             <Button type="submit" loading={savingCat} icon={Plus}>
-              Add
+              Create Category
             </Button>
           </form>
 
           <div className="border border-[#EDEAE1] rounded-[8px] divide-y divide-[#EDEAE1] max-h-56 overflow-y-auto">
-            {categories.map((c) => (
-              <div key={c.id} className="p-2.5 text-xs flex items-center justify-between hover:bg-[#FAFAF8]">
-                <span className="font-semibold text-[#14213D]">{c.name}</span>
-                <span className="text-[10px] text-emerald-700 font-mono bg-emerald-50 px-2 py-0.5 rounded">Active</span>
+            {categories.length === 0 ? (
+              <div className="p-4 text-center text-xs text-[#52607D]">
+                No expense categories created yet. Create one above.
               </div>
-            ))}
+            ) : (
+              categories.map((c) => (
+                <div key={c.id} className="p-2.5 text-xs flex items-center justify-between hover:bg-[#FAFAF8]">
+                  <span className="font-semibold text-[#14213D]">{c.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-emerald-700 font-mono bg-emerald-50 px-2 py-0.5 rounded">
+                      Active
+                    </span>
+                    <button
+                      type="button"
+                      title="Delete category"
+                      onClick={() => handleDeleteCategory(c.id, c.name)}
+                      className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="flex justify-end pt-2 border-t border-[#EDEAE1]">

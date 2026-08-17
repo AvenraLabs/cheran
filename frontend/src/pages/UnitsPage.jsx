@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Scale, Plus, Edit2, RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { Scale, Plus, Edit2, RefreshCw, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
@@ -10,6 +10,7 @@ export function UnitsPage() {
   const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [actionError, setActionError] = useState("");
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -56,6 +57,19 @@ export function UnitsPage() {
     setIsActive(unit.is_active);
     setErrorMsg("");
     setModalOpen(true);
+  };
+
+  const handleDeleteUnit = async (unit) => {
+    if (!window.confirm(`Are you sure you want to delete unit "${unit.name}" (${unit.symbol})?`)) {
+      return;
+    }
+    try {
+      setActionError("");
+      await api.delete(`/units/${unit.id}`);
+      fetchUnits();
+    } catch (err) {
+      setActionError(err.response?.data?.message || err.message || "Failed to delete unit.");
+    }
   };
 
   const handleSave = async (e) => {
@@ -107,7 +121,19 @@ export function UnitsPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
+        {actionError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-[8px] flex items-center justify-between">
+            <span>{actionError}</span>
+            <button
+              onClick={() => setActionError("")}
+              className="text-rose-600 font-bold hover:text-rose-800 ml-2"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Filter Bar */}
         <div className="bg-white p-4 border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1 max-w-md">
@@ -177,14 +203,25 @@ export function UnitsPage() {
                         {new Date(u.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          icon={Edit2}
-                          onClick={() => handleOpenEdit(u)}
-                        >
-                          Edit
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            icon={Edit2}
+                            onClick={() => handleOpenEdit(u)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            icon={Trash2}
+                            onClick={() => handleDeleteUnit(u)}
+                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

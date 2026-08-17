@@ -14,6 +14,7 @@ const router = Router();
 router.get("/categories", expenseController.listCategories);
 router.post("/categories", validate(createCategorySchema), expenseController.createCategory);
 router.patch("/categories/:id", validate(updateCategorySchema), expenseController.updateCategory);
+router.delete("/categories/:id", expenseController.deleteCategory);
 
 // Expenses
 router.get("/", validate(listExpenseSchema), expenseController.listExpenses);

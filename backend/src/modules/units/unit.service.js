@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import Unit from "./unit.model.js";
+import Item from "../items/item.model.js";
 import AppError from "../../shared/appError.js";
 
 export async function listUnits({ search, is_active } = {}) {
@@ -80,8 +81,24 @@ export async function updateUnit(id, { name, symbol, is_active }) {
   return unit;
 }
 
+export async function deleteUnit(id) {
+  const unit = await Unit.findByPk(id);
+  if (!unit) {
+    throw new AppError(`Unit not found with ID ${id}`, 404);
+  }
+
+  const count = await Item.count({ where: { unit_id: id } });
+  if (count > 0) {
+    throw new AppError(`Cannot delete unit '${unit.name}' because it is linked to ${count} catalog items.`, 400);
+  }
+
+  await unit.destroy();
+  return { success: true };
+}
+
 function dbWhereName(name) {
   return {
     name: { [Op.iLike]: name },
   };
 }
+

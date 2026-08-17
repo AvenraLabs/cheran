@@ -122,14 +122,14 @@ export function SuppliersPage() {
         }
       />
 
-      <main className="p-8 space-y-6 flex-1 overflow-y-auto">
-        <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex items-center justify-between">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
+        <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <input
             type="text"
             placeholder="Search suppliers by name, phone, GST..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-md px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+            className="w-full sm:max-w-md px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
           />
           <div className="text-xs text-[#52607D]">
             Total: <strong className="text-[#14213D]">{pagination.total}</strong> suppliers
