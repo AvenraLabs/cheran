@@ -40,3 +40,12 @@ export const getProjectInvoices = asyncHandler(async (req, res) => {
     data: result,
   });
 });
+
+export const recordInvoicePayment = asyncHandler(async (req, res) => {
+  const invoice = await invoiceService.recordInvoicePayment(req.params.id, req.body);
+  res.status(200).json({
+    status: "success",
+    message: "Invoice payment recorded successfully",
+    data: { invoice },
+  });
+});

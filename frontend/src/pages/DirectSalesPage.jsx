@@ -6,6 +6,8 @@ import {
   RefreshCw,
   Search,
   CheckCircle,
+  Check,
+  CreditCard,
   Clock,
   User,
   Calendar,
@@ -30,6 +32,7 @@ export function DirectSalesPage() {
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("ALL");
 
   // Create Invoice Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -54,6 +57,16 @@ export function DirectSalesPage() {
   const [savingCancel, setSavingCancel] = useState(false);
   const [cancelError, setCancelError] = useState("");
 
+  // Payment Collection Modal State
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payingInvoice, setPayingInvoice] = useState(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payReference, setPayReference] = useState("");
+  const [payNotes, setPayNotes] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [payError, setPayError] = useState("");
+
   const fetchDependencies = async () => {
     try {
       const [itemsRes, custRes, settingsRes] = await Promise.all([
@@ -75,12 +88,18 @@ export function DirectSalesPage() {
     }
   };
 
-  const fetchInvoices = async (page = 1, searchQuery = search, type = typeFilter) => {
+  const fetchInvoices = async (
+    page = 1,
+    searchQuery = search,
+    type = typeFilter,
+    payStatus = paymentStatusFilter
+  ) => {
     setLoading(true);
     try {
       let url = `/invoices?page=${page}&limit=50`;
       if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`;
       if (type !== "ALL") url += `&invoice_type=${type}`;
+      if (payStatus !== "ALL") url += `&payment_status=${payStatus}`;
 
       const res = await api.get(url);
       setInvoices(res.data?.invoices || []);
@@ -100,12 +119,58 @@ export function DirectSalesPage() {
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearch(val);
-    fetchInvoices(1, val, typeFilter);
+    fetchInvoices(1, val, typeFilter, paymentStatusFilter);
   };
 
   const handleTypeFilterChange = (val) => {
     setTypeFilter(val);
-    fetchInvoices(1, search, val);
+    fetchInvoices(1, search, val, paymentStatusFilter);
+  };
+
+  const handlePaymentStatusFilterChange = (val) => {
+    setPaymentStatusFilter(val);
+    fetchInvoices(1, search, typeFilter, val);
+  };
+
+  const handleOpenPaymentModal = (inv) => {
+    setPayingInvoice(inv);
+    const total = parseFloat(inv.total_amount || 0);
+    const paid = parseFloat(inv.paid_amount || 0);
+    const remaining = Math.max(0, total - paid);
+    setPayAmount(remaining.toFixed(2));
+    setPayDate(new Date().toISOString().split("T")[0]);
+    setPayReference("Cash / Direct Bank Transfer");
+    setPayNotes("");
+    setPayError("");
+    setPayModalOpen(true);
+  };
+
+  const handleRecordPayment = async (e) => {
+    e.preventDefault();
+    if (!payingInvoice) return;
+    setSavingPayment(true);
+    setPayError("");
+
+    try {
+      const amt = parseFloat(payAmount);
+      if (isNaN(amt) || amt <= 0) {
+        throw new Error("Please enter a valid payment amount greater than 0");
+      }
+
+      await api.post(`/invoices/${payingInvoice.id}/payment`, {
+        amount: amt,
+        payment_date: payDate,
+        payment_reference: payReference.trim() || "Direct Payment",
+        notes: payNotes.trim() || null,
+      });
+
+      setPayModalOpen(false);
+      fetchInvoices(pagination.page);
+    } catch (err) {
+      setPayError(err.response?.data?.message || err.message || "Failed to record payment");
+    } finally {
+      setSavingPayment(false);
+    }
   };
 
   // Line calculations
@@ -257,25 +322,38 @@ export function DirectSalesPage() {
 
         {/* Action Header */}
         <div className="bg-white p-4 rounded-[10px] border border-[#E4E1D8] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="relative flex-1 md:w-72">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto flex-1">
+            <div className="relative flex-1 min-w-[200px] md:max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C97AB]" size={15} />
               <input
                 type="text"
-                placeholder="Search invoice number, farmer, or customer..."
+                placeholder="Search invoice #, customer, UTR..."
                 value={search}
                 onChange={handleSearchChange}
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
               />
             </div>
-            <div className="w-48">
+            <div className="w-44">
               <CustomSelect
                 value={typeFilter}
                 onChange={handleTypeFilterChange}
                 options={[
-                  { value: "ALL", label: "All Types" },
+                  { value: "ALL", label: "All Invoice Types" },
                   { value: "GOVERNMENT", label: "Government Project" },
                   { value: "DIRECT_SALE", label: "Direct Sale" },
+                ]}
+              />
+            </div>
+            <div className="w-56">
+              <CustomSelect
+                value={paymentStatusFilter}
+                onChange={handlePaymentStatusFilterChange}
+                options={[
+                  { value: "ALL", label: "All Payment States" },
+                  { value: "PENDING", label: "Pending (Has Balance Due)" },
+                  { value: "UNPAID", label: "Unpaid (0% Paid)" },
+                  { value: "PARTIALLY_PAID", label: "Partially Paid" },
+                  { value: "PAID", label: "Fully Paid" },
                 ]}
               />
             </div>
@@ -332,79 +410,114 @@ export function DirectSalesPage() {
                     <th className="py-3 px-4">Type</th>
                     <th className="py-3 px-4">Customer / Application ID</th>
                     <th className="py-3 px-4 text-right">Net Items</th>
-                    <th className="py-3 px-4 text-right">Fittings Cost (5%)</th>
-                    <th className="py-3 px-4 text-right">GST (5%)</th>
                     <th className="py-3 px-4 text-right">Grand Total</th>
+                    <th className="py-3 px-4">Payment / Collections</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EDEAE1] text-[#14213D]">
-                  {invoices.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-[#FAFAF8] transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">
-                        #{inv.invoice_number}
-                      </td>
-                      <td className="py-3 px-4">{inv.invoice_date}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            inv.invoice_type === "GOVERNMENT"
-                              ? "bg-[#EAF3F0] text-[#2F6F5E]"
-                              : "bg-[#EFF6FF] text-[#2563EB]"
-                          }`}
-                        >
-                          {inv.invoice_type === "GOVERNMENT" ? "Government" : "Direct Sale"}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold">{inv.customer_name || "—"}</div>
-                        {inv.government_project && (
-                          <div className="text-[10px] text-[#52607D] font-mono">
-                            App ID: {inv.government_project.application_id}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono">
-                        ₹{parseFloat(inv.net_item_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-[#D97706]">
-                        +₹{parseFloat(inv.fittings_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                        ₹{parseFloat(inv.gst_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
-                        ₹{parseFloat(inv.total_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            inv.status === "POSTED"
-                              ? "bg-[#EAF3F0] text-[#2F6F5E]"
-                              : "bg-[#FDE8E8] text-[#C81E1E]"
-                          }`}
-                        >
-                          {inv.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        {inv.status === "POSTED" && (
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            onClick={() => {
-                              setSelectedInvoice(inv);
-                              setCancelModalOpen(true);
-                            }}
-                            className="text-[#B0403A] hover:bg-[#FDF2F1] border-[#F8D7D5] hover:border-[#B0403A] font-medium"
+                  {invoices.map((inv) => {
+                    const totalAmt = parseFloat(inv.total_amount || 0);
+                    const paidAmt = parseFloat(inv.paid_amount || 0);
+                    const isFullyPaid = inv.payment_status === "PAID" || paidAmt >= totalAmt;
+                    const isPartial = !isFullyPaid && paidAmt > 0;
+                    const dueAmt = Math.max(0, totalAmt - paidAmt);
+
+                    return (
+                      <tr key={inv.id} className="hover:bg-[#FAFAF8] transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">
+                          #{inv.invoice_number}
+                        </td>
+                        <td className="py-3 px-4">{inv.invoice_date}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              inv.invoice_type === "GOVERNMENT"
+                                ? "bg-[#EAF3F0] text-[#2F6F5E]"
+                                : "bg-[#EFF6FF] text-[#2563EB]"
+                            }`}
                           >
-                            Cancel
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                            {inv.invoice_type === "GOVERNMENT" ? "Government" : "Direct Sale"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold">{inv.customer_name || "—"}</div>
+                          {inv.government_project && (
+                            <div className="text-[10px] text-[#52607D] font-mono">
+                              App ID: {inv.government_project.application_id}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono">
+                          ₹{parseFloat(inv.net_item_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
+                          ₹{totalAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4">
+                          {inv.invoice_type === "GOVERNMENT" ? (
+                            <span className="text-[11px] text-[#8C97AB]">Govt Subsidy</span>
+                          ) : isFullyPaid ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20">
+                              <Check size={11} /> Paid (₹{totalAmt.toLocaleString("en-IN")})
+                            </span>
+                          ) : isPartial ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                Partial: ₹{paidAmt.toLocaleString("en-IN")}
+                              </span>
+                              <div className="text-[10px] text-rose-600 font-mono font-semibold">
+                                Due: ₹{dueAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="inline-flex text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                              Unpaid (₹{totalAmt.toLocaleString("en-IN")} Due)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              inv.status === "POSTED"
+                                ? "bg-[#EAF3F0] text-[#2F6F5E]"
+                                : "bg-[#FDE8E8] text-[#C81E1E]"
+                            }`}
+                          >
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2">
+                            {inv.invoice_type === "DIRECT_SALE" && inv.status === "POSTED" && !isFullyPaid && (
+                              <Button
+                                variant="primary"
+                                size="xs"
+                                icon={CreditCard}
+                                onClick={() => handleOpenPaymentModal(inv)}
+                              >
+                                Pay
+                              </Button>
+                            )}
+                            {inv.status === "POSTED" && (
+                              <Button
+                                variant="secondary"
+                                size="xs"
+                                onClick={() => {
+                                  setSelectedInvoice(inv);
+                                  setCancelModalOpen(true);
+                                }}
+                                className="text-[#B0403A] hover:bg-[#FDF2F1] hover:text-[#8F332E] border-[#E4E1D8] hover:border-[#F8B4B4]"
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -493,7 +606,7 @@ export function DirectSalesPage() {
                   className="w-full px-3 py-2 text-xs font-mono border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E]"
                 />
                 <p className="text-[10px] text-[#52607D] mt-1">
-                  Backend will strictly verify this Application ID against existing Government Projects.
+                  Links to existing project. If not found, a new Government Project will be automatically created with status <strong>INVOICED</strong>.
                 </p>
               </div>
             ) : (
@@ -512,10 +625,96 @@ export function DirectSalesPage() {
               </div>
             )}
 
-            {/* Items Dispatched Table */}
-            <div className="border border-[#E4E1D8] rounded-[8px] overflow-hidden">
-              <div className="bg-[#FAFAF8] px-3 py-2 border-b border-[#E4E1D8] flex items-center justify-between">
-                <span className="text-xs font-bold text-[#14213D]">Dispatched Items</span>
+            {/* Tax and Percentage Rate Controls (Editable on-the-fly, prefilled from settings) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#FAFAF8] rounded-[8px] border border-[#E4E1D8]">
+              <div>
+                <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                  GST Rate (%):
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={gstPct}
+                    onChange={(e) => setGstPct(parseFloat(e.target.value) || 0)}
+                    className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-white border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E] text-[#14213D]"
+                    placeholder="e.g. 5 or 18"
+                  />
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setGstPct(5.0)}
+                      className={`px-2 py-1 text-[10px] font-bold rounded-[6px] border cursor-pointer transition-colors ${
+                        gstPct === 5.0 ? "bg-[#2F6F5E] text-white border-[#2F6F5E]" : "bg-white text-[#52607D] border-[#E4E1D8]"
+                      }`}
+                    >
+                      5%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGstPct(12.0)}
+                      className={`px-2 py-1 text-[10px] font-bold rounded-[6px] border cursor-pointer transition-colors ${
+                        gstPct === 12.0 ? "bg-[#2F6F5E] text-white border-[#2F6F5E]" : "bg-white text-[#52607D] border-[#E4E1D8]"
+                      }`}
+                    >
+                      12%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGstPct(18.0)}
+                      className={`px-2 py-1 text-[10px] font-bold rounded-[6px] border cursor-pointer transition-colors ${
+                        gstPct === 18.0 ? "bg-[#2F6F5E] text-white border-[#2F6F5E]" : "bg-white text-[#52607D] border-[#E4E1D8]"
+                      }`}
+                    >
+                      18%
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                  Fittings Cost Rate (%):
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={fittingsPct}
+                    onChange={(e) => setFittingsPct(parseFloat(e.target.value) || 0)}
+                    className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-white border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E] text-[#14213D]"
+                    placeholder="e.g. 5"
+                  />
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setFittingsPct(5.0)}
+                      className={`px-2 py-1 text-[10px] font-bold rounded-[6px] border cursor-pointer transition-colors ${
+                        fittingsPct === 5.0 ? "bg-[#2F6F5E] text-white border-[#2F6F5E]" : "bg-white text-[#52607D] border-[#E4E1D8]"
+                      }`}
+                    >
+                      5%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFittingsPct(0.0)}
+                      className={`px-2 py-1 text-[10px] font-bold rounded-[6px] border cursor-pointer transition-colors ${
+                        fittingsPct === 0.0 ? "bg-[#2F6F5E] text-white border-[#2F6F5E]" : "bg-white text-[#52607D] border-[#E4E1D8]"
+                      }`}
+                    >
+                      0%
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="border border-[#E4E1D8] rounded-[8px] relative bg-white">
+              <div className="bg-[#FAFAF8] px-3 py-2 border-b border-[#E4E1D8] flex items-center justify-between rounded-t-[8px]">
+                <span className="text-xs font-bold text-[#14213D]">Dispatched Items (Deducted from Inventory)</span>
                 <Button type="button" variant="outline" size="xs" icon={Plus} onClick={addLine}>
                   Add Line
                 </Button>
@@ -530,19 +729,24 @@ export function DirectSalesPage() {
                 {lines.length > 1 && <div className="w-6"></div>}
               </div>
 
-              <div className="p-3 space-y-2 overflow-visible">
+              <div className="p-3 space-y-3">
                 {lines.map((line, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs">
-                    <div className="flex-1">
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 text-xs relative"
+                    style={{ zIndex: 40 - idx }}
+                  >
+                    <div className="flex-1 min-w-0">
                       <CustomSelect
                         value={line.item_id}
                         onChange={(val) => updateLine(idx, "item_id", val)}
-                        placeholder="Select Catalog Item..."
+                        placeholder="Select Finished Good or Material..."
                         options={itemsList
-                          .filter((i) => ["RAW_MATERIAL", "FINISHED_GOOD"].includes(i.item_type))
+                          .filter((i) => ["FINISHED_GOOD", "RAW_MATERIAL"].includes(i.item_type))
                           .map((i) => ({
                             value: i.id,
                             label: `${i.name} (${i.unit?.symbol || i.unit?.name || "Unit"})`,
+                            badge: i.item_type === "FINISHED_GOOD" ? "Finished Good" : "Material",
                           }))}
                         size="sm"
                       />
@@ -592,40 +796,29 @@ export function DirectSalesPage() {
             </div>
 
             {/* Calculations Summary */}
-            <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#E4E1D8] space-y-1 text-xs font-mono">
+            <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#E4E1D8] space-y-1.5 text-xs font-mono">
               <div className="flex justify-between text-[#52607D]">
                 <span>Net Items Total:</span>
                 <span>₹{netItemTotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[#D97706]">
-                <span>+ 5% Fittings Cost:</span>
+                <span>+ {fittingsPct}% Fittings Cost:</span>
                 <span>₹{fittingsAmount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[#52607D]">
-                <span>Taxable Amount:</span>
+                <span>Taxable Amount (Net + Fittings):</span>
                 <span>₹{taxableAmount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-[#52607D]">
-                <span>+ 5% GST (SGST 2.5% + CGST 2.5%):</span>
+                <span>
+                  + {gstPct}% GST (SGST {(gstPct / 2).toFixed(1)}% + CGST {(gstPct / 2).toFixed(1)}%):
+                </span>
                 <span>₹{gstAmount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm font-bold text-[#14213D] pt-1 border-t border-[#EDEAE1]">
+              <div className="flex justify-between text-sm font-bold text-[#14213D] pt-1.5 border-t border-[#EDEAE1]">
                 <span>Grand Total:</span>
-                <span>₹{grandTotal.toFixed(2)}</span>
+                <span className="text-[#2F6F5E]">₹{grandTotal.toFixed(2)}</span>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Notes / Remarks
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Optional delivery details..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E]"
-              />
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-[#EDEAE1]">
@@ -668,37 +861,154 @@ export function DirectSalesPage() {
               Cancelling this invoice will create <strong className="text-[#14213D]">REVERSAL</strong> inventory movements and restore the physical stock on hand.
             </p>
 
+              <div>
+                <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                  Cancellation Reason *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Order returned by farmer / Duplicate entry"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#EDEAE1]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCancelModalOpen(false)}
+                  disabled={savingCancel}
+                >
+                  Keep Active
+                </Button>
+                <Button
+                  type="submit"
+                  variant="danger"
+                  size="sm"
+                  disabled={savingCancel}
+                >
+                  {savingCancel ? "Cancelling..." : "Cancel Invoice"}
+                </Button>
+              </div>
+            </form>
+          </Modal>
+
+        {/* Record Payment Modal */}
+        <Modal
+          isOpen={payModalOpen}
+          onClose={() => !savingPayment && setPayModalOpen(false)}
+          title={`Record Payment for Invoice #${payingInvoice?.invoice_number || ""}`}
+          maxWidth="max-w-md"
+        >
+          <form onSubmit={handleRecordPayment} className="space-y-4">
+            {payError && (
+              <div className="p-3 bg-[#FDE8E8] border border-[#F8B4B4] rounded-[7px] text-xs text-[#C81E1E] flex items-center gap-2">
+                <AlertCircle size={15} />
+                <span>{payError}</span>
+              </div>
+            )}
+
+            <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#E4E1D8] space-y-1 text-xs font-mono">
+              <div className="flex justify-between text-[#52607D]">
+                <span>Customer / Farmer:</span>
+                <strong className="text-[#14213D] font-sans">{payingInvoice?.customer_name || "—"}</strong>
+              </div>
+              <div className="flex justify-between text-[#52607D]">
+                <span>Total Invoice Amount:</span>
+                <span>₹{parseFloat(payingInvoice?.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-[#2F6F5E]">
+                <span>Already Collected / Paid:</span>
+                <span className="font-bold">₹{parseFloat(payingInvoice?.paid_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-rose-600 font-bold pt-1 border-t border-[#EDEAE1]">
+                <span>Remaining Balance Due:</span>
+                <span>
+                  ₹{Math.max(
+                    0,
+                    parseFloat(payingInvoice?.total_amount || 0) - parseFloat(payingInvoice?.paid_amount || 0)
+                  ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Cancellation Reason *
+                Payment Amount to Collect (₹) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                Payment Date <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                required
+                value={payDate}
+                onChange={(e) => setPayDate(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                Payment Mode & Reference (UTR / Cheque / Cash) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Order returned by farmer / Duplicate entry"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E]"
+                placeholder="e.g. Cash, GPay, NEFT-819201, Cheque #20912"
+                value={payReference}
+                onChange={(e) => setPayReference(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                Payment Notes
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Optional notes or remarks..."
+                value={payNotes}
+                onChange={(e) => setPayNotes(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-[#EDEAE1]">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                onClick={() => setCancelModalOpen(false)}
-                disabled={savingCancel}
+                onClick={() => setPayModalOpen(false)}
+                disabled={savingPayment}
               >
-                Keep Active
+                Cancel
               </Button>
               <Button
                 type="submit"
-                variant="danger"
+                variant="primary"
                 size="sm"
-                disabled={savingCancel}
+                loading={savingPayment}
+                icon={Check}
               >
-                {savingCancel ? "Cancelling..." : "Cancel Invoice"}
+                Confirm Payment
               </Button>
             </div>
           </form>

@@ -48,6 +48,11 @@
     outline: none !important;
     box-shadow: 0 0 0 2px rgba(47, 111, 94, 0.2) !important;
   }
+
+  option:checked {
+    background-color: #2F6F5E !important;
+    color: #FFFFFF !important;
+  }
 }
 
 /* Globally disable up/down arrow marks (spinners) on all number inputs */

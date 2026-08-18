@@ -14,10 +14,11 @@ export function Button({
     "inline-flex items-center justify-center font-medium rounded-[8px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
 
   const sizeClasses = {
-    sm: "text-xs px-2.5 py-1.5 gap-1.5",
-    md: "text-sm px-3.5 py-2 gap-2",
-    lg: "text-base px-5 py-2.5 gap-2.5",
-  }[size];
+    xs: "text-[11px] px-2 py-1 gap-1 font-semibold",
+    sm: "text-xs px-2.5 py-1.5 gap-1.5 font-medium",
+    md: "text-sm px-3.5 py-2 gap-2 font-medium",
+    lg: "text-base px-5 py-2.5 gap-2.5 font-medium",
+  }[size] || "text-xs px-2.5 py-1.5 gap-1.5 font-medium";
 
   const variantClasses = {
     primary:
@@ -37,9 +38,9 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
       ) : Icon ? (
-        <Icon size={size === "sm" ? 14 : 16} />
+        <Icon size={size === "xs" ? 12 : size === "sm" ? 14 : 16} />
       ) : null}
       {children}
     </button>

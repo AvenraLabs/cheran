@@ -25,9 +25,9 @@ export function Layout() {
 
   return (
     <LayoutContext.Provider value={{ isMobileNavOpen, toggleMobileNav, closeMobileNav }}>
-      <div className="flex min-h-screen bg-[#FAFAF8] text-[#14213D] relative overflow-x-hidden">
+      <div className="flex min-h-screen bg-[#FAFAF8] text-[#14213D] relative">
         <Sidebar isOpen={isMobileNavOpen} onClose={closeMobileNav} />
-        <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-x-hidden">
+        <div className="flex-1 flex flex-col min-w-0">
           <Outlet />
         </div>
         <Toaster position="top-right" richColors closeButton />

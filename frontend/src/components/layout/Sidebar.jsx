@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   FileSpreadsheet,
   UploadCloud,
+  FileText,
   Users,
   Sprout,
   Boxes,
@@ -20,54 +21,71 @@ import {
   Sliders,
   LogOut,
   X,
+  Factory,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export function Sidebar({ isOpen, onClose }) {
   const { user, logout } = useAuth();
-  const navigationSections = [
-    {
-      title: "Operations & Govt",
-      items: [
-        { label: "Dashboard", path: "/", icon: LayoutDashboard },
-        { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
-        { label: "Excel Imports", path: "/imports", icon: UploadCloud },
-        { label: "Dealers Directory", path: "/dealers", icon: Users },
-      ],
-    },
-    {
-      title: "Inventory & Materials",
-      items: [
-        { label: "Stock On-Hand", path: "/inventory", icon: Boxes },
-        { label: "Purchase Receipts", path: "/inventory/receipts", icon: ClipboardList },
-        { label: "Item Master", path: "/items", icon: Package },
-        { label: "Units of Measure", path: "/units", icon: Scale },
-        { label: "Suppliers / Vendors", path: "/suppliers", icon: Truck },
-      ],
-    },
-    {
-      title: "Sales & Commercial",
-      items: [
-        { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
-        { label: "Customers", path: "/customers", icon: UserCheck },
-        { label: "Expenses", path: "/expenses", icon: Receipt },
-      ],
-    },
-    {
-      title: "Human Resources",
-      items: [
-        { label: "Staff & Attendance", path: "/employees", icon: UserCog },
-        { label: "Payroll / Salary", path: "/salary", icon: DollarSign },
-      ],
-    },
-    {
-      title: "Reports & Configuration",
-      items: [
-        { label: "Reports & Analytics", path: "/reports", icon: BarChart3 },
-        { label: "Business Settings", path: "/settings", icon: Sliders },
-      ],
-    },
-  ];
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+
+  const navigationSections = isAdmin
+    ? [
+        {
+          title: "Operations & Govt",
+          items: [
+            { label: "Dashboard", path: "/", icon: LayoutDashboard },
+            { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+            { label: "Tally Sales Import", path: "/imports/tally", icon: UploadCloud },
+            { label: "Excel Imports", path: "/imports", icon: FileText },
+            { label: "Dealers Directory", path: "/dealers", icon: Users },
+          ],
+        },
+        {
+          title: "Inventory & Materials",
+          items: [
+            { label: "Stock On-Hand", path: "/inventory", icon: Boxes },
+            { label: "Purchase Receipts", path: "/inventory/receipts", icon: ClipboardList },
+            { label: "Daily Production", path: "/inventory/production", icon: Factory },
+            { label: "Item Master", path: "/items", icon: Package },
+            { label: "Units of Measure", path: "/units", icon: Scale },
+            { label: "Suppliers / Vendors", path: "/suppliers", icon: Truck },
+          ],
+        },
+        {
+          title: "Sales & Commercial",
+          items: [
+            { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
+            { label: "Customers", path: "/customers", icon: UserCheck },
+            { label: "Expenses", path: "/expenses", icon: Receipt },
+          ],
+        },
+        {
+          title: "Human Resources",
+          items: [
+            { label: "Staff & Attendance", path: "/employees", icon: UserCog },
+            { label: "Payroll / Salary", path: "/salary", icon: DollarSign },
+          ],
+        },
+        {
+          title: "Reports & Configuration",
+          items: [
+            { label: "Reports & Analytics", path: "/reports", icon: BarChart3 },
+            { label: "Business Settings", path: "/settings", icon: Sliders },
+          ],
+        },
+      ]
+    : [
+        {
+          title: "Horticulture Operations",
+          items: [
+            { label: "Dashboard", path: "/", icon: LayoutDashboard },
+            { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+            { label: "Excel Imports", path: "/imports", icon: FileText },
+            { label: "Dealers Directory", path: "/dealers", icon: Users },
+          ],
+        },
+      ];
 
   return (
     <>
@@ -82,7 +100,7 @@ export function Sidebar({ isOpen, onClose }) {
 
       {/* Sidebar / Mobile Drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] lg:w-64 bg-white border-r border-[#E4E1D8] flex flex-col h-screen lg:sticky lg:top-0 shrink-0 select-none shadow-[2px_0_12px_rgba(20,33,61,0.08)] lg:shadow-[1px_0_2px_rgba(20,33,61,0.02)] transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] lg:w-64 bg-white border-r border-[#E4E1D8] flex flex-col h-screen max-h-screen lg:sticky lg:top-0 shrink-0 select-none shadow-[2px_0_12px_rgba(20,33,61,0.08)] lg:shadow-[1px_0_2px_rgba(20,33,61,0.02)] transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
@@ -94,7 +112,7 @@ export function Sidebar({ isOpen, onClose }) {
             </div>
             <div className="min-w-0">
               <div className="text-sm font-bold font-display tracking-tight text-[#14213D] truncate">
-                CHERAN PLAST
+                CHERAN IRRIGATION
               </div>
               <div className="text-[10px] font-medium text-[#52607D] truncate">
                 Enterprise School / ERP
@@ -125,7 +143,7 @@ export function Sidebar({ isOpen, onClose }) {
               <NavLink
                 key={item.path}
                 to={item.path}
-                end={item.path === "/" || item.path === "/inventory"}
+                end={item.path === "/" || item.path === "/inventory" || item.path === "/imports"}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 px-3 py-2 rounded-[7px] text-xs font-medium transition-colors ${
                     isActive

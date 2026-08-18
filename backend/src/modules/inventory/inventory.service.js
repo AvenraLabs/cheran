@@ -4,13 +4,16 @@ import StockReceipt from "./stock-receipt.model.js";
 import StockReceiptItem from "./stock-receipt-item.model.js";
 import InventoryMovement from "./inventory-movement.model.js";
 import InventoryStock from "./inventory-stock.model.js";
+import ProductionEntry from "./production-entry.model.js";
+import ProductionMaterial from "./production-material.model.js";
+import ProductionOutput from "./production-output.model.js";
 import Item from "../items/item.model.js";
 import Unit from "../units/unit.model.js";
 import Supplier from "../suppliers/supplier.model.js";
 import AppError from "../../shared/appError.js";
 
-export const IN_MOVEMENT_TYPES = ["OPENING", "PURCHASE", "ADJUSTMENT_IN", "PRODUCTION_IN", "REVERSAL"];
-export const OUT_MOVEMENT_TYPES = ["ADJUSTMENT_OUT", "SALE", "DISPATCH", "PRODUCTION_OUT"];
+export const IN_MOVEMENT_TYPES = ["OPENING", "PURCHASE", "PRODUCTION_IN", "ADJUSTMENT_IN", "REVERSAL"];
+export const OUT_MOVEMENT_TYPES = ["PRODUCTION_OUT", "PRODUCTION_WASTAGE", "DISPATCH", "SALE", "ADJUSTMENT_OUT"];
 
 /**
  * Recalculate true on-hand quantity from inventory_movements source of truth
@@ -46,14 +49,13 @@ export async function recalculateItemStock(itemId, transaction = null) {
 }
 
 /**
- * Explicit Opening Stock entry
+ * Explicit Opening Stock entry (Initial Onboarding)
  */
 export async function createOpeningStock({
   item_id,
   quantity,
   unit_id = null,
   movement_date = new Date().toISOString().split("T")[0],
-  notes = null,
 }) {
   const qty = parseFloat(quantity);
   if (isNaN(qty) || qty <= 0) {
@@ -65,6 +67,21 @@ export async function createOpeningStock({
     throw new AppError(`Item not found with ID ${item_id}`, 404);
   }
 
+  // Prevent accidental duplicate opening stock for the same item
+  const existingOpening = await InventoryMovement.findOne({
+    where: {
+      item_id: item.id,
+      movement_type: "OPENING",
+    },
+  });
+
+  if (existingOpening) {
+    throw new AppError(
+      `Opening stock has already been recorded for "${item.name}". Repeated opening entries are not permitted.`,
+      400
+    );
+  }
+
   return await db.transaction(async (transaction) => {
     const movement = await InventoryMovement.create(
       {
@@ -74,7 +91,6 @@ export async function createOpeningStock({
         unit_id: unit_id || item.unit_id,
         reference_type: "OPENING_STOCK",
         movement_date,
-        notes: notes ? notes.trim() : "Initial stock onboarding",
       },
       { transaction }
     );
@@ -89,18 +105,17 @@ export async function createOpeningStock({
 }
 
 /**
- * Manual Stock Purchase / Receipt with atomic inventory IN movement
+ * Stock Purchase / Receipt - ONLY RAW MATERIALS
  */
 export async function createStockReceipt({
   supplier_id,
   supplier_name,
   receipt_date = new Date().toISOString().split("T")[0],
   reference_number,
-  notes,
   items,
 }) {
   if (!items || !Array.isArray(items) || items.length === 0) {
-    throw new AppError("At least one item is required for a stock receipt", 400);
+    throw new AppError("At least one item is required for a purchase receipt", 400);
   }
 
   return await db.transaction(async (transaction) => {
@@ -112,7 +127,7 @@ export async function createStockReceipt({
       }
     }
 
-    // Calculate item amounts
+    // Validate all items are RAW_MATERIAL and have positive quantity
     let receiptTotal = 0;
     const validatedItems = [];
 
@@ -122,12 +137,23 @@ export async function createStockReceipt({
         throw new AppError(`Item not found with ID ${itemInput.item_id}`, 404);
       }
 
+      if (itemRecord.item_type !== "RAW_MATERIAL") {
+        throw new AppError(
+          `Item "${itemRecord.name}" is a Finished Good and cannot be purchased. Finished goods enter inventory only through production.`,
+          400
+        );
+      }
+
       const qty = parseFloat(itemInput.quantity);
       if (isNaN(qty) || qty <= 0) {
-        throw new AppError(`Invalid quantity for item ${itemRecord.name}`, 400);
+        throw new AppError(`Invalid quantity for raw material ${itemRecord.name}`, 400);
       }
 
       const unitPrice = parseFloat(itemInput.unit_price || 0);
+      if (isNaN(unitPrice) || unitPrice < 0) {
+        throw new AppError(`Invalid unit price for raw material ${itemRecord.name}`, 400);
+      }
+
       const lineTotal = parseFloat((qty * unitPrice).toFixed(2));
       receiptTotal += lineTotal;
 
@@ -147,7 +173,6 @@ export async function createStockReceipt({
         supplier_name: resolvedSupplierName || null,
         receipt_date,
         reference_number: reference_number ? reference_number.trim() : null,
-        notes: notes ? notes.trim() : null,
         total_amount: parseFloat(receiptTotal.toFixed(2)),
       },
       { transaction }
@@ -167,7 +192,7 @@ export async function createStockReceipt({
         { transaction }
       );
 
-      // Create Movement IN
+      // Create Movement IN (PURCHASE)
       await InventoryMovement.create(
         {
           item_id: line.item_id,
@@ -178,12 +203,11 @@ export async function createStockReceipt({
           reference_id: receipt.id,
           movement_date: receipt_date,
           unit_cost: line.unit_price,
-          notes: notes || `Stock Receipt ref ${reference_number || receipt.id.slice(0, 8)}`,
         },
         { transaction }
       );
 
-      // Update cached on hand
+      // Update cached on-hand stock
       await recalculateItemStock(line.item_id, transaction);
     }
 
@@ -192,12 +216,34 @@ export async function createStockReceipt({
 }
 
 /**
- * List Stock Receipts with pagination
+ * List Stock Receipts / Purchase History with date, item & supplier filtering
  */
-export async function listStockReceipts({ page = 1, limit = 50 } = {}) {
+export async function listStockReceipts({
+  page = 1,
+  limit = 50,
+  start_date,
+  end_date,
+  supplier_id,
+  item_id,
+} = {}) {
+  const where = {};
+  if (start_date && end_date) {
+    where.receipt_date = { [Op.between]: [start_date, end_date] };
+  } else if (start_date) {
+    where.receipt_date = { [Op.gte]: start_date };
+  } else if (end_date) {
+    where.receipt_date = { [Op.lte]: end_date };
+  }
+
+  if (supplier_id) {
+    where.supplier_id = supplier_id;
+  }
+
+  const itemIncludeWhere = item_id ? { item_id } : undefined;
   const offset = (page - 1) * limit;
 
   const { rows, count } = await StockReceipt.findAndCountAll({
+    where,
     include: [
       {
         model: Supplier,
@@ -207,11 +253,13 @@ export async function listStockReceipts({ page = 1, limit = 50 } = {}) {
       {
         model: StockReceiptItem,
         as: "items",
+        where: itemIncludeWhere,
+        required: !!item_id,
         include: [
           {
             model: Item,
             as: "item",
-            attributes: ["id", "name", "code"],
+            attributes: ["id", "name", "code", "item_type"],
           },
           {
             model: Unit,
@@ -224,10 +272,27 @@ export async function listStockReceipts({ page = 1, limit = 50 } = {}) {
     order: [["receipt_date", "DESC"], ["created_at", "DESC"]],
     limit,
     offset,
+    distinct: true,
   });
+
+  // Calculate summary metrics for the filtered result set
+  let totalPurchasedQuantity = 0;
+  let totalPurchasedValue = 0;
+
+  for (const receipt of rows) {
+    totalPurchasedValue += parseFloat(receipt.total_amount || 0);
+    for (const item of receipt.items || []) {
+      totalPurchasedQuantity += parseFloat(item.quantity || 0);
+    }
+  }
 
   return {
     receipts: rows,
+    summary: {
+      totalReceipts: count,
+      totalPurchasedQuantity: parseFloat(totalPurchasedQuantity.toFixed(2)),
+      totalPurchasedValue: parseFloat(totalPurchasedValue.toFixed(2)),
+    },
     pagination: {
       total: count,
       page,
@@ -271,13 +336,321 @@ export async function getStockReceiptById(id) {
 }
 
 /**
- * Manual Stock Adjustment (ADJUSTMENT_IN or ADJUSTMENT_OUT) with mandatory reason notes
+ * PRODUCTION ENTRY: Atomic manufacturing transaction
+ * Consumes RAW_MATERIAL (Used + Wastage) and produces FINISHED_GOOD
+ */
+export async function createProductionEntry({
+  production_date = new Date().toISOString().split("T")[0],
+  reference_number = null,
+  materials = [],
+  outputs = [],
+}) {
+  if (!materials || !Array.isArray(materials) || materials.length === 0) {
+    throw new AppError("At least one raw material input is required for production", 400);
+  }
+
+  if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
+    throw new AppError("At least one finished good output is required for production", 400);
+  }
+
+  return await db.transaction(async (transaction) => {
+    // 1. Validate and check stock for all Raw Materials
+    const validatedMaterials = [];
+    for (const mat of materials) {
+      const item = await Item.findByPk(mat.item_id, {
+        include: [
+          { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
+          { model: InventoryStock, as: "stock", attributes: ["quantity_on_hand"] },
+        ],
+        transaction,
+      });
+
+      if (!item) {
+        throw new AppError(`Raw material not found with ID ${mat.item_id}`, 404);
+      }
+
+      if (item.item_type !== "RAW_MATERIAL") {
+        throw new AppError(
+          `Item "${item.name}" is a ${item.item_type} and cannot be used as a raw material input. Production inputs must be RAW_MATERIAL only.`,
+          400
+        );
+      }
+
+      const qtyUsed = parseFloat(mat.quantity_used);
+      if (isNaN(qtyUsed) || qtyUsed <= 0) {
+        throw new AppError(`Quantity used must be greater than 0 for raw material "${item.name}"`, 400);
+      }
+
+      const qtyWastage = parseFloat(mat.wastage_quantity || 0);
+      if (isNaN(qtyWastage) || qtyWastage < 0) {
+        throw new AppError(`Wastage quantity cannot be negative for raw material "${item.name}"`, 400);
+      }
+
+      const totalRequired = parseFloat((qtyUsed + qtyWastage).toFixed(3));
+      const availableStock = item.stock ? parseFloat(item.stock.quantity_on_hand) : 0.0;
+
+      if (totalRequired > availableStock) {
+        throw new AppError(
+          `Insufficient stock for raw material "${item.name}". Required: ${totalRequired} ${item.unit?.symbol || "NOS"} (Used: ${qtyUsed} + Wastage: ${qtyWastage}), Available on hand: ${availableStock} ${item.unit?.symbol || "NOS"}`,
+          400
+        );
+      }
+
+      validatedMaterials.push({
+        item,
+        quantity_used: qtyUsed,
+        wastage_quantity: qtyWastage,
+        total_required: totalRequired,
+        unit_id: mat.unit_id || item.unit_id,
+      });
+    }
+
+    // 2. Validate all Finished Goods outputs
+    const validatedOutputs = [];
+    for (const out of outputs) {
+      const item = await Item.findByPk(out.item_id, {
+        include: [{ model: Unit, as: "unit", attributes: ["id", "name", "symbol"] }],
+        transaction,
+      });
+
+      if (!item) {
+        throw new AppError(`Finished good not found with ID ${out.item_id}`, 404);
+      }
+
+      if (item.item_type !== "FINISHED_GOOD") {
+        throw new AppError(
+          `Item "${item.name}" is a ${item.item_type} and cannot be produced as a finished good output. Production outputs must be FINISHED_GOOD only.`,
+          400
+        );
+      }
+
+      const qtyProduced = parseFloat(out.quantity_produced);
+      if (isNaN(qtyProduced) || qtyProduced <= 0) {
+        throw new AppError(`Produced quantity must be greater than 0 for finished good "${item.name}"`, 400);
+      }
+
+      validatedOutputs.push({
+        item,
+        quantity_produced: qtyProduced,
+        unit_id: out.unit_id || item.unit_id,
+      });
+    }
+
+    // 3. Create Production Entry record
+    const productionEntry = await ProductionEntry.create(
+      {
+        production_date,
+        reference_number: reference_number ? reference_number.trim() : null,
+      },
+      { transaction }
+    );
+
+    // 4. Create ProductionMaterial records & Movements (PRODUCTION_OUT & PRODUCTION_WASTAGE)
+    for (const mat of validatedMaterials) {
+      await ProductionMaterial.create(
+        {
+          production_entry_id: productionEntry.id,
+          item_id: mat.item.id,
+          unit_id: mat.unit_id,
+          quantity_used: mat.quantity_used,
+          wastage_quantity: mat.wastage_quantity,
+        },
+        { transaction }
+      );
+
+      // Movement for actual consumption
+      await InventoryMovement.create(
+        {
+          item_id: mat.item.id,
+          movement_type: "PRODUCTION_OUT",
+          quantity: mat.quantity_used,
+          unit_id: mat.unit_id,
+          reference_type: "PRODUCTION_ENTRY",
+          reference_id: productionEntry.id,
+          movement_date: production_date,
+        },
+        { transaction }
+      );
+
+      // Movement for wastage (if any)
+      if (mat.wastage_quantity > 0) {
+        await InventoryMovement.create(
+          {
+            item_id: mat.item.id,
+            movement_type: "PRODUCTION_WASTAGE",
+            quantity: mat.wastage_quantity,
+            unit_id: mat.unit_id,
+            reference_type: "PRODUCTION_ENTRY",
+            reference_id: productionEntry.id,
+            movement_date: production_date,
+          },
+          { transaction }
+        );
+      }
+
+      // Recalculate material stock
+      await recalculateItemStock(mat.item.id, transaction);
+    }
+
+    // 5. Create ProductionOutput records & Movement (PRODUCTION_IN)
+    for (const out of validatedOutputs) {
+      await ProductionOutput.create(
+        {
+          production_entry_id: productionEntry.id,
+          item_id: out.item.id,
+          unit_id: out.unit_id,
+          quantity_produced: out.quantity_produced,
+        },
+        { transaction }
+      );
+
+      // Movement for finished good production IN
+      await InventoryMovement.create(
+        {
+          item_id: out.item.id,
+          movement_type: "PRODUCTION_IN",
+          quantity: out.quantity_produced,
+          unit_id: out.unit_id,
+          reference_type: "PRODUCTION_ENTRY",
+          reference_id: productionEntry.id,
+          movement_date: production_date,
+        },
+        { transaction }
+      );
+
+      // Recalculate finished good stock
+      await recalculateItemStock(out.item.id, transaction);
+    }
+
+    return productionEntry;
+  });
+}
+
+/**
+ * List Production Entries / Production History with date and item filtering
+ */
+export async function listProductionEntries({
+  page = 1,
+  limit = 50,
+  start_date,
+  end_date,
+  raw_material_id,
+  finished_good_id,
+} = {}) {
+  const where = {};
+  if (start_date && end_date) {
+    where.production_date = { [Op.between]: [start_date, end_date] };
+  } else if (start_date) {
+    where.production_date = { [Op.gte]: start_date };
+  } else if (end_date) {
+    where.production_date = { [Op.lte]: end_date };
+  }
+
+  const offset = (page - 1) * limit;
+
+  const matWhere = raw_material_id ? { item_id: raw_material_id } : undefined;
+  const outWhere = finished_good_id ? { item_id: finished_good_id } : undefined;
+
+  const { rows, count } = await ProductionEntry.findAndCountAll({
+    where,
+    include: [
+      {
+        model: ProductionMaterial,
+        as: "materials",
+        where: matWhere,
+        required: !!raw_material_id,
+        include: [
+          { model: Item, as: "item", attributes: ["id", "name", "code", "item_type"] },
+          { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
+        ],
+      },
+      {
+        model: ProductionOutput,
+        as: "outputs",
+        where: outWhere,
+        required: !!finished_good_id,
+        include: [
+          { model: Item, as: "item", attributes: ["id", "name", "code", "item_type"] },
+          { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
+        ],
+      },
+    ],
+    order: [["production_date", "DESC"], ["created_at", "DESC"]],
+    limit,
+    offset,
+    distinct: true,
+  });
+
+  // Calculate summary metrics for the filtered set
+  let totalMaterialsUsed = 0;
+  let totalWastage = 0;
+  let totalFinishedProduced = 0;
+
+  for (const entry of rows) {
+    for (const m of entry.materials || []) {
+      totalMaterialsUsed += parseFloat(m.quantity_used || 0);
+      totalWastage += parseFloat(m.wastage_quantity || 0);
+    }
+    for (const o of entry.outputs || []) {
+      totalFinishedProduced += parseFloat(o.quantity_produced || 0);
+    }
+  }
+
+  return {
+    entries: rows,
+    summary: {
+      totalEntries: count,
+      totalMaterialsUsed: parseFloat(totalMaterialsUsed.toFixed(2)),
+      totalWastage: parseFloat(totalWastage.toFixed(2)),
+      totalFinishedProduced: parseFloat(totalFinishedProduced.toFixed(2)),
+    },
+    pagination: {
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
+    },
+  };
+}
+
+/**
+ * Get Production Entry by ID with full details
+ */
+export async function getProductionEntryById(id) {
+  const entry = await ProductionEntry.findByPk(id, {
+    include: [
+      {
+        model: ProductionMaterial,
+        as: "materials",
+        include: [
+          { model: Item, as: "item", attributes: ["id", "name", "code", "item_type"] },
+          { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
+        ],
+      },
+      {
+        model: ProductionOutput,
+        as: "outputs",
+        include: [
+          { model: Item, as: "item", attributes: ["id", "name", "code", "item_type"] },
+          { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
+        ],
+      },
+    ],
+  });
+
+  if (!entry) {
+    throw new AppError(`Production entry not found with ID ${id}`, 404);
+  }
+  return entry;
+}
+
+/**
+ * Manual Stock Adjustment (ADJUSTMENT_IN or ADJUSTMENT_OUT)
  */
 export async function createStockAdjustment({
   item_id,
   adjustment_type,
   quantity,
-  notes,
   movement_date = new Date().toISOString().split("T")[0],
 }) {
   if (!["ADJUSTMENT_IN", "ADJUSTMENT_OUT"].includes(adjustment_type)) {
@@ -287,10 +660,6 @@ export async function createStockAdjustment({
   const qty = parseFloat(quantity);
   if (isNaN(qty) || qty <= 0) {
     throw new AppError("Quantity must be a positive number", 400);
-  }
-
-  if (!notes || !notes.trim()) {
-    throw new AppError("Mandatory notes/reason required for stock adjustments", 400);
   }
 
   const item = await Item.findByPk(item_id);
@@ -307,7 +676,6 @@ export async function createStockAdjustment({
         unit_id: item.unit_id,
         reference_type: "MANUAL_ADJUSTMENT",
         movement_date,
-        notes: notes.trim(),
       },
       { transaction }
     );
@@ -365,7 +733,7 @@ export async function getStockSummary({ search, item_type, category } = {}) {
 }
 
 /**
- * Detailed Item Ledger with running balance
+ * Detailed Item Ledger with accurate Opening Balance for date filtering
  */
 export async function getItemLedger(itemId, { start_date, end_date } = {}) {
   const item = await Item.findByPk(itemId, {
@@ -379,6 +747,28 @@ export async function getItemLedger(itemId, { start_date, end_date } = {}) {
     throw new AppError(`Item not found with ID ${itemId}`, 404);
   }
 
+  // 1. If start_date is supplied, calculate opening balance from all movements strictly prior to start_date
+  let openingBalance = 0;
+  if (start_date) {
+    const priorMovements = await InventoryMovement.findAll({
+      where: {
+        item_id: itemId,
+        movement_date: { [Op.lt]: start_date },
+      },
+      attributes: ["movement_type", "quantity"],
+    });
+
+    for (const m of priorMovements) {
+      const qty = parseFloat(m.quantity) || 0;
+      if (IN_MOVEMENT_TYPES.includes(m.movement_type)) {
+        openingBalance += qty;
+      } else if (OUT_MOVEMENT_TYPES.includes(m.movement_type)) {
+        openingBalance -= qty;
+      }
+    }
+  }
+
+  // 2. Query movements within the requested date window
   const where = { item_id: itemId };
   if (start_date && end_date) {
     where.movement_date = { [Op.between]: [start_date, end_date] };
@@ -396,7 +786,7 @@ export async function getItemLedger(itemId, { start_date, end_date } = {}) {
     order: [["movement_date", "ASC"], ["created_at", "ASC"]],
   });
 
-  let runningBalance = 0;
+  let runningBalance = openingBalance;
   const ledgerEntries = movements.map((m) => {
     const qty = parseFloat(m.quantity) || 0;
     const isCredit = IN_MOVEMENT_TYPES.includes(m.movement_type);
@@ -417,7 +807,6 @@ export async function getItemLedger(itemId, { start_date, end_date } = {}) {
       running_balance: parseFloat(runningBalance.toFixed(3)),
       unit: m.unit?.symbol || item.unit?.symbol || "NOS",
       unit_cost: m.unit_cost ? parseFloat(m.unit_cost) : null,
-      notes: m.notes,
     };
   });
 
@@ -430,6 +819,8 @@ export async function getItemLedger(itemId, { start_date, end_date } = {}) {
       unit: item.unit?.symbol || "NOS",
       current_stock: item.stock ? parseFloat(item.stock.quantity_on_hand) : 0.0,
     },
+    opening_balance: parseFloat(openingBalance.toFixed(3)),
+    closing_balance: parseFloat(runningBalance.toFixed(3)),
     ledger: ledgerEntries,
   };
 }

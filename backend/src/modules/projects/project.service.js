@@ -18,6 +18,7 @@ export async function listProjects(filters = {}) {
     farmer_name,
     application_id,
     search,
+    min_status_days,
     page = 1,
     limit = 20,
     sort_by = "created_at",
@@ -34,6 +35,21 @@ export async function listProjects(filters = {}) {
   if (year) where.year = year;
   if (farmer_name) where.farmer_name = { [Op.iLike]: `%${farmer_name}%` };
   if (application_id) where.application_id = { [Op.iLike]: `%${application_id}%` };
+
+  if (min_status_days !== undefined && min_status_days !== null && min_status_days !== "") {
+    const days = parseInt(min_status_days, 10);
+    if (!isNaN(days) && days >= 0) {
+      const today = new Date();
+      const cutoff = new Date(today);
+      cutoff.setDate(cutoff.getDate() - days);
+      const cutoffStr = cutoff.toISOString().split("T")[0];
+
+      where.current_status_date = {
+        [Op.ne]: null,
+        [Op.lte]: cutoffStr,
+      };
+    }
+  }
 
   if (search) {
     where[Op.or] = [
@@ -142,14 +158,21 @@ export async function getProjectStatusHistory(projectId) {
     ],
   });
 
+  // Ensure INVOICED status is sorted first as baseline stage
+  const sortedHistories = [...histories].sort((a, b) => {
+    if (a.status === "INVOICED" && b.status !== "INVOICED") return -1;
+    if (b.status === "INVOICED" && a.status !== "INVOICED") return 1;
+    return new Date(a.status_date || 0) - new Date(b.status_date || 0);
+  });
+
   // Calculate days between consecutive observed statuses
-  const historyWithIntervals = histories.map((entry, index) => {
-    const json = entry.toJSON();
+  const historyWithIntervals = sortedHistories.map((entry, index) => {
+    const json = entry.toJSON ? entry.toJSON() : entry;
     if (index === 0) {
       json.days_since_previous = 0;
       json.previous_status = null;
     } else {
-      const prev = histories[index - 1];
+      const prev = sortedHistories[index - 1];
       json.previous_status = prev.status;
       json.days_since_previous = calculateDaysBetween(prev.status_date, entry.status_date);
     }
@@ -158,7 +181,7 @@ export async function getProjectStatusHistory(projectId) {
 
   return {
     project,
-    total_stages_observed: histories.length,
+    total_stages_observed: sortedHistories.length,
     history: historyWithIntervals,
   };
 }

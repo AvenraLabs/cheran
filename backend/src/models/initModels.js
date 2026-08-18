@@ -5,19 +5,20 @@ import GovernmentProject from "../modules/projects/project.model.js";
 import GovernmentProjectStatusHistory from "../modules/projects/project-history.model.js";
 import GovernmentImport from "../modules/imports/import.model.js";
 import GovernmentImportRow from "../modules/imports/import-row.model.js";
-import GovernmentProjectFollowup from "../modules/projects/project-followup.model.js";
-import GovernmentProjectDocument from "../modules/projects/project-document.model.js";
 
 // Units & Items Masters
 import Unit from "../modules/units/unit.model.js";
 import Item from "../modules/items/item.model.js";
 
-// Suppliers & Inventory
+// Suppliers & Inventory & Production
 import Supplier from "../modules/suppliers/supplier.model.js";
 import StockReceipt from "../modules/inventory/stock-receipt.model.js";
 import StockReceiptItem from "../modules/inventory/stock-receipt-item.model.js";
 import InventoryMovement from "../modules/inventory/inventory-movement.model.js";
 import InventoryStock from "../modules/inventory/inventory-stock.model.js";
+import ProductionEntry from "../modules/inventory/production-entry.model.js";
+import ProductionMaterial from "../modules/inventory/production-material.model.js";
+import ProductionOutput from "../modules/inventory/production-output.model.js";
 
 // Settings & Commissions
 import BusinessSetting from "../modules/settings/business-setting.model.js";
@@ -39,6 +40,7 @@ import SaleItem from "../modules/sales/sale-item.model.js";
 import CustomerPayment from "../modules/sales/customer-payment.model.js";
 import Invoice from "../modules/invoices/invoice.model.js";
 import InvoiceItem from "../modules/invoices/invoice-item.model.js";
+import TallyItemMapping from "../modules/tally/tally-item-mapping.model.js";
 
 // ==========================================
 // 1. Government Module Associations
@@ -98,28 +100,6 @@ GovernmentImportRow.belongsTo(GovernmentProject, {
 GovernmentImportRow.belongsTo(Dealer, {
   foreignKey: "matched_dealer_id",
   as: "matched_dealer",
-});
-
-// Project <-> Followups
-GovernmentProject.hasMany(GovernmentProjectFollowup, {
-  foreignKey: "project_id",
-  as: "followups",
-  onDelete: "CASCADE",
-});
-GovernmentProjectFollowup.belongsTo(GovernmentProject, {
-  foreignKey: "project_id",
-  as: "project",
-});
-
-// Project <-> Documents
-GovernmentProject.hasMany(GovernmentProjectDocument, {
-  foreignKey: "project_id",
-  as: "documents",
-  onDelete: "CASCADE",
-});
-GovernmentProjectDocument.belongsTo(GovernmentProject, {
-  foreignKey: "project_id",
-  as: "project",
 });
 
 // ==========================================
@@ -209,6 +189,67 @@ Unit.hasMany(StockReceiptItem, {
   onDelete: "RESTRICT",
 });
 StockReceiptItem.belongsTo(Unit, {
+  foreignKey: "unit_id",
+  as: "unit",
+});
+
+// Production Associations
+ProductionEntry.hasMany(ProductionMaterial, {
+  foreignKey: "production_entry_id",
+  as: "materials",
+  onDelete: "CASCADE",
+});
+ProductionMaterial.belongsTo(ProductionEntry, {
+  foreignKey: "production_entry_id",
+  as: "production_entry",
+});
+
+Item.hasMany(ProductionMaterial, {
+  foreignKey: "item_id",
+  as: "production_materials",
+  onDelete: "RESTRICT",
+});
+ProductionMaterial.belongsTo(Item, {
+  foreignKey: "item_id",
+  as: "item",
+});
+
+Unit.hasMany(ProductionMaterial, {
+  foreignKey: "unit_id",
+  as: "production_materials",
+  onDelete: "RESTRICT",
+});
+ProductionMaterial.belongsTo(Unit, {
+  foreignKey: "unit_id",
+  as: "unit",
+});
+
+ProductionEntry.hasMany(ProductionOutput, {
+  foreignKey: "production_entry_id",
+  as: "outputs",
+  onDelete: "CASCADE",
+});
+ProductionOutput.belongsTo(ProductionEntry, {
+  foreignKey: "production_entry_id",
+  as: "production_entry",
+});
+
+Item.hasMany(ProductionOutput, {
+  foreignKey: "item_id",
+  as: "production_outputs",
+  onDelete: "RESTRICT",
+});
+ProductionOutput.belongsTo(Item, {
+  foreignKey: "item_id",
+  as: "item",
+});
+
+Unit.hasMany(ProductionOutput, {
+  foreignKey: "unit_id",
+  as: "production_outputs",
+  onDelete: "RESTRICT",
+});
+ProductionOutput.belongsTo(Unit, {
   foreignKey: "unit_id",
   as: "unit",
 });
@@ -408,6 +449,16 @@ Invoice.belongsTo(Dealer, {
   as: "dealer",
 });
 
+// TallyItemMapping <-> Item
+TallyItemMapping.belongsTo(Item, {
+  foreignKey: "item_id",
+  as: "item",
+});
+Item.hasMany(TallyItemMapping, {
+  foreignKey: "item_id",
+  as: "tally_mappings",
+});
+
 export {
   Dealer,
   GovernmentStatus,
@@ -415,8 +466,6 @@ export {
   GovernmentProjectStatusHistory,
   GovernmentImport,
   GovernmentImportRow,
-  GovernmentProjectFollowup,
-  GovernmentProjectDocument,
   Unit,
   Item,
   Supplier,
@@ -424,6 +473,9 @@ export {
   StockReceiptItem,
   InventoryMovement,
   InventoryStock,
+  ProductionEntry,
+  ProductionMaterial,
+  ProductionOutput,
   BusinessSetting,
   DealerCommission,
   ExpenseCategory,
@@ -437,4 +489,5 @@ export {
   CustomerPayment,
   Invoice,
   InvoiceItem,
+  TallyItemMapping,
 };

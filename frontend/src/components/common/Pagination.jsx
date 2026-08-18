@@ -1,7 +1,59 @@
-import React from "react";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import Button from "./Button.jsx";
-import CustomSelect from "./CustomSelect.jsx";
+import React, { useState, useRef, useEffect } from "react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check } from "lucide-react";
+
+function LimitDropdown({ value, options, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative inline-block" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="px-2 py-1 text-xs bg-white border border-[#E4E1D8] hover:border-[#2F6F5E] rounded-[6px] text-[#14213D] font-semibold focus:outline-none focus:ring-1 focus:ring-[#2F6F5E] cursor-pointer shadow-2xs flex items-center gap-1.5 transition-colors"
+      >
+        <span>{value}</span>
+        <ChevronDown size={12} className={`text-[#52607D] transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute bottom-full mb-1.5 left-0 z-50 min-w-[70px] bg-white border border-[#E4E1D8] rounded-[8px] shadow-lg py-1 select-none animate-in fade-in zoom-in-95 duration-100">
+          {options.map((opt) => {
+            const isSelected = opt === value;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onChange(opt);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-2.5 py-1.5 text-xs flex items-center justify-between text-left transition-colors cursor-pointer ${
+                  isSelected
+                    ? "bg-[#EAF3F0] text-[#2F6F5E] font-bold"
+                    : "text-[#14213D] hover:bg-[#FAFAF8] hover:text-[#2F6F5E]"
+                }`}
+              >
+                <span>{opt}</span>
+                {isSelected && <Check size={12} className="text-[#2F6F5E] shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Pagination({
   page = 1,
@@ -61,17 +113,11 @@ export function Pagination({
         {onLimitChange && (
           <div className="flex items-center gap-1.5 ml-2 border-l border-[#E4E1D8] pl-3">
             <span>Per page:</span>
-            <select
+            <LimitDropdown
               value={limit}
-              onChange={(e) => onLimitChange(parseInt(e.target.value, 10))}
-              className="px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-semibold focus:outline-none focus:border-[#2F6F5E] focus:ring-1 focus:ring-[#2F6F5E] cursor-pointer shadow-2xs"
-            >
-              {limitOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+              options={limitOptions}
+              onChange={onLimitChange}
+            />
           </div>
         )}
       </div>
@@ -79,38 +125,37 @@ export function Pagination({
       {/* Pagination Navigation Controls */}
       <div className="flex items-center gap-1">
         {/* First Page Button */}
-        <Button
-          variant="secondary"
-          size="sm"
+        <button
+          type="button"
           disabled={page <= 1}
           onClick={() => onPageChange(1)}
-          className="px-2 py-1"
+          className="min-w-[28px] h-7 px-2 flex items-center justify-center text-xs font-semibold rounded-[6px] border border-[#E4E1D8] bg-white text-[#52607D] hover:bg-[#EAF3F0] hover:text-[#2F6F5E] hover:border-[#D3E6E0] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
           title="First Page"
         >
           <ChevronsLeft size={14} />
-        </Button>
+        </button>
 
         {/* Previous Page Button */}
-        <Button
-          variant="secondary"
-          size="sm"
+        <button
+          type="button"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
-          className="px-2.5 py-1"
+          className="min-w-[28px] h-7 px-2 flex items-center justify-center text-xs font-semibold rounded-[6px] border border-[#E4E1D8] bg-white text-[#52607D] hover:bg-[#EAF3F0] hover:text-[#2F6F5E] hover:border-[#D3E6E0] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
           title="Previous Page"
         >
           <ChevronLeft size={14} />
-        </Button>
+        </button>
 
         {/* Numbered Page Buttons */}
         {pageNumbers.map((p) => (
           <button
             key={p}
+            type="button"
             onClick={() => onPageChange(p)}
             className={`min-w-[28px] h-7 px-2 text-xs font-semibold rounded-[6px] transition-colors cursor-pointer ${
               p === page
-                ? "bg-[#2F6F5E] text-white shadow-xs"
-                : "bg-white border border-[#E4E1D8] text-[#14213D] hover:bg-[#EDEAE1]"
+                ? "bg-[#2F6F5E] text-white border border-[#2F6F5E] shadow-xs"
+                : "bg-white border border-[#E4E1D8] text-[#14213D] hover:bg-[#EAF3F0] hover:text-[#2F6F5E] hover:border-[#D3E6E0]"
             }`}
           >
             {p}
@@ -118,28 +163,26 @@ export function Pagination({
         ))}
 
         {/* Next Page Button */}
-        <Button
-          variant="secondary"
-          size="sm"
+        <button
+          type="button"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
-          className="px-2.5 py-1"
+          className="min-w-[28px] h-7 px-2 flex items-center justify-center text-xs font-semibold rounded-[6px] border border-[#E4E1D8] bg-white text-[#52607D] hover:bg-[#EAF3F0] hover:text-[#2F6F5E] hover:border-[#D3E6E0] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
           title="Next Page"
         >
           <ChevronRight size={14} />
-        </Button>
+        </button>
 
         {/* Last Page Button */}
-        <Button
-          variant="secondary"
-          size="sm"
+        <button
+          type="button"
           disabled={page >= totalPages}
           onClick={() => onPageChange(totalPages)}
-          className="px-2 py-1"
+          className="min-w-[28px] h-7 px-2 flex items-center justify-center text-xs font-semibold rounded-[6px] border border-[#E4E1D8] bg-white text-[#52607D] hover:bg-[#EAF3F0] hover:text-[#2F6F5E] hover:border-[#D3E6E0] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
           title="Last Page"
         >
           <ChevronsRight size={14} />
-        </Button>
+        </button>
       </div>
     </div>
   );

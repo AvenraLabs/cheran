@@ -4,7 +4,7 @@ export const createItemSchema = z.object({
   body: z.object({
     code: z.string().max(100).optional().nullable(),
     name: z.string().min(1, "Item name is required").max(255),
-    item_type: z.enum(["RAW_MATERIAL", "FINISHED_GOOD", "TRADING_ITEM", "ACCESSORY"]).optional(),
+    item_type: z.enum(["RAW_MATERIAL", "FINISHED_GOOD"]).default("FINISHED_GOOD"),
     unit_id: z.string().min(1, "Invalid unit ID format"),
     category: z.string().max(100).optional().nullable(),
     unit_price: z.number().min(0).optional().nullable(),
@@ -19,7 +19,7 @@ export const updateItemSchema = z.object({
   body: z.object({
     code: z.string().max(100).optional().nullable(),
     name: z.string().min(1).max(255).optional(),
-    item_type: z.enum(["RAW_MATERIAL", "FINISHED_GOOD", "TRADING_ITEM", "ACCESSORY"]).optional(),
+    item_type: z.enum(["RAW_MATERIAL", "FINISHED_GOOD"]).optional(),
     unit_id: z.string().min(1, "Invalid unit ID format").optional(),
     category: z.string().max(100).optional().nullable(),
     unit_price: z.number().min(0).optional().nullable(),
@@ -30,7 +30,7 @@ export const updateItemSchema = z.object({
 export const listItemSchema = z.object({
   query: z.object({
     search: z.string().optional(),
-    item_type: z.enum(["RAW_MATERIAL", "FINISHED_GOOD", "TRADING_ITEM", "ACCESSORY"]).optional(),
+    item_type: z.enum(["RAW_MATERIAL", "FINISHED_GOOD"]).optional(),
     category: z.string().optional(),
     is_active: z
       .string()

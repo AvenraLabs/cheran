@@ -9,6 +9,7 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage.jsx";
 import ProjectDetailPage from "./pages/ProjectDetailPage.jsx";
 import ImportsPage from "./pages/ImportsPage.jsx";
+import TallyImportPage from "./pages/TallyImportPage.jsx";
 import DealersPage from "./pages/DealersPage.jsx";
 
 // Core ERP Pages
@@ -17,6 +18,7 @@ import UnitsPage from "./pages/UnitsPage.jsx";
 import SuppliersPage from "./pages/SuppliersPage.jsx";
 import InventoryStockPage from "./pages/InventoryStockPage.jsx";
 import StockReceiptsPage from "./pages/StockReceiptsPage.jsx";
+import ProductionPage from "./pages/ProductionPage.jsx";
 import CustomersPage from "./pages/CustomersPage.jsx";
 import DirectSalesPage from "./pages/DirectSalesPage.jsx";
 import ExpensesPage from "./pages/ExpensesPage.jsx";
@@ -46,6 +48,17 @@ function ProtectedLayout() {
   return <Layout />;
 }
 
+function AdminRoute({ children }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 export function App() {
   return (
     <AuthProvider>
@@ -55,32 +68,28 @@ export function App() {
 
         {/* Protected Dashboard & Operations Routes */}
         <Route path="/" element={<ProtectedLayout />}>
-          {/* Operations & Government */}
+          {/* Operations & Government (Allowed for USER & ADMIN) */}
           <Route index element={<DashboardPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
           <Route path="imports" element={<ImportsPage />} />
           <Route path="dealers" element={<DealersPage />} />
 
-          {/* Inventory & Materials */}
-          <Route path="inventory" element={<InventoryStockPage />} />
-          <Route path="inventory/receipts" element={<StockReceiptsPage />} />
-          <Route path="items" element={<ItemsPage />} />
-          <Route path="units" element={<UnitsPage />} />
-          <Route path="suppliers" element={<SuppliersPage />} />
-
-          {/* Sales & Commercial */}
-          <Route path="sales" element={<DirectSalesPage />} />
-          <Route path="customers" element={<CustomersPage />} />
-          <Route path="expenses" element={<ExpensesPage />} />
-
-          {/* Human Resources */}
-          <Route path="employees" element={<EmployeesPage />} />
-          <Route path="salary" element={<SalaryPage />} />
-
-          {/* Reports & Configuration */}
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          {/* Admin-Only Routes */}
+          <Route path="imports/tally" element={<AdminRoute><TallyImportPage /></AdminRoute>} />
+          <Route path="inventory" element={<AdminRoute><InventoryStockPage /></AdminRoute>} />
+          <Route path="inventory/receipts" element={<AdminRoute><StockReceiptsPage /></AdminRoute>} />
+          <Route path="inventory/production" element={<AdminRoute><ProductionPage /></AdminRoute>} />
+          <Route path="items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
+          <Route path="units" element={<AdminRoute><UnitsPage /></AdminRoute>} />
+          <Route path="suppliers" element={<AdminRoute><SuppliersPage /></AdminRoute>} />
+          <Route path="sales" element={<AdminRoute><DirectSalesPage /></AdminRoute>} />
+          <Route path="customers" element={<AdminRoute><CustomersPage /></AdminRoute>} />
+          <Route path="expenses" element={<AdminRoute><ExpensesPage /></AdminRoute>} />
+          <Route path="employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
+          <Route path="salary" element={<AdminRoute><SalaryPage /></AdminRoute>} />
+          <Route path="reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
+          <Route path="settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

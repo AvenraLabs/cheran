@@ -39,6 +39,7 @@ export const listInvoiceSchema = z.object({
     search: z.string().optional(),
     invoice_type: z.enum(["GOVERNMENT", "DIRECT_SALE"]).optional(),
     status: z.enum(["DRAFT", "POSTED", "CANCELLED"]).optional(),
+    payment_status: z.string().optional(),
     government_project_id: z.string().optional(),
     dealer_id: z.string().optional(),
     customer_id: z.string().optional(),

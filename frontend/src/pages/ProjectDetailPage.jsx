@@ -9,11 +9,15 @@ import {
   History,
   FileCheck2,
   Clock,
-  MessageSquare,
-  FileText,
-  Plus,
   Calendar,
   CheckCircle,
+  Award,
+  AlertTriangle,
+  CreditCard,
+  Check,
+  Percent,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -26,43 +30,34 @@ export function ProjectDetailPage() {
   const { id } = useParams();
   const [project, setProject] = useState(null);
   const [historyData, setHistoryData] = useState([]);
-  const [followups, setFollowups] = useState([]);
-  const [documents, setDocuments] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [dispatchedMaterials, setDispatchedMaterials] = useState([]);
+  const [commissionData, setCommissionData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Follow-up Modal
-  const [followupModalOpen, setFollowupModalOpen] = useState(false);
-  const [followupDate, setFollowupDate] = useState(new Date().toISOString().split("T")[0]);
-  const [followupRemarks, setFollowupRemarks] = useState("");
-  const [nextActionDate, setNextActionDate] = useState("");
-  const [followupStatus, setFollowupStatus] = useState("OPEN");
-  const [savingFollowup, setSavingFollowup] = useState(false);
-
-  // Document Modal
-  const [docModalOpen, setDocModalOpen] = useState(false);
-  const [docName, setDocName] = useState("");
-  const [docType, setDocType] = useState("Work Order");
-  const [docPath, setDocPath] = useState("");
-  const [savingDoc, setSavingDoc] = useState(false);
+  // Commission Payment Modal State
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [activeMilestone, setActiveMilestone] = useState("PART1");
+  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payRef, setPayRef] = useState("");
+  const [payNotes, setPayNotes] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const loadProjectDetails = async () => {
     try {
       setLoading(true);
-      const [projRes, histRes, folRes, docRes, invRes] = await Promise.all([
+      const [projRes, histRes, invRes, commRes] = await Promise.all([
         api.get(`/government/projects/${id}`),
         api.get(`/government/projects/${id}/status-history`),
-        api.get(`/government/projects/${id}/followups`).catch(() => ({ data: { followups: [] } })),
-        api.get(`/government/projects/${id}/documents`).catch(() => ({ data: { documents: [] } })),
         api.get(`/government/projects/${id}/invoices`).catch(() => ({ data: { invoices: [], dispatchedMaterials: [] } })),
+        api.get(`/government/projects/${id}/commission`).catch(() => ({ data: null })),
       ]);
       setProject(projRes.data?.project);
       setHistoryData(histRes.data?.history || []);
-      setFollowups(folRes.data?.followups || []);
-      setDocuments(docRes.data?.documents || []);
       setInvoices(invRes.data?.invoices || []);
       setDispatchedMaterials(invRes.data?.dispatchedMaterials || []);
+      setCommissionData(commRes?.data || commRes || null);
     } catch (err) {
       console.error("Failed to load project details:", err);
     } finally {
@@ -70,53 +65,30 @@ export function ProjectDetailPage() {
     }
   };
 
+  const handleRecordPayout = async (e) => {
+    e.preventDefault();
+    try {
+      setSavingPayment(true);
+      await api.post(`/government/projects/${id}/commission/payout`, {
+        milestone: activeMilestone,
+        paid_date: payDate,
+        paid_ref: payRef.trim() || "NEFT / Direct Bank Transfer",
+        notes: payNotes.trim() || null,
+      });
+      setPayModalOpen(false);
+      setPayRef("");
+      setPayNotes("");
+      loadProjectDetails();
+    } catch (err) {
+      console.error("Failed to record milestone payment:", err);
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
   useEffect(() => {
     loadProjectDetails();
   }, [id]);
-
-  const handleSaveFollowup = async (e) => {
-    e.preventDefault();
-    if (!followupRemarks.trim()) return;
-
-    try {
-      setSavingFollowup(true);
-      await api.post(`/government/projects/${id}/followups`, {
-        followup_date: followupDate,
-        remarks: followupRemarks.trim(),
-        next_action_date: nextActionDate || null,
-        status: followupStatus,
-      });
-      setFollowupModalOpen(false);
-      setFollowupRemarks("");
-      loadProjectDetails();
-    } catch (err) {
-      console.error("Failed to save followup:", err);
-    } finally {
-      setSavingFollowup(false);
-    }
-  };
-
-  const handleSaveDocument = async (e) => {
-    e.preventDefault();
-    if (!docName.trim() || !docPath.trim()) return;
-
-    try {
-      setSavingDoc(true);
-      await api.post(`/government/projects/${id}/documents`, {
-        document_name: docName.trim(),
-        document_type: docType,
-        file_path: docPath.trim(),
-      });
-      setDocModalOpen(false);
-      setDocName("");
-      setDocPath("");
-      loadProjectDetails();
-    } catch (err) {
-      console.error("Failed to save document:", err);
-    } finally {
-      setSavingDoc(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -148,19 +120,11 @@ export function ProjectDetailPage() {
         title={`Application ${project.application_id}`}
         subtitle={`Farmer: ${project.farmer_name || "N/A"} · District: ${project.district || "N/A"}`}
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" icon={MessageSquare} onClick={() => setFollowupModalOpen(true)}>
-              Add Follow-up
+          <Link to="/projects">
+            <Button variant="secondary" icon={ArrowLeft}>
+              Back to List
             </Button>
-            <Button variant="secondary" icon={FileText} onClick={() => setDocModalOpen(true)}>
-              Attach Document
-            </Button>
-            <Link to="/projects">
-              <Button variant="secondary" icon={ArrowLeft}>
-                Back to List
-              </Button>
-            </Link>
-          </div>
+          </Link>
         }
       />
 
@@ -359,72 +323,6 @@ export function ProjectDetailPage() {
           </div>
         </div>
 
-        {/* Action Follow-ups & Documents Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Follow-ups */}
-          <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare size={18} className="text-[#2F6F5E]" />
-                <h2 className="text-sm font-bold font-display text-[#14213D]">Government Follow-ups</h2>
-              </div>
-              <Button size="sm" icon={Plus} onClick={() => setFollowupModalOpen(true)}>
-                Add
-              </Button>
-            </div>
-
-            {followups.length === 0 ? (
-              <p className="text-xs text-[#52607D] py-4 text-center">No follow-ups recorded yet.</p>
-            ) : (
-              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                {followups.map((fol) => (
-                  <div key={fol.id} className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] space-y-1 text-xs">
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold text-[#14213D]">{fol.followup_date}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#EAF3F0] text-[#2F6F5E]">{fol.status}</span>
-                    </div>
-                    <p className="text-[#52607D]">{fol.remarks}</p>
-                    {fol.next_action_date && (
-                      <div className="text-[11px] text-[#2F6F5E] font-medium">
-                        Next Action Date: {fol.next_action_date}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Attached Documents */}
-          <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
-              <div className="flex items-center gap-2">
-                <FileText size={18} className="text-[#2F6F5E]" />
-                <h2 className="text-sm font-bold font-display text-[#14213D]">Project Documents</h2>
-              </div>
-              <Button size="sm" icon={Plus} onClick={() => setDocModalOpen(true)}>
-                Upload
-              </Button>
-            </div>
-
-            {documents.length === 0 ? (
-              <p className="text-xs text-[#52607D] py-4 text-center">No documents attached yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-semibold text-[#14213D]">{doc.document_name}</div>
-                      <div className="text-[11px] text-[#52607D]">{doc.document_type} · {doc.file_path}</div>
-                    </div>
-                    <span className="text-[11px] font-mono text-[#2F6F5E]">Attached</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Dispatched Materials & Linked Invoices Card */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
           <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
@@ -448,14 +346,14 @@ export function ProjectDetailPage() {
 
           {invoices.length === 0 ? (
             <div className="py-6 text-center text-xs text-[#52607D]">
-              No dispatch invoices recorded for this Government Application ID yet.
+              No sales invoices linked to this Government Application ID yet.
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Summary of Materials Dispatched */}
+              {/* Summary of Materials Invoiced */}
               <div>
                 <h3 className="text-xs font-bold text-[#14213D] mb-2 uppercase tracking-wider text-[10px]">
-                  Aggregated Dispatched Materials
+                  Materials Invoiced to Project
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {dispatchedMaterials.map((mat, idx) => (
@@ -514,28 +412,291 @@ export function ProjectDetailPage() {
           )}
         </div>
 
+        {/* Dealer Commission & Milestone Payouts Card */}
+        <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-[8px] bg-[#EAF3F0] flex items-center justify-center text-[#2F6F5E]">
+                <Award size={18} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold font-display text-[#14213D]">
+                  Dealer Commission & Milestone Payouts
+                </h2>
+                <p className="text-[11px] text-[#52607D]">
+                  Calculated from Invoiced Items Net Amount · 2-Stage Lifecycle (55% 1st Fund UTR / 45% Final Fund UTR) · 45-day Aging Penalty Rule
+                </p>
+              </div>
+            </div>
+
+            {commissionData?.dealer ? (
+              <span className="text-xs font-semibold text-[#14213D] bg-[#FAFAF8] border border-[#E4E1D8] px-3 py-1 rounded-full flex items-center gap-1.5 self-start sm:self-auto">
+                <span className="text-[#52607D]">Assigned:</span>
+                <strong>{commissionData.dealer.name}</strong>
+              </span>
+            ) : (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full self-start sm:self-auto font-medium">
+                No Dealer Assigned
+              </span>
+            )}
+          </div>
+
+          {!commissionData?.dealer ? (
+            <div className="p-6 text-center bg-[#FAFAF8] border border-dashed border-[#E4E1D8] rounded-[8px] space-y-1">
+              <p className="text-xs font-semibold text-[#14213D]">No Dealer Assigned to this Government Project</p>
+              <p className="text-[11px] text-[#52607D]">
+                Dealer commission and milestone payouts are strictly calculated based on the assigned dealer's commission percentage in the Dealer Master.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Overview KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] space-y-1">
+                  <div className="text-[11px] font-medium text-[#52607D]">Dealer Base Rate</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-base font-bold text-[#14213D]">
+                      {commissionData.base_percentage !== null && commissionData.base_percentage !== undefined
+                        ? `${commissionData.base_percentage}%`
+                        : "0.00%"}
+                    </span>
+                    <span className="text-[10px] text-[#8C97AB]">Configured Rate</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] space-y-1">
+                  <div className="text-[11px] font-medium text-[#52607D]">Aging Delay & Penalty</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span
+                      className={`text-base font-bold ${
+                        (commissionData?.penalty_percentage || 0) > 0 ? "text-rose-600" : "text-[#2F6F5E]"
+                      }`}
+                    >
+                      {(commissionData?.penalty_percentage || 0) > 0
+                        ? `-${commissionData.penalty_percentage}%`
+                        : "0% Penalty"}
+                    </span>
+                    <span className="text-[10px] text-[#8C97AB]">
+                      {commissionData?.breakdown?.phase1DelayDays || 0} days delay
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] space-y-1">
+                  <div className="text-[11px] font-medium text-[#52607D]">Effective Commission Rate</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-base font-bold text-[#2F6F5E]">
+                      {commissionData?.effective_percentage !== null && commissionData?.effective_percentage !== undefined
+                        ? `${commissionData.effective_percentage}%`
+                        : "0.00%"}
+                    </span>
+                    <span className="text-[10px] text-[#8C97AB]">
+                      on ₹{(commissionData?.base_amount || 0).toLocaleString("en-IN")} Net
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-[#EAF3F0]/60 border border-[#2F6F5E]/20 rounded-[8px] space-y-1">
+                  <div className="text-[11px] font-bold text-[#2F6F5E]">Total Commission Value</div>
+                  <div className="text-base font-bold text-[#14213D] font-mono">
+                    ₹{parseFloat(commissionData?.total_commission_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2-Part Milestone Payout Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                {/* Milestone 1: Part 1 (55%) */}
+                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-3 relative shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-[#2F6F5E] text-white text-[11px] font-bold flex items-center justify-center">
+                        1
+                      </span>
+                      <div>
+                        <h3 className="text-xs font-bold text-[#14213D]">First Milestone (55%)</h3>
+                        <p className="text-[10px] text-[#52607D]">Payout upon First Fund Release (UTR Updated)</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        commissionData?.part1?.status === "PAID"
+                          ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
+                          : commissionData?.part1?.status === "ELIGIBLE"
+                          ? "bg-amber-50 text-amber-800 border border-amber-200"
+                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                      }`}
+                    >
+                      {commissionData?.part1?.status === "PAID"
+                        ? "✓ PAID"
+                        : commissionData?.part1?.status === "ELIGIBLE"
+                        ? "⚡ ELIGIBLE TO PAY"
+                        : "🔒 LOCKED"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Milestone Amount</div>
+                      <div className="text-lg font-extrabold text-[#14213D] font-mono">
+                        ₹{parseFloat(commissionData?.part1?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+
+                    {commissionData?.part1?.status === "ELIGIBLE" && (
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        icon={CreditCard}
+                        onClick={() => {
+                          setActiveMilestone("PART1");
+                          setPayRef("Direct Bank Transfer / NEFT");
+                          setPayNotes("");
+                          setPayModalOpen(true);
+                        }}
+                      >
+                        Mark Part 1 Paid
+                      </Button>
+                    )}
+                  </div>
+
+                  {commissionData?.part1?.status === "PAID" ? (
+                    <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
+                      <div className="flex justify-between font-medium">
+                        <span>Paid Date: <strong className="text-[#14213D]">{commissionData.part1.paid_date || "—"}</strong></span>
+                        <span>Ref: <strong className="text-[#14213D]">{commissionData.part1.paid_ref || "—"}</strong></span>
+                      </div>
+                      {commissionData.part1.notes && (
+                        <div className="text-[10px] italic">Notes: {commissionData.part1.notes}</div>
+                      )}
+                    </div>
+                  ) : commissionData?.part1?.status === "LOCKED" ? (
+                    <div className="text-[10px] text-[#8C97AB] bg-[#FAFAF8] p-2 rounded-[6px] border border-[#EDEAE1]">
+                      Awaiting government status <strong>First Fund Credited (UTR Updated)</strong> to unlock payout.
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Milestone 2: Part 2 (45%) */}
+                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-3 relative shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-[#14213D] text-white text-[11px] font-bold flex items-center justify-center">
+                        2
+                      </span>
+                      <div>
+                        <h3 className="text-xs font-bold text-[#14213D]">Final Milestone (45%)</h3>
+                        <p className="text-[10px] text-[#52607D]">Payout upon Final Fund Release (UTR Updated)</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        commissionData?.part2?.status === "PAID"
+                          ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
+                          : commissionData?.part2?.status === "ELIGIBLE"
+                          ? "bg-amber-50 text-amber-800 border border-amber-200"
+                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                      }`}
+                    >
+                      {commissionData?.part2?.status === "PAID"
+                        ? "✓ PAID"
+                        : commissionData?.part2?.status === "ELIGIBLE"
+                        ? "⚡ ELIGIBLE TO PAY"
+                        : "🔒 LOCKED"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Milestone Amount</div>
+                      <div className="text-lg font-extrabold text-[#14213D] font-mono">
+                        ₹{parseFloat(commissionData?.part2?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+
+                    {commissionData?.part2?.status === "ELIGIBLE" && (
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        icon={CreditCard}
+                        onClick={() => {
+                          setActiveMilestone("PART2");
+                          setPayRef("Direct Bank Transfer / NEFT");
+                          setPayNotes("");
+                          setPayModalOpen(true);
+                        }}
+                      >
+                        Mark Part 2 Paid
+                      </Button>
+                    )}
+                  </div>
+
+                  {commissionData?.part2?.status === "PAID" ? (
+                    <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
+                      <div className="flex justify-between font-medium">
+                        <span>Paid Date: <strong className="text-[#14213D]">{commissionData.part2.paid_date || "—"}</strong></span>
+                        <span>Ref: <strong className="text-[#14213D]">{commissionData.part2.paid_ref || "—"}</strong></span>
+                      </div>
+                      {commissionData.part2.notes && (
+                        <div className="text-[10px] italic">Notes: {commissionData.part2.notes}</div>
+                      )}
+                    </div>
+                  ) : commissionData?.part2?.status === "LOCKED" ? (
+                    <div className="text-[10px] text-[#8C97AB] bg-[#FAFAF8] p-2 rounded-[6px] border border-[#EDEAE1]">
+                      Awaiting government status <strong>Final Fund Credited (UTR Updated)</strong> to unlock payout.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Collapsible Deduction Explainer */}
+              <div className="pt-2 border-t border-[#EDEAE1]">
+                <button
+                  type="button"
+                  onClick={() => setShowBreakdown(!showBreakdown)}
+                  className="text-xs font-semibold text-[#52607D] hover:text-[#14213D] flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  {showBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  <span>How are these aging deductions and amounts calculated?</span>
+                </button>
+
+                {showBreakdown && (
+                  <div className="mt-2.5 p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] text-xs text-[#52607D] space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="font-semibold text-[#14213D]">Phase 1 Stagnation Rule:</span>
+                        <p className="text-[11px] mt-0.5">
+                          Project baseline invoice date: <strong>{commissionData?.breakdown?.baselineInvoiceDate || "—"}</strong>. Delay between invoice date and first post-invoice transition is <strong>{commissionData?.breakdown?.phase1DelayDays || 0} days</strong>. Every 45 days deducts 1% from base commission ({commissionData?.breakdown?.phase1PenaltyPercentage || 0}% deduction applied).
+                        </p>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-[#14213D]">Phase 2 Stagnation Rule:</span>
+                        <p className="text-[11px] mt-0.5">
+                          Delay between First Fund release and Final Fund release: <strong>{commissionData?.breakdown?.phase2DelayDays || 0} days</strong>. Every 45 days delay beyond First Fund deducts 1% from the remaining 45% milestone ({commissionData?.breakdown?.phase2PenaltyPercentage || 0}% deduction applied).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Observed Status History Timeline */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
           <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-3">
             <History size={18} className="text-[#2F6F5E]" />
-            <div>
-              <h2 className="text-base font-bold font-display text-[#14213D]">
-                Observed Government Status History
-              </h2>
-              <p className="text-xs text-[#52607D]">
-                Chronological transitions strictly observed across government Excel uploads (never inferred)
-              </p>
-            </div>
+            <h2 className="text-sm font-bold font-display text-[#14213D]">Status Change History</h2>
           </div>
 
           {historyData.length === 0 ? (
-            <div className="py-6 text-center text-xs text-[#52607D]">
-              No observed status history recorded yet.
-            </div>
+            <p className="text-xs text-[#52607D] py-4 text-center">No status transitions recorded yet.</p>
           ) : (
-            <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#E4E1D8]">
+            <div className="relative pl-6 border-l-2 border-[#E4E1D8] space-y-6 my-2">
               {historyData.map((item, index) => (
-                <div key={item.id} className="relative group">
+                <div key={item.id || index} className="relative group">
+                  {/* Timeline bullet dot */}
                   <div className="absolute -left-[27px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white bg-[#2F6F5E] shadow-xs" />
 
                   <div className="bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -556,12 +717,6 @@ export function ProjectDetailPage() {
                         <div className="text-xs text-[#52607D] italic">Remarks: {item.remarks}</div>
                       )}
                     </div>
-
-                    <div className="text-right text-[11px] text-[#52607D]">
-                      {item.source_import?.file_name && (
-                        <span>Source: <strong className="text-[#14213D]">{item.source_import.file_name}</strong></span>
-                      )}
-                    </div>
                   </div>
                 </div>
               ))}
@@ -570,21 +725,33 @@ export function ProjectDetailPage() {
         </div>
       </main>
 
-      {/* Follow-up Modal */}
+      {/* Payout Record Modal */}
       <Modal
-        isOpen={followupModalOpen}
-        onClose={() => setFollowupModalOpen(false)}
-        title="Add Government Project Follow-up"
+        isOpen={payModalOpen}
+        onClose={() => setPayModalOpen(false)}
+        title={`Record Dealer Milestone Payout (${activeMilestone === "PART1" ? "Part 1 - 55%" : "Part 2 - 45%"})`}
       >
-        <form onSubmit={handleSaveFollowup} className="space-y-4">
+        <form onSubmit={handleRecordPayout} className="space-y-4">
+          <div className="p-3 bg-[#EAF3F0] rounded-[8px] text-xs text-[#2F6F5E] flex items-center justify-between">
+            <span>Milestone Amount to Pay:</span>
+            <strong className="text-sm font-mono font-bold text-[#14213D]">
+              ₹
+              {parseFloat(
+                activeMilestone === "PART1"
+                  ? commissionData?.part1?.amount || 0
+                  : commissionData?.part2?.amount || 0
+              ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </strong>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Follow-up Date <span className="text-rose-500">*</span>
+              Payment Date <span className="text-rose-500">*</span>
             </label>
             <input
               type="date"
-              value={followupDate}
-              onChange={(e) => setFollowupDate(e.target.value)}
+              value={payDate}
+              onChange={(e) => setPayDate(e.target.value)}
               className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
               required
             />
@@ -592,115 +759,37 @@ export function ProjectDetailPage() {
 
           <div>
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Remarks & Officer Discussions <span className="text-rose-500">*</span>
+              Payment Mode & UTR / Cheque Ref <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. NEFT-UTR-89123891, Cheque #49102"
+              value={payRef}
+              onChange={(e) => setPayRef(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Payment Remarks / Notes
             </label>
             <textarea
-              rows={3}
-              placeholder="e.g. Called Assistant Director regarding Joint Verification inspection schedule..."
-              value={followupRemarks}
-              onChange={(e) => setFollowupRemarks(e.target.value)}
+              rows={2}
+              placeholder="Optional notes or remarks regarding this payout..."
+              value={payNotes}
+              onChange={(e) => setPayNotes(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Next Action Date
-              </label>
-              <input
-                type="date"
-                value={nextActionDate}
-                onChange={(e) => setNextActionDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Status
-              </label>
-              <select
-                value={followupStatus}
-                onChange={(e) => setFollowupStatus(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              >
-                <option value="OPEN">Open / Pending</option>
-                <option value="COMPLETED">Completed</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
-            <Button variant="secondary" type="button" onClick={() => setFollowupModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={savingFollowup}>
-              Save Follow-up
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Document Modal */}
-      <Modal
-        isOpen={docModalOpen}
-        onClose={() => setDocModalOpen(false)}
-        title="Attach Document to Project"
-      >
-        <form onSubmit={handleSaveDocument} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Document Name <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Work Order Copy, Joint Verification Report"
-              value={docName}
-              onChange={(e) => setDocName(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Document Category / Type
-            </label>
-            <select
-              value={docType}
-              onChange={(e) => setDocType(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-            >
-              <option value="Work Order">Work Order</option>
-              <option value="Joint Verification">Joint Verification Report</option>
-              <option value="Invoice">Invoice Copy</option>
-              <option value="Quotation">Quotation</option>
-              <option value="Other">Other Document</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              File Path or Cloud URL <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. /uploads/documents/wo_10293.pdf"
-              value={docPath}
-              onChange={(e) => setDocPath(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              required
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
-            <Button variant="secondary" type="button" onClick={() => setDocModalOpen(false)}>
+            <Button variant="secondary" type="button" onClick={() => setPayModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={savingDoc}>
-              Attach Document
+            <Button type="submit" loading={savingPayment} icon={Check}>
+              Confirm Payout
             </Button>
           </div>
         </form>

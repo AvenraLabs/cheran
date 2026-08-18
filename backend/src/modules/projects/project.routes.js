@@ -17,18 +17,6 @@ router
   .route("/:id/status-history")
   .get(validate(getProjectSchema), projectController.getProjectStatusHistory);
 
-// Follow-ups
-router
-  .route("/:id/followups")
-  .get(validate(getProjectSchema), projectController.listFollowups)
-  .post(validate(getProjectSchema), projectController.createFollowup);
-
-// Documents
-router
-  .route("/:id/documents")
-  .get(validate(getProjectSchema), projectController.listDocuments)
-  .post(validate(getProjectSchema), projectController.addDocument);
-
 // Project Invoices & Dispatched Materials
 router.get("/:id/invoices", validate(getProjectSchema), async (req, res, next) => {
   const { getProjectInvoices } = await import("../invoices/invoice.service.js");
@@ -39,5 +27,9 @@ router.get("/:id/invoices", validate(getProjectSchema), async (req, res, next) =
     next(err);
   }
 });
+
+// Dealer Commission & Milestone Payouts
+router.get("/:id/commission", validate(getProjectSchema), projectController.getProjectCommission);
+router.post("/:id/commission/payout", validate(getProjectSchema), projectController.recordCommissionPayment);
 
 export default router;

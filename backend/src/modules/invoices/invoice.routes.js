@@ -17,5 +17,6 @@ router.route("/:id")
   .get(invoiceController.getInvoiceById);
 
 router.post("/:id/cancel", validate(cancelInvoiceSchema), invoiceController.cancelInvoice);
+router.post("/:id/payment", invoiceController.recordInvoicePayment);
 
 export default router;

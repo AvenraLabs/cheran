@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import env from "./config/env.js";
 import errorHandler from "./shared/errorHandler.js";
 import AppError from "./shared/appError.js";
+import { requireAuth, enforceRoleModuleAccess } from "./shared/middlewares/authMiddleware.js";
 
 // Initialize all models and associations
 import "./models/initModels.js";
@@ -29,6 +30,7 @@ import saleRoutes from "./modules/sales/sale.routes.js";
 import invoiceRoutes from "./modules/invoices/invoice.routes.js";
 import reportRoutes from "./modules/reports/report.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
+import tallyRoutes from "./modules/tally/tally.routes.js";
 
 const app = express();
 
@@ -69,14 +71,18 @@ app.use("/api", limiter);
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "success",
-    message: "Cheran Plast Horticulture & ERP Backend API is running smoothly",
+    message: "Cheran Irrigation Horticulture & ERP Backend API is running smoothly",
     timestamp: new Date().toISOString(),
     environment: env.NODE_ENV,
   });
 });
 
-// Mount Domain Routes
+// Mount Public Authentication Routes
 app.use("/api/auth", authRoutes);
+
+// Protected Domain Routes with Authentication & Role-Based Access Guard
+app.use("/api", requireAuth, enforceRoleModuleAccess);
+
 app.use("/api/dealers", dealerRoutes);
 app.use("/api/government/statuses", statusRoutes);
 app.use("/api/government/projects", projectRoutes);
@@ -93,6 +99,7 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/sales", saleRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/tally", tallyRoutes);
 
 // Catch-all 404 handler
 app.use((req, res, next) => {

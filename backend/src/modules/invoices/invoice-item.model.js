@@ -15,33 +15,49 @@ const InvoiceItem = db.define(
     },
     item_id: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
     },
     item_name_snapshot: {
       type: DataTypes.STRING(255),
-      allowNull: false,
+      allowNull: true,
     },
     unit_id: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
     },
     unit_snapshot: {
       type: DataTypes.STRING(50),
-      allowNull: false,
+      allowNull: true,
+    },
+    tally_item_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
     },
     quantity: {
       type: DataTypes.DECIMAL(12, 3),
       allowNull: false,
+    },
+    billed_quantity: {
+      type: DataTypes.DECIMAL(12, 3),
+      allowNull: true,
     },
     unit_price: {
       type: DataTypes.DECIMAL(14, 2),
       allowNull: false,
       defaultValue: 0.0,
     },
+    rate: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: true,
+    },
     line_total: {
       type: DataTypes.DECIMAL(14, 2),
       allowNull: false,
       defaultValue: 0.0,
+    },
+    hsn_code: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
     },
   },
   {

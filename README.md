@@ -1,6 +1,6 @@
-# Cheran Plast - Horticulture Government Project Management System
+# Cheran Irrigation - Horticulture Government Project Management System
 
-Production-grade internal management system for Cheran Plast, tracking Tamil Nadu government micro-irrigation and horticulture projects, status transitions, dealer resolution, and operational metrics.
+Production-grade internal management system for Cheran Irrigation, tracking Tamil Nadu government micro-irrigation and horticulture projects, status transitions, dealer resolution, and operational metrics.
 
 ---
 

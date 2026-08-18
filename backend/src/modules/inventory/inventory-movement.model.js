@@ -22,7 +22,9 @@ const InventoryMovement = db.define(
         "SALE",
         "DISPATCH",
         "PRODUCTION_IN",
-        "PRODUCTION_OUT"
+        "PRODUCTION_OUT",
+        "PRODUCTION_WASTAGE",
+        "REVERSAL"
       ),
       allowNull: false,
     },

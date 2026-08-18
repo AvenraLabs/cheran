@@ -36,4 +36,21 @@ export const uploadExcel = multer({
   },
 });
 
+const jsonFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ext === ".json" || file.mimetype === "application/json" || file.mimetype === "text/plain") {
+    cb(null, true);
+  } else {
+    cb(new AppError("Invalid file type. Only JSON files (.json) are supported.", 400), false);
+  }
+};
+
+export const uploadJson = multer({
+  storage,
+  fileFilter: jsonFileFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB for large Tally JSON
+  },
+});
+
 export default uploadExcel;

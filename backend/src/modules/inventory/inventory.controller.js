@@ -33,6 +33,30 @@ export const getStockReceiptById = asyncHandler(async (req, res) => {
   });
 });
 
+export const createProductionEntry = asyncHandler(async (req, res) => {
+  const entry = await inventoryService.createProductionEntry(req.body);
+  res.status(201).json({
+    status: "success",
+    data: { entry },
+  });
+});
+
+export const listProductionEntries = asyncHandler(async (req, res) => {
+  const result = await inventoryService.listProductionEntries(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+export const getProductionEntryById = asyncHandler(async (req, res) => {
+  const entry = await inventoryService.getProductionEntryById(req.params.id);
+  res.status(200).json({
+    status: "success",
+    data: { entry },
+  });
+});
+
 export const createStockAdjustment = asyncHandler(async (req, res) => {
   const result = await inventoryService.createStockAdjustment(req.body);
   res.status(201).json({

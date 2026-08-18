@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import db from "../../config/db.js";
+import "../../models/initModels.js";
 import Invoice from "./invoice.model.js";
 import InvoiceItem from "./invoice-item.model.js";
 import InventoryMovement from "../inventory/inventory-movement.model.js";
@@ -64,12 +65,53 @@ export async function createInvoice({
     }
 
     const cleanAppId = application_id.trim();
-    const project = await GovernmentProject.findOne({
+    let project = await GovernmentProject.findOne({
       where: { application_id: cleanAppId },
     });
 
     if (!project) {
-      throw new AppError("Government project not found for Application ID.", 404);
+      // Auto-create new Government Project with status INVOICED
+      const farmerTitle = resolvedCustomerName || `Farmer (${cleanAppId})`;
+      project = await GovernmentProject.create({
+        application_id: cleanAppId,
+        farmer_name: farmerTitle,
+        current_status: "INVOICED",
+        current_status_date: invoice_date,
+        invoice_date: invoice_date,
+        invoice_amount: 0, // will be updated below once grandTotal is calculated
+        dealer_id: resolvedDealerId || null,
+      });
+
+      // Record baseline INVOICED status history
+      const { default: GovernmentProjectStatusHistory } = await import("../projects/project-history.model.js");
+      await GovernmentProjectStatusHistory.create({
+        project_id: project.id,
+        status: "INVOICED",
+        status_date: invoice_date,
+        remarks: `Manually created from invoice #${cleanInvoiceNo}`,
+      });
+    } else {
+      // Ensure INVOICED status history exists for baseline
+      const { default: GovernmentProjectStatusHistory } = await import("../projects/project-history.model.js");
+      const existingInvoicedHistory = await GovernmentProjectStatusHistory.findOne({
+        where: {
+          project_id: project.id,
+          status: "INVOICED",
+        },
+      });
+
+      if (!existingInvoicedHistory) {
+        await GovernmentProjectStatusHistory.create({
+          project_id: project.id,
+          status: "INVOICED",
+          status_date: invoice_date,
+          remarks: `Initial invoice stage linked from manual invoice #${cleanInvoiceNo}`,
+        });
+      }
+
+      if (!project.invoice_date || new Date(invoice_date) < new Date(project.invoice_date)) {
+        await project.update({ invoice_date });
+      }
     }
 
     resolvedProjectId = project.id;
@@ -298,6 +340,7 @@ export async function listInvoices({
   search,
   invoice_type,
   status,
+  payment_status,
   government_project_id,
   dealer_id,
   customer_id,
@@ -309,6 +352,13 @@ export async function listInvoices({
   const where = {};
   if (invoice_type) where.invoice_type = invoice_type;
   if (status) where.status = status;
+  if (payment_status && payment_status !== "ALL") {
+    if (payment_status === "PENDING") {
+      where.payment_status = { [Op.in]: ["UNPAID", "PARTIALLY_PAID"] };
+    } else {
+      where.payment_status = payment_status;
+    }
+  }
   if (government_project_id) where.government_project_id = government_project_id;
   if (dealer_id) where.dealer_id = dealer_id;
   if (customer_id) where.customer_id = customer_id;
@@ -325,6 +375,7 @@ export async function listInvoices({
     where[Op.or] = [
       { invoice_number: { [Op.iLike]: `%${search.trim()}%` } },
       { customer_name: { [Op.iLike]: `%${search.trim()}%` } },
+      { payment_reference: { [Op.iLike]: `%${search.trim()}%` } },
       { notes: { [Op.iLike]: `%${search.trim()}%` } },
     ];
   }
@@ -479,4 +530,58 @@ export async function getProjectInvoices(projectId) {
     invoices,
     dispatchedMaterials: Object.values(materialSummary),
   };
+}
+
+/**
+ * Record a payment / collection installment against a commercial or government invoice
+ */
+export async function recordInvoicePayment(id, { amount, payment_date, payment_reference, notes }) {
+  const invoice = await Invoice.findByPk(id);
+  if (!invoice) {
+    throw new AppError(`Invoice not found with ID ${id}`, 404);
+  }
+  if (invoice.status === "CANCELLED") {
+    throw new AppError("Cannot record payment for a cancelled invoice", 400);
+  }
+
+  const paymentAmount = parseFloat(amount);
+  if (isNaN(paymentAmount) || paymentAmount <= 0) {
+    throw new AppError("Payment amount must be greater than 0", 400);
+  }
+
+  const currentPaid = parseFloat(invoice.paid_amount || 0);
+  const totalAmount = parseFloat(invoice.total_amount || 0);
+  const newPaidAmount = parseFloat((currentPaid + paymentAmount).toFixed(2));
+
+  const paymentDate = payment_date || new Date().toISOString().split("T")[0];
+  const paymentRef = payment_reference ? payment_reference.trim() : "Direct Payment";
+
+  let newPaymentStatus = "UNPAID";
+  if (newPaidAmount >= totalAmount) {
+    newPaymentStatus = "PAID";
+  } else if (newPaidAmount > 0) {
+    newPaymentStatus = "PARTIALLY_PAID";
+  }
+
+  const currentHistory = Array.isArray(invoice.payment_history) ? invoice.payment_history : [];
+  const updatedHistory = [
+    ...currentHistory,
+    {
+      amount: paymentAmount,
+      payment_date: paymentDate,
+      payment_reference: paymentRef,
+      notes: notes ? notes.trim() : null,
+      recorded_at: new Date().toISOString(),
+    },
+  ];
+
+  await invoice.update({
+    paid_amount: newPaidAmount,
+    payment_status: newPaymentStatus,
+    payment_date: paymentDate,
+    payment_reference: paymentRef,
+    payment_history: updatedHistory,
+  });
+
+  return await getInvoiceById(invoice.id);
 }

@@ -6,7 +6,6 @@ export const createOpeningStockSchema = z.object({
     quantity: z.number().positive("Opening quantity must be positive"),
     unit_id: z.string().min(1, "Invalid unit ID").optional(),
     movement_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
-    notes: z.string().optional().nullable(),
   }),
 });
 
@@ -16,7 +15,6 @@ export const createStockReceiptSchema = z.object({
     supplier_name: z.string().optional().nullable(),
     receipt_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
     reference_number: z.string().max(100).optional().nullable(),
-    notes: z.string().optional().nullable(),
     items: z
       .array(
         z.object({
@@ -30,12 +28,65 @@ export const createStockReceiptSchema = z.object({
   }),
 });
 
+export const listStockReceiptsSchema = z.object({
+  query: z.object({
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    supplier_id: z.string().optional(),
+    item_id: z.string().optional(),
+    page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+    limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 50)),
+  }),
+});
+
+export const createProductionEntrySchema = z.object({
+  body: z.object({
+    production_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
+    reference_number: z.string().max(100).optional().nullable(),
+    materials: z
+      .array(
+        z.object({
+          item_id: z.string().min(1, "Invalid raw material ID"),
+          unit_id: z.string().min(1, "Invalid unit ID").optional(),
+          quantity_used: z.number().positive("Quantity used must be greater than 0"),
+          wastage_quantity: z.number().min(0, "Wastage quantity cannot be negative").optional().default(0),
+        })
+      )
+      .min(1, "At least one raw material input is required"),
+    outputs: z
+      .array(
+        z.object({
+          item_id: z.string().min(1, "Invalid finished good ID"),
+          unit_id: z.string().min(1, "Invalid unit ID").optional(),
+          quantity_produced: z.number().positive("Quantity produced must be greater than 0"),
+        })
+      )
+      .min(1, "At least one finished good output is required"),
+  }),
+});
+
+export const listProductionSchema = z.object({
+  query: z.object({
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    raw_material_id: z.string().optional(),
+    finished_good_id: z.string().optional(),
+    page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+    limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 50)),
+  }),
+});
+
+export const getProductionByIdSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, "Invalid production entry ID"),
+  }),
+});
+
 export const createAdjustmentSchema = z.object({
   body: z.object({
     item_id: z.string().min(1, "Invalid item ID"),
     adjustment_type: z.enum(["ADJUSTMENT_IN", "ADJUSTMENT_OUT"]),
     quantity: z.number().positive("Quantity must be positive"),
-    notes: z.string().min(1, "Mandatory reason notes required for adjustment"),
     movement_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
   }),
 });
@@ -71,6 +122,7 @@ export const movementHistorySchema = z.object({
         "DISPATCH",
         "PRODUCTION_IN",
         "PRODUCTION_OUT",
+        "PRODUCTION_WASTAGE",
         "REVERSAL",
       ])
       .optional(),
