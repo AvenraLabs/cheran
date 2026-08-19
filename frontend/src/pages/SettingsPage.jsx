@@ -68,7 +68,6 @@ export function SettingsPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Business Configuration & Rules"
-        subtitle="Configure enterprise calculation percentages, tax policies, and default parameters"
         actions={
           <Button variant="secondary" icon={RefreshCw} onClick={fetchSettings}>
             Refresh

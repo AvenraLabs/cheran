@@ -18,6 +18,7 @@ import CustomSelect from "../components/common/CustomSelect.jsx";
 import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function ExpensesPage() {
   const [expenses, setExpenses] = useState([]);
@@ -187,7 +188,6 @@ export function ExpensesPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Operating Expenses"
-        subtitle="Track factory overheads, transport, utilities, maintenance, and administrative costs"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" icon={Tag} onClick={() => setCatModalOpen(true)}>
@@ -287,7 +287,7 @@ export function ExpensesPage() {
                       <tr key={e.id} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="py-3 px-4 font-mono text-[#52607D] flex items-center gap-1.5">
                           <Calendar size={12} className="text-[#2F6F5E]" />
-                          {e.expense_date}
+                          {formatDate(e.expense_date)}
                         </td>
                         <td className="py-3 px-4 font-semibold text-[#14213D]">
                           <span className="px-2 py-0.5 rounded-full text-[11px] bg-[#EAF3F0] text-[#2F6F5E]">

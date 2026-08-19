@@ -24,6 +24,7 @@ import CustomSelect from "../components/common/CustomSelect.jsx";
 import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function ProductionPage() {
   // Master dependencies
@@ -324,7 +325,6 @@ export function ProductionPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Manufacturing & Daily Production"
-        subtitle={`Daily manufacturing runs consuming raw materials and producing finished goods (${(pagination?.total || 0).toLocaleString()} logged)`}
         actions={
           <div className="flex items-center gap-2">
             <Link to="/inventory">
@@ -493,7 +493,7 @@ export function ProductionPage() {
                         <td className="py-3 px-4 font-medium text-[#14213D] whitespace-nowrap">
                           <div className="flex items-center gap-1.5 font-mono">
                             <Calendar size={13} className="text-[#2F6F5E]" />
-                            <span>{entry.production_date}</span>
+                            <span>{formatDate(entry.production_date)}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4 font-mono font-semibold text-[#52607D]">
@@ -815,7 +815,7 @@ export function ProductionPage() {
             <div className="grid grid-cols-2 gap-2 bg-[#FAFAF8] p-3 rounded-[8px] border border-[#EDEAE1]">
               <div>
                 <span className="text-[#52607D]">Production Date:</span>{" "}
-                <strong className="text-[#14213D]">{selectedEntry.production_date}</strong>
+                <strong className="text-[#14213D] font-mono">{formatDate(selectedEntry.production_date)}</strong>
               </div>
               <div>
                 <span className="text-[#52607D]">Reference / Batch:</span>{" "}

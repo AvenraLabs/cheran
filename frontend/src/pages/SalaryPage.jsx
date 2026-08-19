@@ -15,6 +15,7 @@ import Button from "../components/common/Button.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 const MONTH_NAMES = [
   { value: 1, label: "January" },
@@ -205,7 +206,6 @@ export function SalaryPage() {
     <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Payroll & Salary Records"
-        subtitle={`Staff wage computation & disbursements for ${monthName} ${selectedYear}`}
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -338,8 +338,8 @@ export function SalaryPage() {
                       </td>
                       <td className="py-3 px-4">
                         {row.status === "PAID" ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                            <CheckCircle size={12} /> Paid ({row.paid_date ? new Date(row.paid_date).toLocaleDateString() : "Yes"})
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-mono">
+                            <CheckCircle size={12} /> Paid ({row.paid_date ? formatDate(row.paid_date) : "Yes"})
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">

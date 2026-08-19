@@ -5,6 +5,7 @@ import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function UnitsPage() {
   const [units, setUnits] = useState([]);
@@ -108,7 +109,6 @@ export function UnitsPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Units of Measurement"
-        subtitle="Manage measurement units used across inventory and items"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" icon={RefreshCw} onClick={fetchUnits} loading={loading}>
@@ -200,7 +200,7 @@ export function UnitsPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-[#52607D] font-mono">
-                        {new Date(u.created_at).toLocaleDateString()}
+                        {formatDate(u.created_at)}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">

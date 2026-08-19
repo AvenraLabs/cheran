@@ -11,6 +11,7 @@ import Navbar from "../components/layout/Navbar.jsx";
 import MetricCard from "../components/common/MetricCard.jsx";
 import Button from "../components/common/Button.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState("dealers"); // 'dealers' | 'expenses' | 'employees'
@@ -46,7 +47,6 @@ export function ReportsPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Reports & Financial Intelligence"
-        subtitle="Consolidated cross-module reporting for dealers, sales, operations, and payroll"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" icon={RefreshCw} onClick={fetchReports}>
@@ -220,7 +220,7 @@ export function ReportsPage() {
                             {emp.salary_status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-mono text-[#52607D]">{emp.paid_date || "—"}</td>
+                        <td className="py-3 px-4 font-mono text-[#52607D]">{formatDate(emp.paid_date)}</td>
                       </tr>
                     ))}
                   </tbody>

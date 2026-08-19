@@ -8,6 +8,7 @@ import Modal from "../components/common/Modal.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function DealersPage() {
   const [dealers, setDealers] = useState([]);
@@ -191,7 +192,6 @@ export function DealersPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Dealers Directory"
-        subtitle="Manage verified micro-irrigation dealers, deduplicate entries, and set commissions"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" icon={GitMerge} onClick={openMergeModal}>
@@ -291,8 +291,8 @@ export function DealersPage() {
                             {d.is_active ? "ACTIVE" : "INACTIVE"}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-[#52607D]">
-                          {new Date(d.created_at).toLocaleDateString("en-IN")}
+                        <td className="py-3 px-4 text-[#52607D] font-mono">
+                          {formatDate(d.created_at)}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">

@@ -22,6 +22,7 @@ import CustomSelect from "../components/common/CustomSelect.jsx";
 import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState([]);
@@ -159,7 +160,6 @@ export function ProjectsPage() {
     <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8]">
       <Navbar
         title="Government Projects"
-        subtitle={`Tracking ${(pagination?.total || 0).toLocaleString()} government horticulture applications`}
         actions={
           <Button
             variant="secondary"
@@ -357,7 +357,7 @@ export function ProjectsPage() {
                           </td>
                           <td className="py-3 px-4 text-[#52607D]">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono">{proj.current_status_date || "—"}</span>
+                              <span className="font-mono">{formatDate(proj.current_status_date)}</span>
                               {daysInStatus !== null && (
                                 <span
                                   className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
@@ -419,39 +419,36 @@ export function ProjectsPage() {
         isOpen={historyModalOpen}
         onClose={() => setHistoryModalOpen(false)}
         title={`Status History: ${selectedProject?.application_id || ""}`}
-        size="lg"
+        size="xl"
       >
         {selectedProject && (
           <div className="space-y-4 text-xs">
             {/* Project Summary Card */}
-            <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex items-center gap-2">
-                <User size={14} className="text-[#52607D]" />
-                <div>
+            <div className="p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+              <div className="flex items-start gap-2 min-w-0">
+                <User size={14} className="text-[#52607D] shrink-0 mt-0.5" />
+                <div className="min-w-0">
                   <div className="text-[10px] text-[#52607D] uppercase font-bold">Farmer</div>
-                  <div className="font-semibold text-[#14213D]">{selectedProject.farmer_name || "—"}</div>
+                  <div className="font-semibold text-[#14213D] truncate">{selectedProject.farmer_name || "—"}</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <MapPin size={14} className="text-[#52607D]" />
-                <div>
+              <div className="flex items-start gap-2 min-w-0">
+                <MapPin size={14} className="text-[#52607D] shrink-0 mt-0.5" />
+                <div className="min-w-0">
                   <div className="text-[10px] text-[#52607D] uppercase font-bold">Location</div>
-                  <div className="font-semibold text-[#14213D]">
+                  <div className="font-semibold text-[#14213D] truncate">
                     {[selectedProject.village, selectedProject.district].filter(Boolean).join(", ") || "—"}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Clock size={14} className="text-[#52607D]" />
-                <div>
+              <div className="flex items-start gap-2 min-w-0">
+                <Clock size={14} className="text-[#52607D] shrink-0 mt-0.5" />
+                <div className="min-w-0">
                   <div className="text-[10px] text-[#52607D] uppercase font-bold">Current Status</div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="mt-0.5">
                     <StatusBadge status={selectedProject.current_status} size="sm" />
-                    <span className="font-mono text-[11px] text-[#52607D]">
-                      ({selectedProject.current_status_date || "—"})
-                    </span>
                   </div>
                 </div>
               </div>
@@ -473,14 +470,14 @@ export function ProjectsPage() {
                   No status transition history recorded for this project yet.
                 </div>
               ) : (
-                <div className="border border-[#EDEAE1] rounded-[8px] overflow-hidden">
+                <div className="border border-[#EDEAE1] rounded-[8px] overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
                       <tr>
-                        <th className="py-2.5 px-3">#</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3">Status Date</th>
-                        <th className="py-2.5 px-3">Days in Prior Stage</th>
+                        <th className="py-2.5 px-3 w-10">#</th>
+                        <th className="py-2.5 px-3 min-w-[220px]">Status</th>
+                        <th className="py-2.5 px-3 w-36 whitespace-nowrap">Status Date</th>
+                        <th className="py-2.5 px-3 w-44 whitespace-nowrap">Days in Prior Stage</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1] text-[#14213D]">
@@ -493,7 +490,7 @@ export function ProjectsPage() {
                           <td className="py-2.5 px-3 font-mono font-medium">
                             <div className="flex items-center gap-1.5">
                               <Calendar size={12} className="text-[#2F6F5E]" />
-                              <span>{item.status_date || "—"}</span>
+                              <span>{formatDate(item.status_date)}</span>
                             </div>
                           </td>
                           <td className="py-2.5 px-3">

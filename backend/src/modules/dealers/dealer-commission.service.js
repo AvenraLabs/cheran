@@ -209,15 +209,11 @@ export async function calculateProjectDealerCommission(projectId) {
 
   const part1Status = commissionRecord?.part1_status === "PAID"
     ? "PAID"
-    : isFirstFundReached
-    ? "ELIGIBLE"
-    : "LOCKED";
+    : "PENDING";
 
   const part2Status = commissionRecord?.part2_status === "PAID"
     ? "PAID"
-    : isFinalFundReached
-    ? "ELIGIBLE"
-    : "LOCKED";
+    : "PENDING";
 
   const overallStatus =
     part1Status === "PAID" && part2Status === "PAID"

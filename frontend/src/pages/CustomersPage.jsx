@@ -109,7 +109,6 @@ export function CustomersPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Direct Customers & Commercial Clients"
-        subtitle="Manage wholesale buyers, direct retail clients, and commercial farms"
         actions={
           <div className="flex items-center gap-2">
             <Button

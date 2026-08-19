@@ -22,6 +22,7 @@ import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -170,7 +171,6 @@ export function UsersPage() {
     <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8]">
       <Navbar
         title="User Management & Access Control"
-        subtitle="Create and manage system user accounts, assign roles (Admin vs User), and configure account permissions"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" icon={RefreshCw} onClick={() => fetchUsers(pagination.page, pagination.limit)}>
@@ -272,7 +272,7 @@ export function UsersPage() {
                         </td>
 
                         <td className="py-3 px-4 text-[#52607D] font-mono">
-                          {u.created_at ? new Date(u.created_at).toLocaleDateString("en-IN") : "—"}
+                          {formatDate(u.created_at)}
                         </td>
 
                         <td className="py-3 px-4 text-right">

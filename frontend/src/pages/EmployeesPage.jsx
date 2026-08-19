@@ -19,6 +19,7 @@ import MetricCard from "../components/common/MetricCard.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function EmployeesPage() {
   const [employees, setEmployees] = useState([]);
@@ -213,7 +214,6 @@ export function EmployeesPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Staff & Daily Attendance"
-        subtitle="Manage factory staff, operators, and daily 1-click attendance sheet"
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -399,7 +399,7 @@ export function EmployeesPage() {
                       <tr key={att.id} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="py-3 px-4 font-mono text-[#52607D] flex items-center gap-1.5">
                           <Calendar size={12} className="text-[#2F6F5E]" />
-                          {att.attendance_date}
+                          {formatDate(att.attendance_date)}
                         </td>
                         <td className="py-3 px-4 font-semibold text-[#14213D]">
                           {att.employee?.name || "Staff"}

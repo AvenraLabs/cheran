@@ -108,7 +108,6 @@ export function DashboardPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Operations Dashboard & Analytics"
-        subtitle="Real-time government horticulture project metrics, stage progression, and distribution analytics"
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -227,9 +226,6 @@ export function DashboardPage() {
                     <h2 className="text-base font-bold font-display text-[#14213D]">
                       Current Status Distribution
                     </h2>
-                    <p className="text-xs text-[#52607D]">
-                      Live breakdown of government milestones across all imported records
-                    </p>
                   </div>
 
                   <Link
@@ -289,14 +285,9 @@ export function DashboardPage() {
               <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
                 <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-3">
                   <Clock size={18} className="text-[#2F6F5E]" />
-                  <div>
-                    <h2 className="text-base font-bold font-display text-[#14213D]">
-                      Stage Transition Speeds
-                    </h2>
-                    <p className="text-[11px] text-[#52607D]">
-                      Computed from observed periodic imports
-                    </p>
-                  </div>
+                  <h2 className="text-base font-bold font-display text-[#14213D]">
+                    Stage Transition Speeds
+                  </h2>
                 </div>
 
                 {stageDurationsData.length === 0 ? (

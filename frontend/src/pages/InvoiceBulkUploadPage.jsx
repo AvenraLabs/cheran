@@ -15,6 +15,7 @@ import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import MetricCard from "../components/common/MetricCard.jsx";
 import Button from "../components/common/Button.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function InvoiceBulkUploadPage() {
   const [file, setFile] = useState(null);
@@ -98,7 +99,6 @@ export function InvoiceBulkUploadPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Invoice Bulk Upload"
-        subtitle="Import historical Government Project invoice records & establish INVOICED baseline dates"
         actions={
           parsedData && (
             <Button variant="secondary" icon={RefreshCw} onClick={handleReset}>
@@ -245,7 +245,7 @@ export function InvoiceBulkUploadPage() {
                         {row.government_project_id || row.application_id || row.project_id}
                       </td>
                       <td className="py-2.5 px-4 text-[#2F6F5E]">
-                        {row.invoice_date || row.date}
+                        {formatDate(row.invoice_date || row.date)}
                       </td>
                       <td className="py-2.5 px-4 text-right font-sans">
                         <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-[#EAF3F0] text-[#2F6F5E]">

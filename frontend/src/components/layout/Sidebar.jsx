@@ -83,6 +83,8 @@ export function Sidebar({ isOpen, onClose }) {
           items: [
             { label: "Dashboard", path: "/", icon: LayoutDashboard },
             { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+            { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
+            { label: "Invoice Bulk Upload", path: "/imports/invoices", icon: FileJson },
             { label: "Excel Imports", path: "/imports", icon: FileText },
             { label: "Dealers Directory", path: "/dealers", icon: Users },
           ],

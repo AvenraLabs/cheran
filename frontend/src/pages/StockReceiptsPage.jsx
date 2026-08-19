@@ -22,6 +22,7 @@ import CustomSelect from "../components/common/CustomSelect.jsx";
 import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function StockReceiptsPage() {
   const [receipts, setReceipts] = useState([]);
@@ -228,7 +229,6 @@ export function StockReceiptsPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Raw Material Purchases & Receipts"
-        subtitle="Purchase receipts exclusively for Raw Materials with date-filtered history"
         actions={
           <div className="flex items-center gap-2">
             <Link to="/inventory">
@@ -369,9 +369,9 @@ export function StockReceiptsPage() {
                     {receipts.map((rec) => (
                       <tr key={rec.id} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="py-3 px-4 font-medium text-[#14213D] whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 font-mono">
                             <Calendar size={13} className="text-[#2F6F5E]" />
-                            <span>{rec.receipt_date}</span>
+                            <span>{formatDate(rec.receipt_date)}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4 font-semibold text-[#14213D]">
@@ -589,7 +589,7 @@ export function StockReceiptsPage() {
             <div className="grid grid-cols-2 gap-2 bg-[#FAFAF8] p-3 rounded-[8px] border border-[#EDEAE1]">
               <div>
                 <span className="text-[#52607D]">Receipt Date:</span>{" "}
-                <strong className="text-[#14213D]">{selectedReceipt.receipt_date}</strong>
+                <strong className="text-[#14213D] font-mono">{formatDate(selectedReceipt.receipt_date)}</strong>
               </div>
               <div>
                 <span className="text-[#52607D]">Supplier:</span>{" "}

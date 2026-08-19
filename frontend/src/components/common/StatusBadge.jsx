@@ -31,10 +31,10 @@ export function StatusBadge({ status, size = "md" }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border ${style} ${sizeClasses} whitespace-nowrap shadow-xs`}
+      className={`inline-flex items-center gap-1.5 rounded-full border ${style} ${sizeClasses} max-w-full leading-snug shadow-xs`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-      {status}
+      <span className={`w-1.5 h-1.5 rounded-full ${dotColor} shrink-0`} />
+      <span className="break-words">{status}</span>
     </span>
   );
 }

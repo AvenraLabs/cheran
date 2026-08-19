@@ -23,8 +23,10 @@ import Navbar from "../components/layout/Navbar.jsx";
 import MetricCard from "../components/common/MetricCard.jsx";
 import Button from "../components/common/Button.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
+import Pagination from "../components/common/Pagination.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import { formatDate } from "../utils/dates.js";
 
 const ITEM_TYPES = [
   { value: "", label: "All Types" },
@@ -229,7 +231,6 @@ export function InventoryStockPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Inventory & Stock Management"
-        subtitle="Physical stock-on-hand from movement ledger"
       />
 
       <main className="flex-1 p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full">
@@ -688,7 +689,7 @@ export function InventoryStockPage() {
 
                     {ledgerEntries.map((m) => (
                       <tr key={m.id} className="hover:bg-[#FAFAF8]">
-                        <td className="py-2.5 px-3">{m.movement_date}</td>
+                        <td className="py-2.5 px-3">{formatDate(m.movement_date)}</td>
                         <td className="py-2.5 px-3 font-sans">
                           <span
                             className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold border ${getMovementBadgeStyle(m.movement_type)}`}

@@ -25,6 +25,7 @@ import StatusBadge from "../components/common/StatusBadge.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader } from "../components/common/SkeletonLoader.jsx";
+import { formatDate, formatDateTime } from "../utils/dates.js";
 
 export function ProjectDetailPage() {
   const { id } = useParams();
@@ -118,7 +119,6 @@ export function ProjectDetailPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title={`Application ${project.application_id}`}
-        subtitle={`Farmer: ${project.farmer_name || "N/A"} · District: ${project.district || "N/A"}`}
         actions={
           <Link to="/projects">
             <Button variant="secondary" icon={ArrowLeft}>
@@ -139,7 +139,7 @@ export function ProjectDetailPage() {
               <StatusBadge status={project.current_status} size="lg" />
               {project.current_status_date && (
                 <span className="text-xs text-[#52607D]">
-                  Updated on: <strong className="text-[#14213D]">{project.current_status_date}</strong>
+                  Updated on: <strong className="text-[#14213D]">{formatDate(project.current_status_date)}</strong>
                 </span>
               )}
             </div>
@@ -266,18 +266,18 @@ export function ProjectDetailPage() {
               </div>
               <div>
                 <span className="text-[#52607D]">Invoice Date:</span>
-                <p className="font-semibold text-[#14213D]">{project.invoice_date || "—"}</p>
+                <p className="font-semibold text-[#14213D]">{formatDate(project.invoice_date)}</p>
               </div>
               <div>
                 <span className="text-[#52607D]">Work Order No & Date:</span>
                 <p className="font-semibold text-[#14213D]">
-                  {[project.work_order_no, project.work_order_date].filter(Boolean).join(" (") +
+                  {[project.work_order_no, project.work_order_date ? formatDate(project.work_order_date) : null].filter(Boolean).join(" (") +
                     (project.work_order_date ? ")" : "") || "—"}
                 </p>
               </div>
               <div>
                 <span className="text-[#52607D]">Supply Date:</span>
-                <p className="font-semibold text-[#14213D]">{project.supply_date || "—"}</p>
+                <p className="font-semibold text-[#14213D]">{formatDate(project.supply_date)}</p>
               </div>
               <div>
                 <span className="text-[#52607D]">Bank Guarantee Deducted (%):</span>
@@ -312,7 +312,7 @@ export function ProjectDetailPage() {
               <div>
                 <span className="text-[#52607D]">1st UTR No & Date:</span>
                 <p className="font-semibold text-[#14213D]">
-                  {[project.first_fund_utr_no, project.first_fund_utr_date].filter(Boolean).join(" / ") || "—"}
+                  {[project.first_fund_utr_no, project.first_fund_utr_date ? formatDate(project.first_fund_utr_date) : null].filter(Boolean).join(" / ") || "—"}
                 </p>
               </div>
               <div>
@@ -398,7 +398,7 @@ export function ProjectDetailPage() {
                     {invoices.map((inv) => (
                       <tr key={inv.id} className="hover:bg-[#FAFAF8]">
                         <td className="py-2.5 px-3 font-bold text-[#2F6F5E]">#{inv.invoice_number}</td>
-                        <td className="py-2.5 px-3 font-sans">{inv.invoice_date}</td>
+                        <td className="py-2.5 px-3 font-sans">{formatDate(inv.invoice_date)}</td>
                         <td className="py-2.5 px-3 text-right">
                           ₹{(parseFloat(inv.net_item_amount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
@@ -527,37 +527,28 @@ export function ProjectDetailPage() {
                       <span className="w-5 h-5 rounded-full bg-[#2F6F5E] text-white text-[11px] font-bold flex items-center justify-center">
                         1
                       </span>
-                      <div>
-                        <h3 className="text-xs font-bold text-[#14213D]">First Milestone (55%)</h3>
-                        <p className="text-[10px] text-[#52607D]">Payout upon First Fund Release (UTR Updated)</p>
-                      </div>
+                      <h3 className="text-xs font-bold text-[#14213D]">First Fund Commission (55%)</h3>
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                         commissionData?.part1?.status === "PAID"
                           ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
-                          : commissionData?.part1?.status === "ELIGIBLE"
-                          ? "bg-amber-50 text-amber-800 border border-amber-200"
-                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                          : "bg-amber-50 text-amber-800 border border-amber-200"
                       }`}
                     >
-                      {commissionData?.part1?.status === "PAID"
-                        ? "✓ PAID"
-                        : commissionData?.part1?.status === "ELIGIBLE"
-                        ? "⚡ ELIGIBLE TO PAY"
-                        : "🔒 LOCKED"}
+                      {commissionData?.part1?.status === "PAID" ? "✓ PAID" : "UNPAID"}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Milestone Amount</div>
+                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Commission Amount</div>
                       <div className="text-lg font-extrabold text-[#14213D] font-mono">
                         ₹{parseFloat(commissionData?.part1?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
                     </div>
 
-                    {commissionData?.part1?.status === "ELIGIBLE" && (
+                    {commissionData?.part1?.status !== "PAID" && (
                       <Button
                         size="xs"
                         variant="primary"
@@ -574,21 +565,17 @@ export function ProjectDetailPage() {
                     )}
                   </div>
 
-                  {commissionData?.part1?.status === "PAID" ? (
+                  {commissionData?.part1?.status === "PAID" && (
                     <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
                       <div className="flex justify-between font-medium">
-                        <span>Paid Date: <strong className="text-[#14213D]">{commissionData.part1.paid_date || "—"}</strong></span>
+                        <span>Paid Date: <strong className="text-[#14213D]">{formatDate(commissionData.part1.paid_date)}</strong></span>
                         <span>Ref: <strong className="text-[#14213D]">{commissionData.part1.paid_ref || "—"}</strong></span>
                       </div>
                       {commissionData.part1.notes && (
                         <div className="text-[10px] italic">Notes: {commissionData.part1.notes}</div>
                       )}
                     </div>
-                  ) : commissionData?.part1?.status === "LOCKED" ? (
-                    <div className="text-[10px] text-[#8C97AB] bg-[#FAFAF8] p-2 rounded-[6px] border border-[#EDEAE1]">
-                      Awaiting government status <strong>First Fund Credited (UTR Updated)</strong> to unlock payout.
-                    </div>
-                  ) : null}
+                  )}
                 </div>
 
                 {/* Milestone 2: Part 2 (45%) */}
@@ -598,37 +585,28 @@ export function ProjectDetailPage() {
                       <span className="w-5 h-5 rounded-full bg-[#14213D] text-white text-[11px] font-bold flex items-center justify-center">
                         2
                       </span>
-                      <div>
-                        <h3 className="text-xs font-bold text-[#14213D]">Final Milestone (45%)</h3>
-                        <p className="text-[10px] text-[#52607D]">Payout upon Final Fund Release (UTR Updated)</p>
-                      </div>
+                      <h3 className="text-xs font-bold text-[#14213D]">Second Fund Commission (45%)</h3>
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                         commissionData?.part2?.status === "PAID"
                           ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
-                          : commissionData?.part2?.status === "ELIGIBLE"
-                          ? "bg-amber-50 text-amber-800 border border-amber-200"
-                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                          : "bg-amber-50 text-amber-800 border border-amber-200"
                       }`}
                     >
-                      {commissionData?.part2?.status === "PAID"
-                        ? "✓ PAID"
-                        : commissionData?.part2?.status === "ELIGIBLE"
-                        ? "⚡ ELIGIBLE TO PAY"
-                        : "🔒 LOCKED"}
+                      {commissionData?.part2?.status === "PAID" ? "✓ PAID" : "UNPAID"}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Milestone Amount</div>
+                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Commission Amount</div>
                       <div className="text-lg font-extrabold text-[#14213D] font-mono">
                         ₹{parseFloat(commissionData?.part2?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
                     </div>
 
-                    {commissionData?.part2?.status === "ELIGIBLE" && (
+                    {commissionData?.part2?.status !== "PAID" && (
                       <Button
                         size="xs"
                         variant="primary"
@@ -645,21 +623,17 @@ export function ProjectDetailPage() {
                     )}
                   </div>
 
-                  {commissionData?.part2?.status === "PAID" ? (
+                  {commissionData?.part2?.status === "PAID" && (
                     <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
                       <div className="flex justify-between font-medium">
-                        <span>Paid Date: <strong className="text-[#14213D]">{commissionData.part2.paid_date || "—"}</strong></span>
+                        <span>Paid Date: <strong className="text-[#14213D]">{formatDate(commissionData.part2.paid_date)}</strong></span>
                         <span>Ref: <strong className="text-[#14213D]">{commissionData.part2.paid_ref || "—"}</strong></span>
                       </div>
                       {commissionData.part2.notes && (
                         <div className="text-[10px] italic">Notes: {commissionData.part2.notes}</div>
                       )}
                     </div>
-                  ) : commissionData?.part2?.status === "LOCKED" ? (
-                    <div className="text-[10px] text-[#8C97AB] bg-[#FAFAF8] p-2 rounded-[6px] border border-[#EDEAE1]">
-                      Awaiting government status <strong>Final Fund Credited (UTR Updated)</strong> to unlock payout.
-                    </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
 
@@ -724,8 +698,8 @@ export function ProjectDetailPage() {
                         )}
                       </div>
                       <div className="text-xs text-[#52607D]">
-                        Status Date: <strong className="text-[#14213D]">{item.status_date || "N/A"}</strong> · Observed at:{" "}
-                        {new Date(item.observed_at).toLocaleString()}
+                        Status Date: <strong className="text-[#14213D]">{formatDate(item.status_date)}</strong> · Observed at:{" "}
+                        {formatDateTime(item.observed_at)}
                       </div>
                       {item.remarks && (
                         <div className="text-xs text-[#52607D] italic">Remarks: {item.remarks}</div>
@@ -743,7 +717,7 @@ export function ProjectDetailPage() {
       <Modal
         isOpen={payModalOpen}
         onClose={() => setPayModalOpen(false)}
-        title={`Record Dealer Milestone Payout (${activeMilestone === "PART1" ? "Part 1 - 55%" : "Part 2 - 45%"})`}
+        title={`Record Dealer Commission Payout (${activeMilestone === "PART1" ? "First Fund Commission (55%)" : "Second Fund Commission (45%)"})`}
       >
         <form onSubmit={handleRecordPayout} className="space-y-4">
           <div className="p-3 bg-[#EAF3F0] rounded-[8px] text-xs text-[#2F6F5E] flex items-center justify-between">

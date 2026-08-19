@@ -25,6 +25,7 @@ import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import MetricCard from "../components/common/MetricCard.jsx";
 import Button from "../components/common/Button.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function LoadOrderUploadPage() {
   const [file, setFile] = useState(null);
@@ -269,7 +270,6 @@ export function LoadOrderUploadPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Load Order Upload"
-        subtitle="Daily Load Order XLS upload · Configure individual finished goods and counts per Government Project"
         actions={
           previewData && (
             <Button variant="secondary" icon={RefreshCw} onClick={handleReset}>
@@ -285,14 +285,9 @@ export function LoadOrderUploadPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-4">
             <div className="flex items-center gap-2">
               <FileSpreadsheet size={18} className="text-[#2F6F5E]" />
-              <div>
-                <h2 className="text-sm font-bold font-display text-[#14213D]">
-                  Daily Load Order File (`.xls`, `.xlsx`)
-                </h2>
-                <p className="text-[11px] text-[#52607D]">
-                  Extracts Government Application IDs and enables custom finished goods configuration per project
-                </p>
-              </div>
+              <h2 className="text-sm font-bold font-display text-[#14213D]">
+                Daily Load Order File (`.xls`, `.xlsx`)
+              </h2>
             </div>
 
             {/* Editable Invoice / INVOICED Date */}
@@ -361,7 +356,7 @@ export function LoadOrderUploadPage() {
                   Load Order Invoices Committed Successfully!
                 </h3>
                 <p className="text-xs text-[#52607D]">
-                  All {commitResult.data?.totalProjectsProcessed || allProjects.length} projects updated to INVOICED on <strong className="text-[#14213D]">{invoiceDate}</strong> with individualized materials and 5% + 5% breakdown.
+                  All {commitResult.data?.totalProjectsProcessed || allProjects.length} projects updated to INVOICED on <strong className="text-[#14213D]">{formatDate(invoiceDate)}</strong> with individualized materials and 5% + 5% breakdown.
                 </p>
               </div>
             </div>
@@ -400,7 +395,7 @@ export function LoadOrderUploadPage() {
           <div className="space-y-6">
             {/* Batch Summary Top Card */}
             <div className="bg-[#FAFAF8] border border-[#E4E1D8] rounded-[10px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4 text-xs font-mono">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-mono">
                 <div>
                   <span className="text-[#52607D] font-sans">Projects:</span>{" "}
                   <strong className="text-[#14213D] text-sm">{allProjects.length}</strong>
