@@ -12,10 +12,6 @@ import ExpenseCategory from "../expenses/expense-category.model.js";
 import Employee from "../employees/employee.model.js";
 import EmployeeAttendance from "../employees/employee-attendance.model.js";
 import EmployeeSalaryRecord from "../employees/employee-salary-record.model.js";
-import Customer from "../customers/customer.model.js";
-import Sale from "../sales/sale.model.js";
-import SaleItem from "../sales/sale-item.model.js";
-import CustomerPayment from "../sales/customer-payment.model.js";
 
 // ==========================================
 // 1. Dealer Performance & Commission Report
@@ -70,66 +66,6 @@ export async function getDealerReport() {
   });
 }
 
-// ==========================================
-// 2. Sales & Customer Balances Report
-// ==========================================
-export async function getSalesReport({ start_date, end_date } = {}) {
-  const where = {};
-  if (start_date && end_date) where.sale_date = { [Op.between]: [start_date, end_date] };
-  else if (start_date) where.sale_date = { [Op.gte]: start_date };
-  else if (end_date) where.sale_date = { [Op.lte]: end_date };
-
-  const sales = await Sale.findAll({
-    where,
-    include: [
-      { model: Customer, as: "customer", attributes: ["id", "name"] },
-      { model: CustomerPayment, as: "payments", attributes: ["amount"] },
-    ],
-    order: [["sale_date", "DESC"]],
-  });
-
-  let totalSalesValue = 0;
-  let totalReceived = 0;
-  let totalPendingBalance = 0;
-
-  const rows = sales.map((s) => {
-    const total = parseFloat(s.total_amount) || 0;
-    const paid = (s.payments || []).reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
-    const balance = parseFloat((total - paid).toFixed(2));
-
-    totalSalesValue += total;
-    totalReceived += paid;
-    if (balance > 0) totalPendingBalance += balance;
-
-    return {
-      sale_id: s.id,
-      invoice_number: s.invoice_number,
-      sale_date: s.sale_date,
-      customer_name: s.customer?.name || "Direct Cash Customer",
-      net_item_amount: parseFloat(s.net_item_amount),
-      fittings_amount: parseFloat(s.fittings_amount),
-      taxable_amount: parseFloat(s.taxable_amount),
-      gst_amount: parseFloat(s.gst_amount),
-      total_amount: total,
-      paid_amount: parseFloat(paid.toFixed(2)),
-      balance_due: balance > 0 ? balance : 0.0,
-    };
-  });
-
-  return {
-    summary: {
-      totalSalesCount: sales.length,
-      totalSalesValue: parseFloat(totalSalesValue.toFixed(2)),
-      totalReceived: parseFloat(totalReceived.toFixed(2)),
-      totalPendingBalance: parseFloat(totalPendingBalance.toFixed(2)),
-    },
-    sales: rows,
-  };
-}
-
-// ==========================================
-// 3. Expenses Monthly & Category Breakdown
-// ==========================================
 export async function getExpenseReport({ year } = {}) {
   const where = {};
   if (year) {

@@ -26,11 +26,9 @@ import settingRoutes from "./modules/settings/setting.routes.js";
 import expenseRoutes from "./modules/expenses/expense.routes.js";
 import employeeRoutes from "./modules/employees/employee.routes.js";
 import customerRoutes from "./modules/customers/customer.routes.js";
-import saleRoutes from "./modules/sales/sale.routes.js";
 import invoiceRoutes from "./modules/invoices/invoice.routes.js";
 import reportRoutes from "./modules/reports/report.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
-import tallyRoutes from "./modules/tally/tally.routes.js";
 import userRoutes from "./modules/users/user.routes.js";
 
 const app = express();
@@ -97,10 +95,8 @@ app.use("/api/settings", settingRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/customers", customerRoutes);
-app.use("/api/sales", saleRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/reports", reportRoutes);
-app.use("/api/tally", tallyRoutes);
 app.use("/api/users", userRoutes);
 
 // Catch-all 404 handler

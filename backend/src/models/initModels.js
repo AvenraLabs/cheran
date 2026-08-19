@@ -33,14 +33,10 @@ import Employee from "../modules/employees/employee.model.js";
 import EmployeeAttendance from "../modules/employees/employee-attendance.model.js";
 import EmployeeSalaryRecord from "../modules/employees/employee-salary-record.model.js";
 
-// Customers & Sales & Invoices & Payments
+// Customers & Invoices
 import Customer from "../modules/customers/customer.model.js";
-import Sale from "../modules/sales/sale.model.js";
-import SaleItem from "../modules/sales/sale-item.model.js";
-import CustomerPayment from "../modules/sales/customer-payment.model.js";
 import Invoice from "../modules/invoices/invoice.model.js";
 import InvoiceItem from "../modules/invoices/invoice-item.model.js";
-import TallyItemMapping from "../modules/tally/tally-item-mapping.model.js";
 
 // ==========================================
 // 1. Government Module Associations
@@ -317,76 +313,7 @@ EmployeeSalaryRecord.belongsTo(Employee, {
 });
 
 // ==========================================
-// 7. Customers, Sales & Payments
-// ==========================================
-
-Customer.hasMany(Sale, {
-  foreignKey: "customer_id",
-  as: "sales",
-  onDelete: "RESTRICT",
-});
-Sale.belongsTo(Customer, {
-  foreignKey: "customer_id",
-  as: "customer",
-});
-
-GovernmentProject.hasMany(Sale, {
-  foreignKey: "project_id",
-  as: "sales",
-  onDelete: "SET NULL",
-});
-Sale.belongsTo(GovernmentProject, {
-  foreignKey: "project_id",
-  as: "project",
-});
-
-Sale.hasMany(SaleItem, {
-  foreignKey: "sale_id",
-  as: "items",
-  onDelete: "CASCADE",
-});
-SaleItem.belongsTo(Sale, {
-  foreignKey: "sale_id",
-  as: "sale",
-});
-
-Item.hasMany(SaleItem, {
-  foreignKey: "item_id",
-  as: "sale_items",
-  onDelete: "RESTRICT",
-});
-SaleItem.belongsTo(Item, {
-  foreignKey: "item_id",
-  as: "item",
-});
-
-Unit.hasMany(SaleItem, {
-  foreignKey: "unit_id",
-  as: "sale_items",
-  onDelete: "RESTRICT",
-});
-SaleItem.belongsTo(Unit, {
-  foreignKey: "unit_id",
-  as: "unit",
-});
-
-Sale.hasMany(CustomerPayment, {
-  foreignKey: "sale_id",
-  as: "payments",
-  onDelete: "CASCADE",
-});
-CustomerPayment.belongsTo(Sale, {
-  foreignKey: "sale_id",
-  as: "sale",
-});
-
-Customer.hasMany(CustomerPayment, {
-  foreignKey: "customer_id",
-  as: "payments",
-  onDelete: "SET NULL",
-});
-// ==========================================
-// 8. Invoices & Dispatch Associations
+// 7. Customers & Invoices
 // ==========================================
 
 Invoice.hasMany(InvoiceItem, {
@@ -449,15 +376,6 @@ Invoice.belongsTo(Dealer, {
   as: "dealer",
 });
 
-// TallyItemMapping <-> Item
-TallyItemMapping.belongsTo(Item, {
-  foreignKey: "item_id",
-  as: "item",
-});
-Item.hasMany(TallyItemMapping, {
-  foreignKey: "item_id",
-  as: "tally_mappings",
-});
 
 export {
   Dealer,
@@ -484,10 +402,6 @@ export {
   EmployeeAttendance,
   EmployeeSalaryRecord,
   Customer,
-  Sale,
-  SaleItem,
-  CustomerPayment,
   Invoice,
   InvoiceItem,
-  TallyItemMapping,
 };
