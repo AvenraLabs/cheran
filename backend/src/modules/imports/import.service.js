@@ -313,3 +313,20 @@ export async function autoCreateAllUnresolvedDealers(importId) {
     remainingPendingResolutions: 0,
   };
 }
+
+export async function deleteImport(id) {
+  const importRecord = await GovernmentImport.findByPk(id);
+  if (!importRecord) {
+    throw new AppError(`Import with ID ${id} not found`, 404);
+  }
+
+  // Delete staged rows first
+  await GovernmentImportRow.destroy({
+    where: { import_id: id },
+  });
+
+  await importRecord.destroy();
+
+  return { message: `Import batch '${importRecord.file_name}' discarded successfully.` };
+}
+

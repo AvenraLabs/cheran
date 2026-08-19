@@ -93,22 +93,40 @@ export function parseRate(rateVal) {
 }
 
 /**
- * Parse Tally inventory entries from allinventoryentries array
+ * Parse Tally inventory entries from allinventoryentries (handles array, object, or nested)
  */
 export function parseInventoryEntries(entries = []) {
-  if (!Array.isArray(entries)) return [];
+  if (!entries) return [];
+
+  let rawList = entries;
+  if (typeof entries === "object" && !Array.isArray(entries)) {
+    if (Array.isArray(entries.list)) {
+      rawList = entries.list;
+    } else if (Array.isArray(entries.allinventoryentries)) {
+      rawList = entries.allinventoryentries;
+    } else {
+      rawList = [entries];
+    }
+  }
+
+  if (!Array.isArray(rawList)) return [];
   const results = [];
 
-  for (const entry of entries) {
-    const stockitemname = entry.stockitemname ? String(entry.stockitemname).trim() : "Standard Item";
-    const { quantity: actualQty, unit: actualUnit } = parseQuantityAndUnit(entry.actualqty || entry.billedqty);
-    const { quantity: billedQty } = parseQuantityAndUnit(entry.billedqty || entry.actualqty);
+  for (const entry of rawList) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const stockitemname = entry.stockitemname || entry.itemname || entry.item || "Standard Item";
+    const { quantity: actualQty, unit: actualUnit } = parseQuantityAndUnit(entry.actualqty || entry.billedqty || entry.qty || 1);
+    const { quantity: billedQty } = parseQuantityAndUnit(entry.billedqty || entry.actualqty || entry.qty || 1);
     const rate = parseRate(entry.rate);
-    const amount = entry.amount !== undefined && entry.amount !== null ? Math.abs(parseFloat(entry.amount) || 0) : actualQty * rate;
-    const hsn_code = entry.gsthsnname ? String(entry.gsthsnname).trim() : null;
+    const amount =
+      entry.amount !== undefined && entry.amount !== null
+        ? Math.abs(parseFloat(entry.amount) || 0)
+        : actualQty * rate;
+    const hsn_code = entry.gsthsnname || entry.hsncode || null;
 
     results.push({
-      stockitemname,
+      stockitemname: String(stockitemname).trim(),
       quantity: actualQty,
       billed_quantity: billedQty,
       unit: actualUnit,
@@ -119,6 +137,75 @@ export function parseInventoryEntries(entries = []) {
   }
 
   return results;
+}
+
+/**
+ * Parse Tally ledger entries to extract Tax, Rounding, and Party Grand Total
+ */
+export function parseLedgerEntries(voucher) {
+  let ledgers =
+    voucher.allledgerentries ||
+    voucher.ledgerentries ||
+    voucher.ledgerentrieslist ||
+    [];
+
+  if (ledgers && typeof ledgers === "object" && !Array.isArray(ledgers)) {
+    if (Array.isArray(ledgers.list)) {
+      ledgers = ledgers.list;
+    } else if (Array.isArray(ledgers.allledgerentries)) {
+      ledgers = ledgers.allledgerentries;
+    } else {
+      ledgers = [ledgers];
+    }
+  }
+
+  if (!Array.isArray(ledgers)) ledgers = [];
+
+  let taxAmount = 0;
+  let roundingAmount = 0;
+  let partyAmount = 0;
+  let otherCharges = 0;
+
+  const partyNameLower = String(voucher.partyname || voucher.partyledgername || "").toLowerCase().trim();
+  const partyMailingLower = String(voucher.partymailingname || "").toLowerCase().trim();
+
+  for (const entry of ledgers) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const ledgerName = String(entry.ledgername || entry.ledger || "").trim();
+    const ledgerLower = ledgerName.toLowerCase();
+    const rawAmount = parseFloat(entry.amount) || 0;
+    const absAmount = Math.abs(rawAmount);
+
+    // Is this a GST / Tax ledger?
+    if (/gst|cgst|sgst|igst|output\s*tax|vat|tax\s*ledger/i.test(ledgerLower)) {
+      taxAmount += absAmount;
+    }
+    // Is this a Round Off ledger?
+    else if (/round\s*off|rounding|round/i.test(ledgerLower)) {
+      roundingAmount += rawAmount;
+    }
+    // Is this the Party Ledger (Grand Total)?
+    else if (
+      (partyNameLower && ledgerLower.includes(partyNameLower)) ||
+      (partyMailingLower && ledgerLower.includes(partyMailingLower)) ||
+      entry.isdeemedpositive === "Yes" ||
+      entry.isdeemedpositive === true
+    ) {
+      partyAmount = absAmount;
+    }
+    // Other freight / delivery / service charge ledgers
+    else if (!/sales|revenue|income/i.test(ledgerLower)) {
+      otherCharges += absAmount;
+    }
+  }
+
+  return {
+    taxAmount,
+    roundingAmount,
+    partyAmount,
+    otherCharges,
+  };
 }
 
 /**
@@ -237,7 +324,7 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
       continue;
     }
 
-    // Extract core Tally fields
+    // Extract core Tally identifiers & dates
     const guid = voucher.guid || metadata.guid || metadata.remoteid || `${voucher.vouchernumber}_${voucher.date}`;
     const invoiceNumber = String(voucher.vouchernumber || guid).trim();
     const invoiceDate = parseTallyDate(voucher.date || voucher.vchstatusdate);
@@ -246,25 +333,35 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
     const partyName = voucher.partyname ? String(voucher.partyname).trim() : null;
     const partyMailingName = voucher.partymailingname ? String(voucher.partymailingname).trim() : null;
 
-    // Check duplicate invoice by Tally GUID
-    if (guid) {
-      const existing = await Invoice.findOne({
-        where: {
-          source: "TALLY",
-          tally_guid: guid,
-        },
-      });
+    // Check duplicate invoice by Tally GUID or Invoice Number
+    const existing = await Invoice.findOne({
+      where: db.Sequelize.or(
+        ...(guid ? [{ source: "TALLY", tally_guid: guid }] : []),
+        { invoice_number: invoiceNumber, invoice_type: "GOVERNMENT" }
+      ),
+    });
 
-      if (existing) {
-        summary.skippedInvoices++;
-        continue;
-      }
+    if (existing) {
+      summary.skippedInvoices++;
+      continue;
     }
 
-    // Parse inventory line items
+    // Parse inventory line items & ledger financial breakdown
     const parsedItems = parseInventoryEntries(voucher.allinventoryentries || []);
     const netItemAmount = parsedItems.reduce((sum, it) => sum + it.amount, 0);
-    const totalAmount = netItemAmount; // Financial total from items
+
+    const { taxAmount, roundingAmount, partyAmount } = parseLedgerEntries(voucher);
+
+    // Calculate genuine Tally financial totals
+    const tallySubtotal = netItemAmount;
+    const tallyTaxAmount = taxAmount;
+    const tallyRounding = roundingAmount;
+    const tallyGrandTotal =
+      partyAmount > 0
+        ? partyAmount
+        : voucher.totalamount
+        ? Math.abs(parseFloat(voucher.totalamount) || 0)
+        : Math.round((tallySubtotal + tallyTaxAmount + tallyRounding) * 100) / 100;
 
     // Atomic transaction per invoice
     const transaction = await db.transaction();
@@ -285,7 +382,7 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
             current_status: "INVOICED",
             current_status_date: invoiceDate,
             invoice_date: invoiceDate,
-            invoice_amount: totalAmount,
+            invoice_amount: tallyGrandTotal,
           },
           { transaction }
         );
@@ -301,16 +398,15 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
           { transaction }
         );
 
-        summary.newProjects++;
         isNewProject = true;
       } else {
-        // Project exists (e.g. created from Excel earlier):
+        // Project exists: update invoice date and amount
         const updateFields = {};
         if (!project.invoice_date || new Date(invoiceDate) < new Date(project.invoice_date)) {
           updateFields.invoice_date = invoiceDate;
         }
         if (!project.invoice_amount || parseFloat(project.invoice_amount) === 0) {
-          updateFields.invoice_amount = totalAmount;
+          updateFields.invoice_amount = tallyGrandTotal;
         }
         if (project.current_status === "INVOICED") {
           if (!project.current_status_date || new Date(invoiceDate) < new Date(project.current_status_date)) {
@@ -321,7 +417,7 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
           await project.update(updateFields, { transaction });
         }
 
-        // Ensure INVOICED status exists in status history as the first baseline
+        // Ensure INVOICED status exists in status history as baseline
         const existingInvoicedHistory = await GovernmentProjectStatusHistory.findOne({
           where: {
             project_id: project.id,
@@ -341,11 +437,9 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
             { transaction }
           );
         }
-
-        summary.existingProjectsLinked++;
       }
 
-      // 4. Create Invoice Record
+      // 4. Create Invoice Record with explicit Tally financials
       const newInvoice = await Invoice.create(
         {
           invoice_number: invoiceNumber,
@@ -353,8 +447,16 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
           customer_name: partyMailingName || partyName || "Government Project Farmer",
           government_project_id: project.id,
           dealer_id: project.dealer_id || null,
-          net_item_amount: netItemAmount,
-          total_amount: totalAmount,
+          net_item_amount: tallySubtotal,
+          taxable_amount: tallySubtotal,
+          fittings_percentage: 0.0,
+          fittings_amount: 0.0,
+          gst_amount: tallyTaxAmount,
+          total_amount: tallyGrandTotal,
+          tally_subtotal: tallySubtotal,
+          tally_tax_amount: tallyTaxAmount,
+          tally_rounding: tallyRounding,
+          tally_grand_total: tallyGrandTotal,
           invoice_type: "GOVERNMENT",
           status: "POSTED",
           source: "TALLY",
@@ -371,6 +473,12 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
             address: voucher.address,
             partyname: voucher.partyname,
             partymailingname: voucher.partymailingname,
+            financials: {
+              subtotal: tallySubtotal,
+              tax: tallyTaxAmount,
+              rounding: tallyRounding,
+              grandTotal: tallyGrandTotal,
+            },
           },
         },
         { transaction }
@@ -457,13 +565,24 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
       }
 
       await transaction.commit();
+
+      // Only increment success counters after commit succeeds
       summary.importedInvoices++;
+      if (isNewProject) {
+        summary.newProjects++;
+      } else {
+        summary.existingProjectsLinked++;
+      }
+
       summary.importedInvoiceList.push({
         invoice_number: invoiceNumber,
         invoice_date: invoiceDate,
         project_id: projectId,
         is_new_project: isNewProject,
-        total_amount: totalAmount,
+        subtotal: tallySubtotal,
+        tax_amount: tallyTaxAmount,
+        rounding: tallyRounding,
+        total_amount: tallyGrandTotal,
         item_count: parsedItems.length,
       });
     } catch (err) {

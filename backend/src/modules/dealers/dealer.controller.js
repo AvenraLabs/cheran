@@ -18,7 +18,12 @@ export const getDealer = asyncHandler(async (req, res) => {
 });
 
 export const createDealer = asyncHandler(async (req, res) => {
-  const dealer = await dealerService.createDealer(req.body);
+  const userName = req.user?.name || req.user?.username || "Staff";
+  const dealer = await dealerService.createDealer({
+    ...req.body,
+    created_by: userName,
+    updated_by: userName,
+  });
   res.status(201).json({
     status: "success",
     message: "Dealer created successfully",
@@ -27,7 +32,11 @@ export const createDealer = asyncHandler(async (req, res) => {
 });
 
 export const updateDealer = asyncHandler(async (req, res) => {
-  const dealer = await dealerService.updateDealer(req.params.id, req.body);
+  const userName = req.user?.name || req.user?.username || "Staff";
+  const dealer = await dealerService.updateDealer(req.params.id, {
+    ...req.body,
+    updated_by: userName,
+  });
   res.status(200).json({
     status: "success",
     message: "Dealer updated successfully",

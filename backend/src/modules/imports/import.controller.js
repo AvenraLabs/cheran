@@ -9,10 +9,11 @@ export const previewImport = asyncHandler(async (req, res) => {
     throw new AppError("No Excel file uploaded. Please provide a valid .xls or .xlsx file under 'file' field.", 400);
   }
 
+  const userName = req.user?.name || req.user?.username || req.body.uploaded_by || "Staff";
   const result = await processImportPreview({
     fileBuffer: req.file.buffer,
     fileName: req.file.originalname,
-    uploadedBy: req.body.uploaded_by || "Staff",
+    uploadedBy: userName,
   });
 
   res.status(200).json({
@@ -77,6 +78,15 @@ export const commit = asyncHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Import committed successfully into production project database",
+    data: result,
+  });
+});
+
+export const deleteImport = asyncHandler(async (req, res) => {
+  const result = await importService.deleteImport(req.params.id);
+  res.status(200).json({
+    status: "success",
+    message: result.message,
     data: result,
   });
 });

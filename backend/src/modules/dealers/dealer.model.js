@@ -26,6 +26,14 @@ const Dealer = db.define(
       allowNull: false,
       defaultValue: true,
     },
+    created_by: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    updated_by: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
   },
   {
     tableName: "dealers",

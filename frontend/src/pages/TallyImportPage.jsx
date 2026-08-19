@@ -85,7 +85,7 @@ export function TallyImportPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const result = res?.data || res || {};
+      const result = res.data?.data || res.data || res || {};
       setUploadResult(result);
       fetchItemsAndMappings();
     } catch (err) {
@@ -298,25 +298,45 @@ export function TallyImportPage() {
               </div>
             )}
 
+            {/* Error Diagnostics Card (if any vouchers failed) */}
+            {uploadResult.errors && uploadResult.errors.length > 0 && (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-[10px] space-y-2">
+                <div className="flex items-center gap-2 text-rose-800 text-xs font-bold uppercase tracking-wider">
+                  <AlertTriangle size={16} />
+                  <span>{uploadResult.errors.length} Voucher(s) Failed During Import</span>
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1 text-xs text-rose-700 font-mono">
+                  {uploadResult.errors.map((err, idx) => (
+                    <div key={idx} className="p-1.5 bg-white/70 rounded border border-rose-200/50">
+                      <strong>Voucher #{err.invoice_number || err.voucher_index}:</strong> {err.error}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Imported Invoices Table */}
             {uploadResult.importedInvoiceList && uploadResult.importedInvoiceList.length > 0 && (
               <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-xs">
                 <h3 className="text-xs font-bold text-[#14213D] mb-3 uppercase tracking-wider">
                   Imported Invoices Batch ({uploadResult.importedInvoiceList.length})
                 </h3>
-                <div className="border border-[#EDEAE1] rounded-[8px] overflow-hidden">
+                <div className="border border-[#EDEAE1] rounded-[8px] overflow-x-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
+                    <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] font-semibold whitespace-nowrap">
                       <tr>
                         <th className="py-2.5 px-3">Invoice #</th>
                         <th className="py-2.5 px-3">Invoice Date</th>
                         <th className="py-2.5 px-3">Government Project ID</th>
                         <th className="py-2.5 px-3">Project Status</th>
                         <th className="py-2.5 px-3 text-right">Items</th>
-                        <th className="py-2.5 px-3 text-right">Total Amount</th>
+                        <th className="py-2.5 px-3 text-right">Net Subtotal</th>
+                        <th className="py-2.5 px-3 text-right">GST Tax</th>
+                        <th className="py-2.5 px-3 text-right">Rounding</th>
+                        <th className="py-2.5 px-3 text-right">Grand Total</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EDEAE1] text-[#14213D]">
+                    <tbody className="divide-y divide-[#EDEAE1] text-[#14213D] whitespace-nowrap">
                       {uploadResult.importedInvoiceList.map((inv, idx) => (
                         <tr key={idx} className="hover:bg-[#FAFAF8]">
                           <td className="py-2 px-3 font-mono font-bold text-[#2F6F5E]">
@@ -338,7 +358,16 @@ export function TallyImportPage() {
                             </span>
                           </td>
                           <td className="py-2 px-3 text-right font-mono">{inv.item_count}</td>
-                          <td className="py-2 px-3 text-right font-mono font-bold">
+                          <td className="py-2 px-3 text-right font-mono text-[#52607D]">
+                            ₹{parseFloat(inv.subtotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono text-[#2F6F5E]">
+                            ₹{parseFloat(inv.tax_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono text-[#52607D]">
+                            ₹{parseFloat(inv.rounding || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D]">
                             ₹{parseFloat(inv.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
                         </tr>

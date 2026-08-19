@@ -35,4 +35,7 @@ router.post("/:id/auto-create-dealers", validate(getImportSchema), importControl
 // Commit import to production
 router.post("/:id/commit", validate(commitImportSchema), importController.commit);
 
+// Delete / Discard import preview batch
+router.delete("/:id", validate(getImportSchema), importController.deleteImport);
+
 export default router;

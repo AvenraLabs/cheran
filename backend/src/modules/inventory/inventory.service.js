@@ -67,6 +67,14 @@ export async function createOpeningStock({
     throw new AppError(`Item not found with ID ${item_id}`, 404);
   }
 
+  // Prevent unit mismatch
+  if (unit_id && unit_id !== item.unit_id) {
+    throw new AppError(
+      `Unit mismatch for "${item.name}". Movements must match the item's inventory base unit.`,
+      400
+    );
+  }
+
   // Prevent accidental duplicate opening stock for the same item
   const existingOpening = await InventoryMovement.findOne({
     where: {
@@ -140,6 +148,14 @@ export async function createStockReceipt({
       if (itemRecord.item_type !== "RAW_MATERIAL") {
         throw new AppError(
           `Item "${itemRecord.name}" is a Finished Good and cannot be purchased. Finished goods enter inventory only through production.`,
+          400
+        );
+      }
+
+      // Prevent unit mismatch from corrupting inventory
+      if (itemInput.unit_id && itemInput.unit_id !== itemRecord.unit_id) {
+        throw new AppError(
+          `Unit mismatch for "${itemRecord.name}". Purchase receipts must match the item's inventory base unit.`,
           400
         );
       }
@@ -275,22 +291,21 @@ export async function listStockReceipts({
     distinct: true,
   });
 
-  // Calculate summary metrics for the filtered result set
-  let totalPurchasedQuantity = 0;
-  let totalPurchasedValue = 0;
+  // Calculate global aggregate purchase value across unpaginated filtered dataset
+  const globalSummary = await StockReceipt.findOne({
+    where,
+    attributes: [
+      [db.fn("COALESCE", db.fn("SUM", db.col("total_amount")), 0), "totalPurchasedValue"],
+    ],
+    raw: true,
+  });
 
-  for (const receipt of rows) {
-    totalPurchasedValue += parseFloat(receipt.total_amount || 0);
-    for (const item of receipt.items || []) {
-      totalPurchasedQuantity += parseFloat(item.quantity || 0);
-    }
-  }
+  const totalPurchasedValue = parseFloat(globalSummary?.totalPurchasedValue || 0);
 
   return {
     receipts: rows,
     summary: {
       totalReceipts: count,
-      totalPurchasedQuantity: parseFloat(totalPurchasedQuantity.toFixed(2)),
       totalPurchasedValue: parseFloat(totalPurchasedValue.toFixed(2)),
     },
     pagination: {
@@ -354,14 +369,11 @@ export async function createProductionEntry({
   }
 
   return await db.transaction(async (transaction) => {
-    // 1. Validate and check stock for all Raw Materials
+    // 1. Validate and lock stock for all Raw Materials
     const validatedMaterials = [];
     for (const mat of materials) {
       const item = await Item.findByPk(mat.item_id, {
-        include: [
-          { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
-          { model: InventoryStock, as: "stock", attributes: ["quantity_on_hand"] },
-        ],
+        include: [{ model: Unit, as: "unit", attributes: ["id", "name", "symbol"] }],
         transaction,
       });
 
@@ -372,6 +384,14 @@ export async function createProductionEntry({
       if (item.item_type !== "RAW_MATERIAL") {
         throw new AppError(
           `Item "${item.name}" is a ${item.item_type} and cannot be used as a raw material input. Production inputs must be RAW_MATERIAL only.`,
+          400
+        );
+      }
+
+      // Enforce strict unit matching to prevent stock calculation corruption (Point 9)
+      if (mat.unit_id && mat.unit_id !== item.unit_id) {
+        throw new AppError(
+          `Unit mismatch for raw material "${item.name}". Production input must match the item's base unit.`,
           400
         );
       }
@@ -387,7 +407,15 @@ export async function createProductionEntry({
       }
 
       const totalRequired = parseFloat((qtyUsed + qtyWastage).toFixed(3));
-      const availableStock = item.stock ? parseFloat(item.stock.quantity_on_hand) : 0.0;
+
+      // Acquire exclusive row lock on InventoryStock to prevent concurrent over-consumption race condition (Point 8)
+      const stockRecord = await InventoryStock.findOne({
+        where: { item_id: item.id },
+        lock: transaction.LOCK.UPDATE,
+        transaction,
+      });
+
+      const availableStock = stockRecord ? parseFloat(stockRecord.quantity_on_hand) : 0.0;
 
       if (totalRequired > availableStock) {
         throw new AppError(
@@ -401,7 +429,7 @@ export async function createProductionEntry({
         quantity_used: qtyUsed,
         wastage_quantity: qtyWastage,
         total_required: totalRequired,
-        unit_id: mat.unit_id || item.unit_id,
+        unit_id: item.unit_id,
       });
     }
 
@@ -424,6 +452,14 @@ export async function createProductionEntry({
         );
       }
 
+      // Enforce strict unit matching for outputs
+      if (out.unit_id && out.unit_id !== item.unit_id) {
+        throw new AppError(
+          `Unit mismatch for finished good "${item.name}". Production output must match the item's base unit.`,
+          400
+        );
+      }
+
       const qtyProduced = parseFloat(out.quantity_produced);
       if (isNaN(qtyProduced) || qtyProduced <= 0) {
         throw new AppError(`Produced quantity must be greater than 0 for finished good "${item.name}"`, 400);
@@ -432,7 +468,7 @@ export async function createProductionEntry({
       validatedOutputs.push({
         item,
         quantity_produced: qtyProduced,
-        unit_id: out.unit_id || item.unit_id,
+        unit_id: item.unit_id,
       });
     }
 

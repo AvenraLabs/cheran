@@ -4,29 +4,6 @@ import User from "./user.model.js";
 import env from "../../config/env.js";
 import AppError from "../../shared/appError.js";
 
-export async function ensureDefaultAdminUser() {
-  try {
-    const count = await User.count();
-    if (count === 0) {
-      const username = env.ADMIN_USERNAME || "admin";
-      const password = env.ADMIN_PASSWORD || "admin123";
-      const salt = await bcrypt.genSalt(10);
-      const password_hash = await bcrypt.hash(password, salt);
-
-      await User.create({
-        username,
-        password_hash,
-        name: "Admin",
-        role: "ADMIN",
-        is_active: true,
-      });
-      console.log(`✅ Default admin user '${username}' seeded automatically.`);
-    }
-  } catch (err) {
-    console.error("⚠️ Failed to ensure default admin user:", err.message);
-  }
-}
-
 export async function loginUser({ username, password }) {
   if (!username || !password) {
     throw new AppError("Username and password are required", 400);
@@ -53,7 +30,7 @@ export async function loginUser({ username, password }) {
       role: user.role,
     },
     env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: env.JWT_EXPIRES_IN || "30d" }
   );
 
   return {

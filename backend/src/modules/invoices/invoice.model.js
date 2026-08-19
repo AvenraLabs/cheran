@@ -122,6 +122,22 @@ const Invoice = db.define(
       type: DataTypes.STRING(100),
       allowNull: true,
     },
+    tally_subtotal: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: true,
+    },
+    tally_tax_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: true,
+    },
+    tally_rounding: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: true,
+    },
+    tally_grand_total: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: true,
+    },
     party_name: {
       type: DataTypes.STRING(255),
       allowNull: true,

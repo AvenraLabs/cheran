@@ -63,7 +63,7 @@ export async function getDealerById(id) {
   };
 }
 
-export async function createDealer({ name, commission_percentage, is_active = true }) {
+export async function createDealer({ name, commission_percentage, is_active = true, created_by, updated_by }) {
   const normalized_name = normalizeDealerName(name);
 
   // Check if existing dealer with same normalized name
@@ -77,12 +77,14 @@ export async function createDealer({ name, commission_percentage, is_active = tr
     normalized_name,
     commission_percentage: commission_percentage || null,
     is_active,
+    created_by: created_by || null,
+    updated_by: updated_by || created_by || null,
   });
 
   return dealer;
 }
 
-export async function updateDealer(id, { name, commission_percentage, is_active }) {
+export async function updateDealer(id, { name, commission_percentage, is_active, updated_by }) {
   const dealer = await Dealer.findByPk(id);
   if (!dealer) {
     throw new AppError(`Dealer not found with ID ${id}`, 404);
@@ -95,6 +97,7 @@ export async function updateDealer(id, { name, commission_percentage, is_active 
   }
   if (commission_percentage !== undefined) updates.commission_percentage = commission_percentage;
   if (is_active !== undefined) updates.is_active = is_active;
+  if (updated_by !== undefined) updates.updated_by = updated_by;
 
   await dealer.update(updates);
   return dealer;

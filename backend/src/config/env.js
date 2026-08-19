@@ -17,8 +17,7 @@ const envSchema = z.object({
   MAX_FILE_SIZE_MB: z.string().default("25").transform((v) => parseInt(v, 10)),
   CORS_ORIGIN: z.string().default("*"),
   JWT_SECRET: z.string().default("cheran_super_secret_jwt_key_2026_production"),
-  ADMIN_USERNAME: z.string().default("admin"),
-  ADMIN_PASSWORD: z.string().default("admin123"),
+  JWT_EXPIRES_IN: z.string().default("30d"),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -2,7 +2,6 @@ import app from "./app.js";
 import db from "./config/db.js";
 import env from "./config/env.js";
 import { runAutomatedMigrations } from "./config/runMigrations.js";
-import { ensureDefaultAdminUser } from "./modules/auth/auth.service.js";
 
 async function startServer() {
   try {
@@ -12,9 +11,6 @@ async function startServer() {
 
     // Run database migrations and seeders automatically
     await runAutomatedMigrations();
-
-    // Ensure default admin user exists
-    await ensureDefaultAdminUser();
 
     const server = app.listen(env.PORT, () => {
       console.log(`🚀 Cheran Horticulture Backend Server running on port ${env.PORT} in [${env.NODE_ENV}] mode`);

@@ -22,12 +22,13 @@ import {
   LogOut,
   X,
   Factory,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export function Sidebar({ isOpen, onClose }) {
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
 
   const navigationSections = isAdmin
     ? [
@@ -72,6 +73,7 @@ export function Sidebar({ isOpen, onClose }) {
           items: [
             { label: "Reports & Analytics", path: "/reports", icon: BarChart3 },
             { label: "Business Settings", path: "/settings", icon: Sliders },
+            { label: "User Management", path: "/users", icon: ShieldCheck },
           ],
         },
       ]

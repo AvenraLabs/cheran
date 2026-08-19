@@ -253,6 +253,8 @@ export function DealersPage() {
                       <th className="py-3 px-4">Dealer Name</th>
                       <th className="py-3 px-4">Normalized Key</th>
                       <th className="py-3 px-4">Commission %</th>
+                      <th className="py-3 px-4">Created By</th>
+                      <th className="py-3 px-4">Last Edited By</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Registered Date</th>
                       <th className="py-3 px-4 text-right">Actions</th>
@@ -268,6 +270,16 @@ export function DealersPage() {
                         <td className="py-3 px-4 font-medium text-[#14213D]">
                           {d.commission_percentage ? `${d.commission_percentage}%` : "—"}
                         </td>
+                        <td className="py-3 px-4 text-[#52607D]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8]">
+                            {d.created_by || "—"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-[#52607D]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8]">
+                            {d.updated_by || d.created_by || "—"}
+                          </span>
+                        </td>
                         <td className="py-3 px-4">
                           <span
                             className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -280,7 +292,7 @@ export function DealersPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-[#52607D]">
-                          {new Date(d.created_at).toLocaleDateString()}
+                          {new Date(d.created_at).toLocaleDateString("en-IN")}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">

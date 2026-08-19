@@ -26,6 +26,7 @@ import EmployeesPage from "./pages/EmployeesPage.jsx";
 import SalaryPage from "./pages/SalaryPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
+import UsersPage from "./pages/UsersPage.jsx";
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -50,7 +51,7 @@ function ProtectedLayout() {
 
 function AdminRoute({ children }) {
   const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+  const isAdmin = user?.role === "ADMIN";
 
   if (!isAdmin) {
     return <Navigate to="/" replace />;
@@ -90,6 +91,7 @@ export function App() {
           <Route path="salary" element={<AdminRoute><SalaryPage /></AdminRoute>} />
           <Route path="reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
           <Route path="settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+          <Route path="users" element={<AdminRoute><UsersPage /></AdminRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

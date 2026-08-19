@@ -10,6 +10,10 @@ import {
   Clock,
   Sparkles,
   Search,
+  Trash2,
+  ArrowRight,
+  Eye,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
@@ -277,6 +281,51 @@ export function ImportsPage() {
     }
   };
 
+  const loadImportPreview = (imp) => {
+    setPreviewData({
+      importId: imp.id,
+      fileName: imp.file_name,
+      fileHash: imp.file_hash || "",
+      uploadedBy: imp.uploaded_by,
+      summary: {
+        totalRows: imp.total_rows || 0,
+        newProjects: imp.new_projects_count || 0,
+        existingProjects: imp.updated_projects_count || 0,
+        updatedProjects: imp.updated_projects_count || 0,
+        statusChanges: imp.status_changes_count || 0,
+        unchanged: imp.unchanged_count || 0,
+        duplicateRows: imp.duplicate_rows_count || 0,
+        errorRows: imp.error_rows_count || 0,
+        dealerResolutionsRequired: imp.dealer_resolutions_count || 0,
+      },
+    });
+
+    fetchStagedRows(imp.id, 1, stagedPagination.limit, "ALL");
+    fetchUnresolvedDealersSummary(imp.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.info(`Loaded preview batch for '${imp.file_name}'`);
+  };
+
+  const handleDeleteImport = async (importId, fileName) => {
+    if (!window.confirm(`Are you sure you want to discard and delete import batch '${fileName}'?`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/government/imports/${importId}`);
+      toast.success(`Import batch '${fileName}' discarded successfully`);
+      if (previewData?.importId === importId) {
+        setPreviewData(null);
+        setFile(null);
+        setStagedRows([]);
+        setUnresolvedDealers([]);
+      }
+      fetchPastImports(historyPagination.page, historyPagination.limit);
+    } catch (err) {
+      toast.error(err.message || "Failed to delete import batch");
+    }
+  };
+
   const handleFilterChange = (newAction) => {
     setRowActionFilter(newAction);
     if (previewData?.importId) {
@@ -292,6 +341,59 @@ export function ImportsPage() {
       />
 
       <main className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 flex-1 overflow-y-auto">
+        {/* Pending Preview Alert Banner */}
+        {!previewData && pastImports.some((imp) => imp.status === "PREVIEW") && (
+          <div className="bg-[#EAF3F0] border border-[#2F6F5E]/30 rounded-[10px] p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#2F6F5E] text-white flex items-center justify-center shrink-0">
+                <Clock size={18} />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-[#14213D]">
+                  Staged Preview Pending Review:{" "}
+                  <span className="font-mono text-[#2F6F5E]">
+                    {pastImports.find((imp) => imp.status === "PREVIEW")?.file_name}
+                  </span>{" "}
+                  ({pastImports.find((imp) => imp.status === "PREVIEW")?.total_rows?.toLocaleString()} rows)
+                </div>
+                <div className="text-[11px] text-[#52607D]">
+                  Imported by{" "}
+                  <strong>{pastImports.find((imp) => imp.status === "PREVIEW")?.uploaded_by || "Staff"}</strong>{" "}
+                  on{" "}
+                  {new Date(
+                    pastImports.find((imp) => imp.status === "PREVIEW")?.uploaded_at
+                  ).toLocaleString("en-IN")}
+                  . You can review mappings and commit without re-uploading the file.
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Trash2}
+                onClick={() => {
+                  const p = pastImports.find((imp) => imp.status === "PREVIEW");
+                  if (p) handleDeleteImport(p.id, p.file_name);
+                }}
+              >
+                Discard
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Play}
+                onClick={() => {
+                  const p = pastImports.find((imp) => imp.status === "PREVIEW");
+                  if (p) loadImportPreview(p);
+                }}
+              >
+                Resume Review
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Upload Card */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
           <h2 className="text-base font-bold font-display text-[#14213D] mb-2">
@@ -328,7 +430,7 @@ export function ImportsPage() {
                     Staged Import Preview ({previewData.fileName})
                   </h3>
                   <p className="text-xs text-[#52607D]">
-                    SHA-256: <code className="font-mono text-[10px]">{previewData.fileHash.slice(0, 16)}...</code>
+                    SHA-256: <code className="font-mono text-[10px]">{previewData.fileHash ? `${previewData.fileHash.slice(0, 16)}...` : "Staged Batch"}</code>
                   </p>
                 </div>
 
@@ -363,43 +465,43 @@ export function ImportsPage() {
                 <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
                   <span className="text-[10px] uppercase font-bold text-[#52607D]">Total Rows</span>
                   <div className="text-lg font-bold font-display text-[#14213D]">
-                    {previewData.summary.totalRows.toLocaleString()}
+                    {(previewData.summary?.totalRows || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-3 bg-[#EAF3F0] border border-[#D3E6E0] rounded-[8px]">
                   <span className="text-[10px] uppercase font-bold text-[#2F6F5E]">New Projects</span>
                   <div className="text-lg font-bold font-display text-[#2F6F5E]">
-                    {previewData.summary.newProjects.toLocaleString()}
+                    {(previewData.summary?.newProjects || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
                   <span className="text-[10px] uppercase font-bold text-[#14213D]">Existing</span>
                   <div className="text-lg font-bold font-display text-[#14213D]">
-                    {previewData.summary.existingProjects.toLocaleString()}
+                    {(previewData.summary?.existingProjects ?? previewData.summary?.updatedProjects ?? 0).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
                   <span className="text-[10px] uppercase font-bold text-[#B8860B]">Status Changes</span>
                   <div className="text-lg font-bold font-display text-[#B8860B]">
-                    {previewData.summary.statusChanges.toLocaleString()}
+                    {(previewData.summary?.statusChanges || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
                   <span className="text-[10px] uppercase font-bold text-[#52607D]">Unchanged</span>
                   <div className="text-lg font-bold font-display text-[#52607D]">
-                    {previewData.summary.unchanged.toLocaleString()}
+                    {(previewData.summary?.unchanged || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-3 bg-[#FDF2F1] border border-[#F8D7D5] rounded-[8px]">
                   <span className="text-[10px] uppercase font-bold text-[#B0403A]">Duplicates</span>
                   <div className="text-lg font-bold font-display text-[#B0403A]">
-                    {previewData.summary.duplicateRows.toLocaleString()}
+                    {(previewData.summary?.duplicateRows || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
                   <span className="text-[10px] uppercase font-bold text-[#B8860B]">Dealer Needs Action</span>
                   <div className="text-lg font-bold font-display text-[#B8860B]">
-                    {previewData.summary.dealerResolutionsRequired.toLocaleString()}
+                    {(previewData.summary?.dealerResolutionsRequired || 0).toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -604,19 +706,26 @@ export function ImportsPage() {
                   <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
                     <tr>
                       <th className="py-2.5 px-4">File Name</th>
+                      <th className="py-2.5 px-4">Imported By</th>
                       <th className="py-2.5 px-4">Uploaded At</th>
                       <th className="py-2.5 px-4 text-right">Total Rows</th>
                       <th className="py-2.5 px-4 text-right">New Projects</th>
                       <th className="py-2.5 px-4 text-right">Status Changes</th>
                       <th className="py-2.5 px-4">Status</th>
+                      <th className="py-2.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EDEAE1]">
                     {pastImports.map((imp) => (
                       <tr key={imp.id} className="hover:bg-[#FAFAF8]">
                         <td className="py-3 px-4 font-semibold text-[#14213D]">{imp.file_name}</td>
+                        <td className="py-3 px-4 text-[#14213D]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8]">
+                            {imp.uploaded_by || "—"}
+                          </span>
+                        </td>
                         <td className="py-3 px-4 text-[#52607D]">
-                          {new Date(imp.uploaded_at).toLocaleString()}
+                          {new Date(imp.uploaded_at).toLocaleString("en-IN")}
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-[#14213D]">
                           {imp.total_rows.toLocaleString()}
@@ -639,6 +748,46 @@ export function ImportsPage() {
                           >
                             {imp.status}
                           </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {imp.status === "PREVIEW" && (
+                              <>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  icon={Play}
+                                  onClick={() => loadImportPreview(imp)}
+                                  className="px-2.5 py-1 text-[11px]"
+                                  title="Resume and review staged preview"
+                                >
+                                  Resume Review
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  icon={Trash2}
+                                  onClick={() => handleDeleteImport(imp.id, imp.file_name)}
+                                  className="px-2 py-1 text-[11px]"
+                                  title="Discard staged preview batch"
+                                >
+                                  Discard
+                                </Button>
+                              </>
+                            )}
+                            {imp.status === "FAILED" && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                icon={Trash2}
+                                onClick={() => handleDeleteImport(imp.id, imp.file_name)}
+                                className="px-2 py-1 text-[11px]"
+                                title="Delete failed import log"
+                              >
+                                Delete
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

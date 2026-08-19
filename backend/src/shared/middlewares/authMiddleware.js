@@ -39,7 +39,7 @@ export const optionalAuth = (req, res, next) => {
 };
 
 /**
- * Restrict route to specific roles (e.g. ADMIN, SUPER_ADMIN)
+ * Restrict route to specific roles (e.g. ADMIN)
  */
 export const authorize = (...allowedRoles) => {
   return (req, res, next) => {
@@ -50,7 +50,7 @@ export const authorize = (...allowedRoles) => {
     const userRole = (req.user.role || "USER").toUpperCase();
     const formattedAllowed = allowedRoles.map((r) => r.toUpperCase());
 
-    if (userRole === "ADMIN" || userRole === "SUPER_ADMIN") {
+    if (userRole === "ADMIN") {
       return next();
     }
 
@@ -76,7 +76,7 @@ export const authorize = (...allowedRoles) => {
  * 4. Dealers Directory (/api/dealers)
  * + Reference Statuses (/api/government/statuses) & Auth (/api/auth)
  *
- * All other modules (Invoices, Inventory, Items, Units, Suppliers, Customers, Sales, Expenses, Employees, Reports, Settings, Tally)
+ * All other modules (Invoices, Inventory, Items, Units, Suppliers, Customers, Sales, Expenses, Employees, Reports, Settings, Tally, Users)
  * are restricted to ADMIN role.
  */
 export const enforceRoleModuleAccess = (req, res, next) => {
@@ -85,7 +85,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
   }
 
   const role = (req.user.role || "USER").toUpperCase();
-  if (role === "ADMIN" || role === "SUPER_ADMIN") {
+  if (role === "ADMIN") {
     return next();
   }
 
