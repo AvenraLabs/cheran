@@ -251,7 +251,7 @@ export function EmployeesPage() {
           />
           <MetricCard
             title="Monthly Payroll Commitment"
-            value={`₹${totalMonthlyPayroll.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            value={`₹${(Number(totalMonthlyPayroll) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             subtitle="Combined base salaries"
             icon={DollarSign}
           />
@@ -339,7 +339,7 @@ export function EmployeesPage() {
                           {emp.designation}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-sm text-[#14213D]">
-                          ₹{parseFloat(emp.salary).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          ₹{(parseFloat(emp.salary) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-4">
                           {emp.is_active ? (

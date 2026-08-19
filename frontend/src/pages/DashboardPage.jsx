@@ -194,8 +194,8 @@ export function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               <MetricCard
                 title="Total Govt Projects"
-                value={summaryData?.totalProjects?.toLocaleString() || "0"}
-                subtitle={`${completedProjects.toLocaleString()} finalized / ${summaryData?.pendingProjects?.toLocaleString()} in progress`}
+                value={(summaryData?.totalProjects || 0).toLocaleString()}
+                subtitle={`${(completedProjects || 0).toLocaleString()} finalized / ${(summaryData?.pendingProjects || 0).toLocaleString()} in progress`}
                 icon={FileSpreadsheet}
               />
               <MetricCard
@@ -206,13 +206,13 @@ export function DashboardPage() {
               />
               <MetricCard
                 title="Total Funds Released"
-                value={`₹${totalFundsReleased.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
+                value={`₹${(totalFundsReleased || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
                 subtitle="Government subsidy credited"
                 icon={TrendingUp}
               />
               <MetricCard
                 title="Total Invoice Value"
-                value={`₹${totalInvoiceSum.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
+                value={`₹${(totalInvoiceSum || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
                 subtitle="Across verified applications"
                 icon={IndianRupee}
               />
@@ -264,7 +264,7 @@ export function DashboardPage() {
                               <StatusBadge status={item.status} size="sm" />
                             </td>
                             <td className="py-2.5 px-3 text-right font-medium font-mono text-[#14213D]">
-                              {item.count.toLocaleString()}
+                              {(item.count || 0).toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
                               {item.percentage}%
@@ -273,8 +273,8 @@ export function DashboardPage() {
                               {item.totalAreaHa ? `${item.totalAreaHa.toFixed(2)} Ha` : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-medium font-mono text-[#2F6F5E]">
-                              {item.totalFundReleased > 0
-                                ? `₹${item.totalFundReleased.toLocaleString("en-IN")}`
+                              {(item.totalFundReleased || 0) > 0
+                                ? `₹${(item.totalFundReleased || 0).toLocaleString("en-IN")}`
                                 : "—"}
                             </td>
                           </tr>
@@ -386,19 +386,19 @@ export function DashboardPage() {
                               {d.dealer_name}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-medium text-[#14213D]">
-                              {d.count.toLocaleString()}
+                              {(d.count || 0).toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
                               {d.percentage}%
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-[#14213D]">
-                              {d.totalSubsidyAmount > 0
-                                ? `₹${d.totalSubsidyAmount.toLocaleString("en-IN")}`
+                              {(d.totalSubsidyAmount || 0) > 0
+                                ? `₹${(d.totalSubsidyAmount || 0).toLocaleString("en-IN")}`
                                 : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-medium text-[#2F6F5E]">
-                              {d.totalFundReleased > 0
-                                ? `₹${d.totalFundReleased.toLocaleString("en-IN")}`
+                              {(d.totalFundReleased || 0) > 0
+                                ? `₹${(d.totalFundReleased || 0).toLocaleString("en-IN")}`
                                 : "—"}
                             </td>
                           </tr>
@@ -443,7 +443,7 @@ export function DashboardPage() {
                               {d.district}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-medium text-[#14213D]">
-                              {d.count.toLocaleString()}
+                              {(d.count || 0).toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
                               {d.percentage}%
@@ -452,8 +452,8 @@ export function DashboardPage() {
                               {d.totalAreaHa ? `${d.totalAreaHa.toFixed(2)} Ha` : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-medium text-[#2F6F5E]">
-                              {d.totalFundReleased > 0
-                                ? `₹${d.totalFundReleased.toLocaleString("en-IN")}`
+                              {(d.totalFundReleased || 0) > 0
+                                ? `₹${(d.totalFundReleased || 0).toLocaleString("en-IN")}`
                                 : "—"}
                             </td>
                           </tr>

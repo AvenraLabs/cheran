@@ -109,7 +109,7 @@ export function SuppliersPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Suppliers & Vendors"
-        subtitle={`Directory of material vendors & manufacturers (${pagination.total.toLocaleString()} suppliers)`}
+        subtitle={`Directory of material vendors & manufacturers (${(pagination?.total || 0).toLocaleString()} suppliers)`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" icon={RefreshCw} onClick={() => fetchSuppliers(pagination.page, pagination.limit)}>

@@ -208,7 +208,7 @@ export function ExpensesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <MetricCard
             title="Total Expenses Logged"
-            value={`₹${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            value={`₹${(Number(totalAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             subtitle="Matching current filters"
             icon={Receipt}
           />
@@ -304,7 +304,7 @@ export function ExpensesPage() {
                           {e.reference || "—"}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-sm text-[#14213D]">
-                          ₹{parseFloat(e.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          ₹{(parseFloat(e.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}

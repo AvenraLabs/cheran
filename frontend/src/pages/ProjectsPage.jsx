@@ -159,7 +159,7 @@ export function ProjectsPage() {
     <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8]">
       <Navbar
         title="Government Projects"
-        subtitle={`Tracking ${pagination.total.toLocaleString()} government horticulture applications`}
+        subtitle={`Tracking ${(pagination?.total || 0).toLocaleString()} government horticulture applications`}
         actions={
           <Button
             variant="secondary"

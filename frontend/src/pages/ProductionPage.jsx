@@ -324,7 +324,7 @@ export function ProductionPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Manufacturing & Daily Production"
-        subtitle={`Daily manufacturing runs consuming raw materials and producing finished goods (${pagination.total.toLocaleString()} logged)`}
+        subtitle={`Daily manufacturing runs consuming raw materials and producing finished goods (${(pagination?.total || 0).toLocaleString()} logged)`}
         actions={
           <div className="flex items-center gap-2">
             <Link to="/inventory">
@@ -351,28 +351,28 @@ export function ProductionPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Total Production Runs"
-            value={summary.totalEntries}
+            value={summary?.totalEntries || 0}
             icon={Factory}
             accentColor="#2F6F5E"
             description="Runs in filtered period"
           />
           <MetricCard
             title="Raw Material Consumed"
-            value={`${summary.totalMaterialsUsed.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
+            value={`${(summary?.totalMaterialsUsed || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
             icon={Boxes}
             accentColor="#2B5B84"
             description="Net materials utilized"
           />
           <MetricCard
             title="Production Wastage"
-            value={`${summary.totalWastage.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
+            value={`${(summary?.totalWastage || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
             icon={AlertTriangle}
             accentColor="#D97706"
             description="Material scrap & trim"
           />
           <MetricCard
             title="Finished Goods Output"
-            value={`${summary.totalFinishedProduced.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
+            value={`${(summary?.totalFinishedProduced || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
             icon={PackageCheck}
             accentColor="#10B981"
             description="Total finished stock produced"
@@ -504,7 +504,7 @@ export function ProductionPage() {
                             <div key={idx} className="flex items-center gap-1.5 font-mono text-[11px]">
                               <span className="font-semibold text-[#14213D]">{m.item?.name}</span>:
                               <span className="text-rose-600 font-bold">
-                                -{parseFloat(m.quantity_used).toLocaleString()} {m.unit?.symbol || "NOS"}
+                                -{(parseFloat(m.quantity_used) || 0).toLocaleString()} {m.unit?.symbol || "NOS"}
                               </span>
                             </div>
                           ))}
@@ -519,7 +519,7 @@ export function ProductionPage() {
                                 <div key={idx} className="flex items-center gap-1.5 font-mono text-[11px] text-amber-700">
                                   <span>{m.item?.name}:</span>
                                   <span className="font-bold">
-                                    -{parseFloat(m.wastage_quantity).toLocaleString()} {m.unit?.symbol || "NOS"}
+                                    -{(parseFloat(m.wastage_quantity) || 0).toLocaleString()} {m.unit?.symbol || "NOS"}
                                   </span>
                                 </div>
                               ))
@@ -530,7 +530,7 @@ export function ProductionPage() {
                             <div key={idx} className="flex items-center gap-1.5 font-mono text-[11px]">
                               <span className="font-semibold text-[#14213D]">{o.item?.name}</span>:
                               <span className="text-[#2F6F5E] font-bold">
-                                +{parseFloat(o.quantity_produced).toLocaleString()} {o.unit?.symbol || "NOS"}
+                                +{(parseFloat(o.quantity_produced) || 0).toLocaleString()} {o.unit?.symbol || "NOS"}
                               </span>
                             </div>
                           ))}
@@ -686,7 +686,7 @@ export function ProductionPage() {
 
                     <div className="w-24 text-right font-mono text-[11px]">
                       <span className={isExceeding ? "text-rose-600 font-bold" : "text-[#52607D]"}>
-                        {available.toLocaleString()} {line.unit_symbol}
+                        {(Number(available) || 0).toLocaleString()} {line.unit_symbol}
                       </span>
                     </div>
 
@@ -845,13 +845,13 @@ export function ProductionPage() {
                       <tr key={idx}>
                         <td className="py-2 px-3 font-semibold text-[#14213D]">{m.item?.name}</td>
                         <td className="py-2 px-3 text-right font-mono text-rose-600">
-                          -{used.toLocaleString()} {m.unit?.symbol || "NOS"}
+                          -{(used || 0).toLocaleString()} {m.unit?.symbol || "NOS"}
                         </td>
                         <td className="py-2 px-3 text-right font-mono text-amber-700">
-                          -{waste.toLocaleString()} {m.unit?.symbol || "NOS"}
+                          -{(waste || 0).toLocaleString()} {m.unit?.symbol || "NOS"}
                         </td>
                         <td className="py-2 px-3 text-right font-mono font-bold text-rose-700">
-                          -{(used + waste).toLocaleString()} {m.unit?.symbol || "NOS"}
+                          -{((used || 0) + (waste || 0)).toLocaleString()} {m.unit?.symbol || "NOS"}
                         </td>
                       </tr>
                     );
@@ -877,7 +877,7 @@ export function ProductionPage() {
                     <tr key={idx}>
                       <td className="py-2 px-3 font-semibold text-[#14213D]">{o.item?.name}</td>
                       <td className="py-2 px-3 text-right font-mono font-bold text-[#2F6F5E]">
-                        +{parseFloat(o.quantity_produced).toLocaleString()} {o.unit?.symbol || "NOS"}
+                        +{(parseFloat(o.quantity_produced) || 0).toLocaleString()} {o.unit?.symbol || "NOS"}
                       </td>
                     </tr>
                   ))}

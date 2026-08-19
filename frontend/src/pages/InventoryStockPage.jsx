@@ -243,14 +243,14 @@ export function InventoryStockPage() {
           />
           <MetricCard
             title="Raw Material Stock"
-            value={`${totalRawStock.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
+            value={`${(Number(totalRawStock) || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
             icon={TrendingUp}
             accentColor="#2B5B84"
             description="Purchased raw materials"
           />
           <MetricCard
             title="Finished Goods Stock"
-            value={`${totalFinishedStock.toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
+            value={`${(Number(totalFinishedStock) || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 })} Units`}
             icon={Package}
             accentColor="#D97706"
             description="Manufactured from production"
@@ -401,7 +401,7 @@ export function InventoryStockPage() {
                                 : "text-[#C81E1E]"
                             }
                           >
-                            {qty.toLocaleString("en-IN", {
+                            {(Number(qty) || 0).toLocaleString("en-IN", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}

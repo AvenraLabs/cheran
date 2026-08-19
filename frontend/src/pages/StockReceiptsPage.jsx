@@ -251,21 +251,21 @@ export function StockReceiptsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard
             title="Total Purchases"
-            value={summary.totalReceipts}
+            value={summary?.totalReceipts || 0}
             icon={ShoppingBag}
             accentColor="#2F6F5E"
             description="Purchases in filtered range"
           />
           <MetricCard
             title="Total Raw Material Quantity"
-            value={`${summary.totalPurchasedQuantity.toLocaleString()} Units`}
+            value={`${(summary?.totalPurchasedQuantity || 0).toLocaleString()} Units`}
             icon={Boxes}
             accentColor="#4361EE"
             description="Cumulative volume purchased"
           />
           <MetricCard
             title="Total Purchase Value"
-            value={`₹${summary.totalPurchasedValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            value={`₹${(summary?.totalPurchasedValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             icon={TrendingUp}
             accentColor="#D97706"
             description="Total procurement spend"
@@ -384,7 +384,7 @@ export function StockReceiptsPage() {
                           {(rec.items || []).map((line, idx) => (
                             <div key={idx} className="flex items-center gap-1.5 font-mono text-[11px]">
                               <span className="font-semibold text-[#14213D]">{line.item?.name}</span>:
-                              <span>{parseFloat(line.quantity).toLocaleString()} {line.unit?.symbol || "NOS"}</span>
+                              <span>{(parseFloat(line.quantity) || 0).toLocaleString()} {line.unit?.symbol || "NOS"}</span>
                               {parseFloat(line.unit_price) > 0 && (
                                 <span className="text-[#8C97AB]">(@ ₹{parseFloat(line.unit_price)})</span>
                               )}
@@ -620,7 +620,7 @@ export function StockReceiptsPage() {
                   {(selectedReceipt.items || []).map((line, idx) => (
                     <tr key={idx}>
                       <td className="py-2 px-3 font-semibold text-[#14213D]">{line.item?.name}</td>
-                      <td className="py-2 px-3 text-right font-mono">{parseFloat(line.quantity).toLocaleString()} {line.unit?.symbol || "NOS"}</td>
+                      <td className="py-2 px-3 text-right font-mono">{(parseFloat(line.quantity) || 0).toLocaleString()} {line.unit?.symbol || "NOS"}</td>
                       <td className="py-2 px-3 text-right font-mono">₹{parseFloat(line.unit_price || 0).toFixed(2)}</td>
                       <td className="py-2 px-3 text-right font-mono font-bold text-[#2F6F5E]">₹{parseFloat(line.total_amount || 0).toFixed(2)}</td>
                     </tr>

@@ -360,7 +360,7 @@ export function ProjectDetailPage() {
                     <div key={idx} className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] flex items-center justify-between text-xs">
                       <span className="font-semibold text-[#14213D]">{mat.item_name}</span>
                       <span className="font-mono font-bold text-[#2F6F5E]">
-                        {parseFloat(mat.total_quantity).toLocaleString("en-IN")} {mat.unit}
+                        {(parseFloat(mat.total_quantity) || 0).toLocaleString("en-IN")} {mat.unit}
                       </span>
                     </div>
                   ))}
@@ -386,13 +386,13 @@ export function ProjectDetailPage() {
                         <td className="py-2.5 px-3 font-bold text-[#2F6F5E]">#{inv.invoice_number}</td>
                         <td className="py-2.5 px-3 font-sans">{inv.invoice_date}</td>
                         <td className="py-2.5 px-3 text-right">
-                          ₹{parseFloat(inv.net_item_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹{(parseFloat(inv.net_item_amount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-2.5 px-3 text-right text-[#D97706]">
-                          +₹{parseFloat(inv.fittings_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          +₹{(parseFloat(inv.fittings_amount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-[#14213D]">
-                          ₹{parseFloat(inv.total_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹{(parseFloat(inv.total_amount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-2.5 px-3 text-center font-sans">
                           <span

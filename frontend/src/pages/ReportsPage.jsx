@@ -145,16 +145,16 @@ export function ReportsPage() {
                             {d.total_projects}
                           </td>
                           <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                            ₹{d.total_subsidy_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            ₹{(Number(d.total_subsidy_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4 text-right font-mono text-emerald-700">
-                            ₹{d.total_fund_released.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            ₹{(Number(d.total_fund_released) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-amber-700">
-                            ₹{d.commission_pending.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            ₹{(Number(d.commission_pending) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
-                            ₹{d.commission_paid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            ₹{(Number(d.commission_paid) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       ))}
@@ -213,22 +213,22 @@ export function ReportsPage() {
                               {s.customer_name}
                             </td>
                             <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                              ₹{s.net_item_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              ₹{(Number(s.net_item_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                              ₹{s.fittings_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              ₹{(Number(s.fittings_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                              ₹{s.taxable_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              ₹{(Number(s.taxable_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="py-3 px-4 text-right font-mono font-bold text-sm text-[#14213D]">
-                              ₹{s.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              ₹{(Number(s.total_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="py-3 px-4 text-right font-mono text-emerald-700">
-                              ₹{s.paid_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              ₹{(Number(s.paid_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="py-3 px-4 text-right font-mono font-bold text-rose-700">
-                              ₹{s.balance_due.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              ₹{(Number(s.balance_due) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                           </tr>
                         ))}
@@ -245,7 +245,7 @@ export function ReportsPage() {
                 <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
                   <div className="text-xs text-[#52607D]">Total Operating Expenses:</div>
                   <div className="font-mono text-2xl font-bold text-[#14213D] mt-1">
-                    ₹{expenseReport.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    ₹{(Number(expenseReport?.totalExpenses) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
                 </div>
 
@@ -259,11 +259,11 @@ export function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1]">
-                      {expenseReport.byCategory.map((cat, idx) => (
+                      {(expenseReport?.byCategory || []).map((cat, idx) => (
                         <tr key={idx} className="hover:bg-[#FAFAF8]">
                           <td className="py-3 px-4 font-semibold text-[#14213D]">{cat.category}</td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
-                            ₹{cat.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            ₹{(Number(cat.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-semibold text-[#2F6F5E]">
                             {cat.percentage}%
@@ -296,10 +296,10 @@ export function ReportsPage() {
                         <td className="py-3 px-4 font-semibold text-[#14213D]">{emp.name}</td>
                         <td className="py-3 px-4 text-[#52607D]">{emp.designation}</td>
                         <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                          ₹{emp.base_salary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          ₹{(Number(emp.base_salary) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
-                          ₹{emp.net_salary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          ₹{(Number(emp.net_salary) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-4">
                           <span

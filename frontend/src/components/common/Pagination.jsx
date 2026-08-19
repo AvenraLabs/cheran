@@ -65,10 +65,11 @@ export function Pagination({
   limitOptions = [20, 50, 100, 250],
   className = "",
 }) {
-  if (totalItems === 0) return null;
+  const safeTotal = Number(totalItems) || 0;
+  if (safeTotal <= 0) return null;
 
-  const startItem = Math.min((page - 1) * limit + 1, totalItems);
-  const endItem = Math.min(page * limit, totalItems);
+  const startItem = Math.min((page - 1) * limit + 1, safeTotal);
+  const endItem = Math.min(page * limit, safeTotal);
 
   // Generate page numbers to show
   const getPageNumbers = () => {
@@ -107,7 +108,7 @@ export function Pagination({
         <span>
           Showing <strong className="text-[#14213D]">{startItem}</strong> to{" "}
           <strong className="text-[#14213D]">{endItem}</strong> of{" "}
-          <strong className="text-[#14213D]">{totalItems.toLocaleString()}</strong> items
+          <strong className="text-[#14213D]">{safeTotal.toLocaleString()}</strong> items
         </span>
 
         {onLimitChange && (

@@ -728,13 +728,13 @@ export function ImportsPage() {
                           {new Date(imp.uploaded_at).toLocaleString("en-IN")}
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-[#14213D]">
-                          {imp.total_rows.toLocaleString()}
+                          {(imp.total_rows || 0).toLocaleString()}
                         </td>
                         <td className="py-3 px-4 text-right text-[#2F6F5E] font-medium">
-                          {imp.new_projects_count.toLocaleString()}
+                          {(imp.new_projects_count || 0).toLocaleString()}
                         </td>
                         <td className="py-3 px-4 text-right text-[#B8860B] font-medium">
-                          {imp.status_changes_count.toLocaleString()}
+                          {(imp.status_changes_count || 0).toLocaleString()}
                         </td>
                         <td className="py-3 px-4">
                           <span

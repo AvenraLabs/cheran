@@ -237,19 +237,19 @@ export function SalaryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <MetricCard
             title="Total Payroll Amount"
-            value={`₹${totalPayrollMonth.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            value={`₹${(Number(totalPayrollMonth) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             subtitle={`Net wages for ${monthName} ${selectedYear}`}
             icon={DollarSign}
           />
           <MetricCard
             title="Disbursed / Paid"
-            value={`₹${totalPaidMonth.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            value={`₹${(Number(totalPaidMonth) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             subtitle={`${paidRows.length} staff completed`}
             icon={CheckCircle}
           />
           <MetricCard
             title="Pending / Unpaid"
-            value={`₹${totalPendingMonth.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            value={`₹${(Number(totalPendingMonth) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             subtitle={`${unpaidRows.length} staff pending`}
             icon={Clock}
           />
@@ -321,20 +321,20 @@ export function SalaryPage() {
                         {row.employee.designation || "—"}
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-[#14213D] font-medium">
-                        ₹{row.base_salary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        ₹{(Number(row.base_salary) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-emerald-700">
                         {row.adjustments > 0
-                          ? `+₹${row.adjustments.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                          ? `+₹${(Number(row.adjustments) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                           : "—"}
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-rose-700">
                         {row.deductions > 0
-                          ? `-₹${row.deductions.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                          ? `-₹${(Number(row.deductions) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                           : "—"}
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-sm text-[#2F6F5E]">
-                        ₹{row.net_salary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        ₹{(Number(row.net_salary) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3 px-4">
                         {row.status === "PAID" ? (
@@ -433,7 +433,7 @@ export function SalaryPage() {
           <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] flex items-center justify-between text-xs">
             <span className="font-semibold text-[#52607D]">Total Net Payable:</span>
             <strong className="font-mono text-base font-bold text-[#2F6F5E]">
-              ₹{netSalaryPreview.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{(Number(netSalaryPreview) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </strong>
           </div>
 

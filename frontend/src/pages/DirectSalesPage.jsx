@@ -296,19 +296,19 @@ export function DirectSalesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Total Invoices"
-            value={pagination.total.toLocaleString("en-IN")}
+            value={(pagination?.total || 0).toLocaleString("en-IN")}
             icon={ShoppingCart}
             accentColor="#2F6F5E"
           />
           <MetricCard
             title="Total Invoiced (Page)"
-            value={`₹${totalInvoiced.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
+            value={`₹${(totalInvoiced || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
             icon={CheckCircle}
             accentColor="#2B5B84"
           />
           <MetricCard
             title="5% Fittings Total"
-            value={`₹${totalFittings.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
+            value={`₹${(totalFittings || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
             icon={FileSpreadsheet}
             accentColor="#D97706"
           />
@@ -450,30 +450,30 @@ export function DirectSalesPage() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-right font-mono">
-                          ₹{parseFloat(inv.net_item_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹{parseFloat(inv.net_item_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
-                          ₹{totalAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹{(totalAmt || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-4">
                           {inv.invoice_type === "GOVERNMENT" ? (
                             <span className="text-[11px] text-[#8C97AB]">Govt Subsidy</span>
                           ) : isFullyPaid ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20">
-                              <Check size={11} /> Paid (₹{totalAmt.toLocaleString("en-IN")})
+                              <Check size={11} /> Paid (₹{(totalAmt || 0).toLocaleString("en-IN")})
                             </span>
                           ) : isPartial ? (
                             <div className="space-y-0.5">
                               <span className="inline-flex text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                                Partial: ₹{paidAmt.toLocaleString("en-IN")}
+                                Partial: ₹{(paidAmt || 0).toLocaleString("en-IN")}
                               </span>
                               <div className="text-[10px] text-rose-600 font-mono font-semibold">
-                                Due: ₹{dueAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                Due: ₹{(dueAmt || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                               </div>
                             </div>
                           ) : (
                             <span className="inline-flex text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-                              Unpaid (₹{totalAmt.toLocaleString("en-IN")} Due)
+                              Unpaid (₹{(totalAmt || 0).toLocaleString("en-IN")} Due)
                             </span>
                           )}
                         </td>
