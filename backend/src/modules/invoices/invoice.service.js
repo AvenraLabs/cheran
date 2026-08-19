@@ -91,6 +91,21 @@ export async function createInvoice({
         remarks: `Manually created from invoice #${cleanInvoiceNo}`,
       });
     } else {
+      // Enforce Rule 23: ONE Government Project = ONE Invoice
+      const existingGovInvoice = await Invoice.findOne({
+        where: {
+          government_project_id: project.id,
+          status: { [Op.ne]: "CANCELLED" },
+        },
+      });
+
+      if (existingGovInvoice) {
+        throw new AppError(
+          `Government Project '${cleanAppId}' already has an active invoice (#${existingGovInvoice.invoice_number}). One Government Project allows only one invoice.`,
+          400
+        );
+      }
+
       // Ensure INVOICED status history exists for baseline
       const { default: GovernmentProjectStatusHistory } = await import("../projects/project-history.model.js");
       const existingInvoicedHistory = await GovernmentProjectStatusHistory.findOne({
@@ -107,6 +122,8 @@ export async function createInvoice({
           status_date: invoice_date,
           remarks: `Initial invoice stage linked from manual invoice #${cleanInvoiceNo}`,
         });
+      } else if (!existingInvoicedHistory.status_date || new Date(invoice_date) < new Date(existingInvoicedHistory.status_date)) {
+        await existingInvoicedHistory.update({ status_date: invoice_date });
       }
 
       if (!project.invoice_date || new Date(invoice_date) < new Date(project.invoice_date)) {

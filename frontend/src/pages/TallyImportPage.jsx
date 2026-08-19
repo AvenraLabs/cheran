@@ -255,7 +255,7 @@ export function TallyImportPage() {
                 value={uploadResult.importedInvoices}
                 icon={CheckCircle}
                 accentColor="#2F6F5E"
-                description={`${uploadResult.importedInvoices + uploadResult.skippedInvoices} Govt invoices in file`}
+                description={`${uploadResult.importedInvoices + (uploadResult.skippedInvoices || 0)} Govt invoices in file`}
               />
               <MetricCard
                 title="New Projects Created"
@@ -272,11 +272,11 @@ export function TallyImportPage() {
                 description="Linked to existing records"
               />
               <MetricCard
-                title="Finished Goods Auto-Created"
-                value={uploadResult.autoCreatedItemsCount || 0}
+                title="Direct Sales Ignored"
+                value={uploadResult.ignoredDirectSales || 0}
                 icon={Boxes}
-                accentColor="#8B5CF6"
-                description="Added to Item Master"
+                accentColor="#64748B"
+                description="No Project ID (Manual Entry)"
               />
               <MetricCard
                 title="Duplicate Invoices Skipped"
@@ -287,12 +287,12 @@ export function TallyImportPage() {
               />
             </div>
 
-            {uploadResult.autoCreatedItems && uploadResult.autoCreatedItems.length > 0 && (
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-[8px] text-xs text-purple-900 flex items-center justify-between">
+            {uploadResult.unmappedItems && uploadResult.unmappedItems.length > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-[8px] text-xs text-amber-900 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Boxes size={16} className="text-purple-600 shrink-0" />
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0" />
                   <span>
-                    <strong>{uploadResult.autoCreatedItems.length} Finished Good item(s)</strong> were automatically created and added to your Item Master & mapped.
+                    <strong>{uploadResult.unmappedItems.length} Tally Stock Item(s)</strong> require manual mapping to Cheran Finished Goods below.
                   </span>
                 </div>
               </div>

@@ -75,6 +75,11 @@ export async function calculateProjectDealerCommission(projectId) {
       ? parseFloat(dealer.commission_percentage)
       : 0.0;
 
+  // Original Total Commission before penalties
+  const originalTotalCommission = parseFloat(((baseAmount * basePercentage) / 100.0).toFixed(2));
+  // Fixed penalty amount per 45-day cycle: 1% of ORIGINAL TOTAL COMMISSION
+  const fixedPenaltyPerCycle = parseFloat(((originalTotalCommission * 1.0) / 100.0).toFixed(2));
+
   // Fetch status history in chronological order
   const histories = await GovernmentProjectStatusHistory.findAll({
     where: { project_id: projectId },
@@ -91,18 +96,34 @@ export async function calculateProjectDealerCommission(projectId) {
   const invoicedHistory = histories.find((h) => h.status === "INVOICED");
   const baselineInvoiceDate = invoicedHistory?.status_date || invoiceDateStr;
 
-  // Find first status transition that occurred AFTER INVOICED
-  const postInvoiceHistories = histories.filter(
-    (h) => h.status !== "INVOICED" && h.status_date >= baselineInvoiceDate
-  );
+  // Collect all possible post-invoice dates from history and project milestone fields to find the earliest/lowest progression date
+  const candidateDates = [];
 
-  // Phase 1 Stagnation Days Calculation (From INVOICED date)
+  for (const h of histories) {
+    if (h.status !== "INVOICED" && h.status_date) {
+      candidateDates.push(h.status_date);
+    }
+  }
+
+  // Include project milestone date fields if populated
+  if (project.work_order_date) candidateDates.push(project.work_order_date);
+  if (project.supply_date) candidateDates.push(project.supply_date);
+  if (project.current_status !== "INVOICED" && project.current_status_date) {
+    candidateDates.push(project.current_status_date);
+  }
+
+  // Filter for dates occurring on or after baseline invoice date and sort ascending to find lowest date
+  const validNextDates = candidateDates
+    .filter((d) => d && typeof d === "string" && d.trim() !== "" && d >= baselineInvoiceDate)
+    .sort();
+
+  // Phase 1 Stagnation Days Calculation (From INVOICED date to lowest/earliest next status date)
   let phase1DelayDays = 0;
   let phase1EndDate = todayStr;
 
-  if (postInvoiceHistories.length > 0) {
-    // Project moved to next status: delay is time between invoice date and first post-invoice status date
-    phase1EndDate = postInvoiceHistories[0].status_date;
+  if (validNextDates.length > 0) {
+    // Pick the lowest / earliest next status date possible
+    phase1EndDate = validNextDates[0];
     phase1DelayDays = Math.max(0, calculateDaysBetween(baselineInvoiceDate, phase1EndDate));
   } else {
     // Project is still stagnated at INVOICED
@@ -110,19 +131,14 @@ export async function calculateProjectDealerCommission(projectId) {
     phase1DelayDays = Math.max(0, calculateDaysBetween(baselineInvoiceDate, todayStr));
   }
 
-  // 1% penalty for every 45-day block of stagnation from INVOICED date
-  const phase1PenaltyPercentage = Math.floor(phase1DelayDays / 45) * 1.0;
-  const effectivePercentage = Math.max(0, basePercentage - phase1PenaltyPercentage);
+  // Phase 1 penalty: fixedPenaltyPerCycle (1% of original total) per 45-day block
+  const phase1Cycles = Math.floor(phase1DelayDays / 45);
+  const phase1TotalPenalty = parseFloat((phase1Cycles * fixedPenaltyPerCycle).toFixed(2));
 
-  // Total Commission Value
-  const totalCommissionAmount = (baseAmount * effectivePercentage) / 100.0;
-
-  // Part 1 (55%) and Part 2 (45%) allocations
-  const part1Percentage = 55.0;
-  let part1Amount = (totalCommissionAmount * 55.0) / 100.0;
-
-  const part2Percentage = 45.0;
-  let part2Amount = (totalCommissionAmount * 45.0) / 100.0;
+  // Commission after Phase 1 penalty split 55% / 45%
+  const totalAfterPhase1 = Math.max(0, parseFloat((originalTotalCommission - phase1TotalPenalty).toFixed(2)));
+  const fund1BaseAmount = parseFloat(((totalAfterPhase1 * 55.0) / 100.0).toFixed(2));
+  const fund2BaseAmount = parseFloat((totalAfterPhase1 - fund1BaseAmount).toFixed(2));
 
   // Check Milestone Eligibility
   // Milestone 1 (First Fund Release)
@@ -147,7 +163,8 @@ export async function calculateProjectDealerCommission(projectId) {
 
   // Phase 2 Stagnation Days Calculation (From First Fund date to Final Fund or Today)
   let phase2DelayDays = 0;
-  let phase2PenaltyPercentage = 0;
+  let phase2Cycles = 0;
+  let phase2TotalPenalty = 0;
 
   if (isFirstFundReached) {
     const firstFundDate = firstFundHistory?.status_date || project.current_status_date || todayStr;
@@ -159,13 +176,21 @@ export async function calculateProjectDealerCommission(projectId) {
       phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, todayStr));
     }
 
-    if (phase2DelayDays >= 45) {
-      phase2PenaltyPercentage = Math.floor(phase2DelayDays / 45) * 1.0;
-      // Deduct 1% per 45 days from part 2 remaining amount
-      const part2Deduction = (baseAmount * (phase2PenaltyPercentage / 100.0) * 45.0) / 100.0;
-      part2Amount = Math.max(0, part2Amount - part2Deduction);
-    }
+    phase2Cycles = Math.floor(phase2DelayDays / 45);
+    phase2TotalPenalty = parseFloat((phase2Cycles * fixedPenaltyPerCycle).toFixed(2));
   }
+
+  // Part 1 (55%) and Part 2 (45%) strictly deducting Phase 2 penalty from remaining unpaid commission (Fund 2)
+  const part1Amount = fund1BaseAmount;
+  const part2Amount = Math.max(0, parseFloat((fund2BaseAmount - phase2TotalPenalty).toFixed(2)));
+  const totalCommissionAmount = parseFloat((part1Amount + part2Amount).toFixed(2));
+  const totalPenaltyAmount = parseFloat((phase1TotalPenalty + phase2TotalPenalty).toFixed(2));
+
+  // Effective percentage representation for display
+  const effectivePercentage =
+    baseAmount > 0
+      ? parseFloat(((totalCommissionAmount / baseAmount) * 100.0).toFixed(2))
+      : basePercentage;
 
   // Load existing commission record if already created to preserve payment states
   let commissionRecord = await DealerCommission.findOne({
@@ -192,12 +217,17 @@ export async function calculateProjectDealerCommission(projectId) {
       : "PENDING";
 
   const breakdownJson = {
+    originalTotalCommission,
+    fixedPenaltyPerCycle,
     baselineInvoiceDate,
     phase1EndDate,
     phase1DelayDays,
-    phase1PenaltyPercentage,
+    phase1Cycles,
+    phase1TotalPenalty,
     phase2DelayDays,
-    phase2PenaltyPercentage,
+    phase2Cycles,
+    phase2TotalPenalty,
+    totalPenaltyAmount,
     isFirstFundReached,
     firstFundDate: firstFundHistory?.status_date || null,
     isFinalFundReached,
@@ -212,15 +242,15 @@ export async function calculateProjectDealerCommission(projectId) {
         dealer_id: dealer.id,
         project_id: project.id,
         commission_percentage: basePercentage,
-        penalty_percentage: phase1PenaltyPercentage + phase2PenaltyPercentage,
+        penalty_percentage: totalPenaltyAmount,
         effective_percentage: effectivePercentage,
         base_amount: baseAmount,
         commission_amount: totalCommissionAmount,
         status: overallStatus,
-        part1_percentage: part1Percentage,
+        part1_percentage: 55.0,
         part1_amount: part1Amount,
         part1_status: part1Status,
-        part2_percentage: part2Percentage,
+        part2_percentage: 45.0,
         part2_amount: part2Amount,
         part2_status: part2Status,
         breakdown_json: breakdownJson,
@@ -229,15 +259,15 @@ export async function calculateProjectDealerCommission(projectId) {
       await commissionRecord.update({
         dealer_id: dealer.id,
         commission_percentage: basePercentage,
-        penalty_percentage: phase1PenaltyPercentage + phase2PenaltyPercentage,
+        penalty_percentage: totalPenaltyAmount,
         effective_percentage: effectivePercentage,
         base_amount: baseAmount,
         commission_amount: totalCommissionAmount,
         status: overallStatus,
-        part1_percentage: part1Percentage,
+        part1_percentage: 55.0,
         part1_amount: part1Amount,
         part1_status: part1Status,
-        part2_percentage: part2Percentage,
+        part2_percentage: 45.0,
         part2_amount: part2Amount,
         part2_status: part2Status,
         breakdown_json: breakdownJson,
@@ -255,7 +285,9 @@ export async function calculateProjectDealerCommission(projectId) {
       : null,
     base_amount: baseAmount,
     base_percentage: basePercentage,
-    penalty_percentage: phase1PenaltyPercentage + phase2PenaltyPercentage,
+    original_commission_amount: originalTotalCommission,
+    fixed_penalty_per_cycle: fixedPenaltyPerCycle,
+    penalty_amount: totalPenaltyAmount,
     effective_percentage: effectivePercentage,
     total_commission_amount: totalCommissionAmount,
     status: overallStatus,

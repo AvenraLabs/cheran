@@ -289,14 +289,14 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
     skippedInvoices: 0,
     newProjects: 0,
     existingProjectsLinked: 0,
-    autoCreatedItemsCount: 0,
-    autoCreatedItems: [],
+    unmappedItemsCount: 0,
+    unmappedItems: [],
     failed: 0,
     importedInvoiceList: [],
     errors: [],
   };
 
-  const autoCreatedSet = new Set();
+  const unmappedSet = new Set();
 
   for (let i = 0; i < vouchers.length; i++) {
     const voucher = vouchers[i];
@@ -436,6 +436,8 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
             },
             { transaction }
           );
+        } else if (!existingInvoicedHistory.status_date || new Date(invoiceDate) < new Date(existingInvoicedHistory.status_date)) {
+          await existingInvoicedHistory.update({ status_date: invoiceDate }, { transaction });
         }
       }
 
@@ -484,15 +486,15 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
         { transaction }
       );
 
-      // 5. Create Invoice Line Items with automatic Finished Goods creation if not mapped
+      // 5. Create Invoice Line Items (Preserving original Tally item and leaving item_id null if unmapped - Rule 19)
       for (const it of parsedItems) {
         const lookupKey = it.stockitemname.toLowerCase().trim();
         let mappedItem = mappingMap.get(lookupKey);
 
         if (!mappedItem) {
-          // Check if an item already exists in items table by name
+          // Check if an existing item in Cheran item master matches by exact name or normalized name
           const normalized = lookupKey.replace(/[^a-z0-9]/g, "");
-          let existingItem = await Item.findOne({
+          const existingItem = await Item.findOne({
             where: db.Sequelize.or(
               db.Sequelize.where(
                 db.Sequelize.fn("LOWER", db.Sequelize.col("name")),
@@ -504,54 +506,31 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
             transaction,
           });
 
-          if (!existingItem) {
-            // Automatically create new Finished Good item
-            const itemUnit = await getOrCreateUnit(it.unit || "NOS", transaction);
-            existingItem = await Item.create(
+          if (existingItem) {
+            mappedItem = existingItem;
+            mappingMap.set(lookupKey, mappedItem);
+
+            // Save permanent mapping for this exact name
+            await TallyItemMapping.upsert(
               {
-                name: it.stockitemname.trim(),
-                normalized_name: normalized || it.stockitemname.toLowerCase().trim(),
-                item_type: "FINISHED_GOOD",
-                unit_id: itemUnit.id,
-                category: "Finished Goods",
-                unit_price: it.rate || 0,
-                is_active: true,
+                tally_item_name: it.stockitemname.trim(),
+                item_id: existingItem.id,
               },
               { transaction }
             );
-            existingItem.unit = itemUnit;
-
-            if (!autoCreatedSet.has(it.stockitemname.trim())) {
-              autoCreatedSet.add(it.stockitemname.trim());
-              summary.autoCreatedItems.push({
-                id: existingItem.id,
-                name: existingItem.name,
-                unit: itemUnit.symbol,
-                type: "FINISHED_GOOD",
-              });
-            }
+          } else {
+            // Rule 19: NEVER auto-create finished goods from Tally. Leave item_id null and mark as unmapped.
+            unmappedSet.add(it.stockitemname.trim());
           }
-
-          // Create Tally Item Mapping so all future occurrences use this item
-          await TallyItemMapping.upsert(
-            {
-              tally_item_name: it.stockitemname.trim(),
-              item_id: existingItem.id,
-            },
-            { transaction }
-          );
-
-          mappedItem = existingItem;
-          mappingMap.set(lookupKey, mappedItem);
         }
 
         await InvoiceItem.create(
           {
             invoice_id: newInvoice.id,
-            item_id: mappedItem.id,
-            item_name_snapshot: mappedItem.name,
-            unit_id: mappedItem.unit_id,
-            unit_snapshot: mappedItem.unit?.symbol || it.unit || "NOS",
+            item_id: mappedItem ? mappedItem.id : null,
+            item_name_snapshot: mappedItem ? mappedItem.name : it.stockitemname,
+            unit_id: mappedItem ? mappedItem.unit_id : null,
+            unit_snapshot: mappedItem?.unit?.symbol || it.unit || "NOS",
             tally_item_name: it.stockitemname,
             quantity: it.quantity,
             billed_quantity: it.billed_quantity,
@@ -597,7 +576,8 @@ export async function importTallyGovernmentInvoices(jsonData, options = {}) {
     }
   }
 
-  summary.autoCreatedItemsCount = autoCreatedSet.size;
+  summary.unmappedItems = Array.from(unmappedSet);
+  summary.unmappedItemsCount = unmappedSet.size;
 
   return summary;
 }

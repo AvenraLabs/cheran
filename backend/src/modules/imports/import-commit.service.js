@@ -159,6 +159,7 @@ export async function commitImport(importId) {
       } else {
         // Project exists: check if status changed
         const statusDiffers = project.current_status !== importedStatus;
+        const shouldUpdateStatus = statusDiffers && !(importedStatus === "INVOICED" && project.current_status !== "INVOICED");
 
         // Build updated fields payload from latest Excel
         const updatePayload = {
@@ -233,8 +234,8 @@ export async function commitImport(importId) {
             rowData.total_fund_released !== null ? rowData.total_fund_released : project.total_fund_released,
           ae_restricted_amount:
             rowData.ae_restricted_amount !== null ? rowData.ae_restricted_amount : project.ae_restricted_amount,
-          current_status: importedStatus,
-          current_status_date: importedStatusDate || project.current_status_date,
+          current_status: shouldUpdateStatus ? importedStatus : project.current_status,
+          current_status_date: shouldUpdateStatus ? (importedStatusDate || project.current_status_date) : project.current_status_date,
           current_status_remarks: rowData.current_status_remarks || project.current_status_remarks,
           no_of_days_pending:
             rowData.no_of_days_pending !== null ? rowData.no_of_days_pending : project.no_of_days_pending,
@@ -246,8 +247,8 @@ export async function commitImport(importId) {
         await project.update(updatePayload, { transaction });
         updatedCount++;
 
-        // If status differs, insert new status history record
-        if (statusDiffers) {
+        // If status differs and is advancing, insert new status history record
+        if (shouldUpdateStatus) {
           await GovernmentProjectStatusHistory.create(
             {
               project_id: project.id,
