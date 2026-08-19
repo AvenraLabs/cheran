@@ -329,7 +329,7 @@ export function ProductionPage() {
           <div className="flex items-center gap-2">
             <Link to="/inventory">
               <Button variant="secondary" icon={ArrowLeft}>
-                Stock On-Hand
+                Stock
               </Button>
             </Link>
             <Button
@@ -340,13 +340,13 @@ export function ProductionPage() {
               Refresh
             </Button>
             <Button icon={Plus} onClick={handleOpenCreateModal}>
-              New Production Run
+              Add
             </Button>
           </div>
         }
       />
 
-      <main className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full">
         {/* KPI Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
@@ -450,7 +450,7 @@ export function ProductionPage() {
               </p>
             </div>
             <Button size="sm" icon={Plus} onClick={handleOpenCreateModal}>
-              New Production Run
+              Add
             </Button>
           </div>
 
@@ -469,7 +469,7 @@ export function ProductionPage() {
               }
               action={
                 <Button size="sm" icon={Plus} onClick={handleOpenCreateModal}>
-                  Record Production Run
+                  Add
                 </Button>
               }
             />

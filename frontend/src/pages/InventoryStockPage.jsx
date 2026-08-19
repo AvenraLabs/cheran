@@ -229,12 +229,12 @@ export function InventoryStockPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
         title="Inventory & Stock Management"
-        subtitle="Real physical stock-on-hand backed strictly by immutable movement ledger"
+        subtitle="Physical stock-on-hand from movement ledger"
       />
 
-      <main className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full">
         {/* KPI Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <MetricCard
             title="Total Catalog Items"
             value={stockList.length}
@@ -265,16 +265,17 @@ export function InventoryStockPage() {
         </div>
 
         {/* Action Header */}
-        <div className="bg-white p-4 rounded-[10px] border border-[#E4E1D8] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="bg-white p-3 sm:p-4 rounded-[10px] border border-[#E4E1D8] shadow-xs space-y-3">
+          {/* Row 1: Search + Filter */}
+          <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Search by SKU code or Item name..."
+              placeholder="Search SKU or item..."
               value={search}
               onChange={handleSearchChange}
-              className="w-full md:w-64 px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
+              className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
             />
-            <div className="w-48">
+            <div className="w-36 shrink-0">
               <CustomSelect
                 value={selectedType}
                 onChange={handleTypeChange}
@@ -283,7 +284,8 @@ export function InventoryStockPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          {/* Row 2: Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -298,16 +300,16 @@ export function InventoryStockPage() {
               icon={Plus}
               onClick={() => setOpeningModalOpen(true)}
             >
-              Opening Stock Entry
+              Opening
             </Button>
             <Link to="/inventory/receipts">
               <Button variant="outline" size="sm" icon={Plus}>
-                Purchase Receipt
+                Receipt
               </Button>
             </Link>
             <Link to="/inventory/production">
               <Button variant="primary" size="sm" icon={Factory}>
-                Daily Production
+                Production
               </Button>
             </Link>
           </div>
@@ -315,17 +317,6 @@ export function InventoryStockPage() {
 
         {/* Stock Ledger Table */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-xs overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#EDEAE1] flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-[#14213D] font-display">
-                Physical Stock on Hand (Source: Movement Ledger)
-              </h2>
-              <p className="text-xs text-[#52607D]">
-                Showing {stockList.length} items recorded across all categories
-              </p>
-            </div>
-          </div>
-
           {loading ? (
             <div className="p-6">
               <SkeletonLoader rows={8} />

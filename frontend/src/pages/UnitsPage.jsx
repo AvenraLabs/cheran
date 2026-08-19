@@ -115,7 +115,7 @@ export function UnitsPage() {
               Refresh
             </Button>
             <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
-              New Unit
+              Add
             </Button>
           </div>
         }
@@ -162,7 +162,7 @@ export function UnitsPage() {
               description="Create your first measurement unit to use in catalog items."
               action={
                 <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
-                  Add Unit
+                  Add
                 </Button>
               }
             />
@@ -296,7 +296,7 @@ export function UnitsPage() {
               Cancel
             </Button>
             <Button type="submit" loading={saving}>
-              {editingUnit ? "Save Changes" : "Create Unit"}
+              {editingUnit ? "Save" : "Create"}
             </Button>
           </div>
         </form>

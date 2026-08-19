@@ -233,14 +233,14 @@ export function StockReceiptsPage() {
           <div className="flex items-center gap-2">
             <Link to="/inventory">
               <Button variant="secondary" icon={ArrowLeft}>
-                Stock On-Hand
+                Stock
               </Button>
             </Link>
             <Button variant="secondary" icon={RefreshCw} onClick={() => fetchReceipts(pagination.page, pagination.limit)}>
               Refresh
             </Button>
             <Button icon={Plus} onClick={handleOpenAdd}>
-              New Purchase Receipt
+              Add
             </Button>
           </div>
         }
@@ -347,7 +347,7 @@ export function StockReceiptsPage() {
               }
               action={
                 <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
-                  New Purchase Receipt
+                  Add
                 </Button>
               }
             />

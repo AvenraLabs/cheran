@@ -116,7 +116,7 @@ export function SuppliersPage() {
               Refresh
             </Button>
             <Button icon={Plus} onClick={handleOpenAdd}>
-              Add Supplier
+              Add
             </Button>
           </div>
         }
@@ -147,7 +147,7 @@ export function SuppliersPage() {
               description="Register raw material and equipment suppliers to record stock purchases."
               action={
                 <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
-                  Add Supplier
+                  Add
                 </Button>
               }
             />
@@ -305,7 +305,7 @@ export function SuppliersPage() {
               Cancel
             </Button>
             <Button type="submit" loading={saving}>
-              {editingSupplier ? "Save Changes" : "Create Supplier"}
+              {editingSupplier ? "Save" : "Create"}
             </Button>
           </div>
         </form>

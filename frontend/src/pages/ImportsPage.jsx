@@ -388,7 +388,7 @@ export function ImportsPage() {
                   if (p) loadImportPreview(p);
                 }}
               >
-                Resume Review
+                Resume
               </Button>
             </div>
           </div>
@@ -414,7 +414,7 @@ export function ImportsPage() {
             </div>
 
             <Button type="submit" loading={uploading} disabled={!file} icon={UploadCloud}>
-              Parse & Preview
+              Preview
             </Button>
           </form>
         </div>
@@ -455,7 +455,7 @@ export function ImportsPage() {
                     onClick={handleCommitImport}
                     icon={Play}
                   >
-                    Commit Import to Production
+                    Commit
                   </Button>
                 </div>
               </div>
@@ -531,7 +531,7 @@ export function ImportsPage() {
                     icon={Sparkles}
                     className="bg-[#2F6F5E] text-white shrink-0"
                   >
-                    Auto-Create & Resolve All Remaining
+                    Auto-Resolve
                   </Button>
                 </div>
 
@@ -556,7 +556,7 @@ export function ImportsPage() {
                         onClick={() => openDealerResolutionForName(d.dealer_name, d.count)}
                         className="text-xs px-2.5 py-1 shrink-0"
                       >
-                        Resolve All {d.count}
+                        Resolve
                       </Button>
                     </div>
                   ))}
@@ -653,7 +653,7 @@ export function ImportsPage() {
                                   onClick={() => openDealerResolutionForName(r.dealer_name, 1)}
                                   icon={Users}
                                 >
-                                  Resolve Dealer
+                                  Resolve
                                 </Button>
                               )}
                             </td>
@@ -761,7 +761,7 @@ export function ImportsPage() {
                                   className="px-2.5 py-1 text-[11px]"
                                   title="Resume and review staged preview"
                                 >
-                                  Resume Review
+                                  Resume
                                 </Button>
                                 <Button
                                   variant="danger"
@@ -904,7 +904,7 @@ export function ImportsPage() {
               Cancel
             </Button>
             <Button type="submit" size="sm" loading={resolving}>
-              Confirm Mapping ({targetDealerRowCount} rows)
+              Confirm
             </Button>
           </div>
         </form>

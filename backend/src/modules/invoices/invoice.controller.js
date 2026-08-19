@@ -1,5 +1,9 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import * as invoiceService from "./invoice.service.js";
+import { importHistoricalInvoiceJson as importJsonService } from "./invoice-json-import.service.js";
+import { parseLoadOrderBuffer } from "./load-order-parser.service.js";
+import { commitLoadOrder as commitLoadOrderService } from "./load-order-commit.service.js";
+import AppError from "../../shared/appError.js";
 
 export const createInvoice = asyncHandler(async (req, res) => {
   const invoice = await invoiceService.createInvoice(req.body);
@@ -47,5 +51,55 @@ export const recordInvoicePayment = asyncHandler(async (req, res) => {
     status: "success",
     message: "Invoice payment recorded successfully",
     data: { invoice },
+  });
+});
+
+/**
+ * Historical Invoice JSON Bulk Import Controller
+ * Supports both JSON body payload and multipart file upload.
+ */
+export const importHistoricalInvoiceJson = asyncHandler(async (req, res) => {
+  let jsonData = req.body;
+
+  if (req.file) {
+    try {
+      jsonData = JSON.parse(req.file.buffer.toString("utf8"));
+    } catch (err) {
+      throw new AppError("Invalid JSON file format. Could not parse JSON content.", 400);
+    }
+  }
+
+  const result = await importJsonService(jsonData);
+  res.status(200).json({
+    status: "success",
+    message: `Successfully processed ${result.totalRecords} historical invoice records`,
+    data: result,
+  });
+});
+
+/**
+ * Load Order XLS Upload & Preview Controller
+ */
+export const previewLoadOrder = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new AppError("Please upload a Load Order Excel file (.xls, .xlsx)", 400);
+  }
+
+  const result = await parseLoadOrderBuffer(req.file.buffer);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+/**
+ * Load Order Commit Controller
+ */
+export const commitLoadOrder = asyncHandler(async (req, res) => {
+  const result = await commitLoadOrderService(req.body);
+  res.status(200).json({
+    status: "success",
+    message: result.message,
+    data: result,
   });
 });

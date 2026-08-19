@@ -122,7 +122,7 @@ export function CustomersPage() {
               Refresh
             </Button>
             <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
-              New Customer
+              Add
             </Button>
           </div>
         }
@@ -157,7 +157,7 @@ export function CustomersPage() {
               description="Add your first direct customer to start creating direct sales invoices."
               action={
                 <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
-                  Add Customer
+                  Add
                 </Button>
               }
             />
@@ -330,7 +330,7 @@ export function CustomersPage() {
               Cancel
             </Button>
             <Button type="submit" loading={saving}>
-              {editingCustomer ? "Save Changes" : "Create Customer"}
+              {editingCustomer ? "Save" : "Create"}
             </Button>
           </div>
         </form>

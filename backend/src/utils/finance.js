@@ -1,0 +1,72 @@
+/**
+ * Financial calculation utilities for Cheran ERP
+ * Uses explicit 2-decimal rounded arithmetic for all invoice & commission operations.
+ */
+
+/**
+ * Calculate complete invoice breakdown from line items:
+ * 1. ITEM NET TOTAL = sum(quantity * unit_price)
+ * 2. FITTINGS COST = 5% of ITEM NET TOTAL
+ * 3. SUBTOTAL = ITEM NET TOTAL + FITTINGS COST
+ * 4. GST = 5% of SUBTOTAL (calculated AFTER fittings)
+ * 5. FINAL INVOICE AMOUNT = SUBTOTAL + GST
+ */
+export function calculateInvoiceTotals(items = [], fittingsPct = 5.0, gstPct = 5.0) {
+  const effectiveFittingsPct = parseFloat(fittingsPct) || 5.0;
+  const effectiveGstPct = parseFloat(gstPct) || 5.0;
+
+  let itemNetTotal = 0;
+  const processedItems = (items || []).map((item) => {
+    const qty = parseFloat(item.quantity || 0) || 0;
+    const price = parseFloat(item.unit_price !== undefined ? item.unit_price : item.rate || 0) || 0;
+    const lineTotal = Math.round(qty * price * 100) / 100;
+    itemNetTotal += lineTotal;
+    return {
+      ...item,
+      quantity: qty,
+      unit_price: price,
+      line_total: lineTotal,
+    };
+  });
+
+  itemNetTotal = Math.round(itemNetTotal * 100) / 100;
+  const fittingsAmount = Math.round(((itemNetTotal * effectiveFittingsPct) / 100.0) * 100) / 100;
+  const subtotalBeforeGst = Math.round((itemNetTotal + fittingsAmount) * 100) / 100;
+  const gstAmount = Math.round(((subtotalBeforeGst * effectiveGstPct) / 100.0) * 100) / 100;
+  const grandTotal = Math.round((subtotalBeforeGst + gstAmount) * 100) / 100;
+
+  return {
+    items: processedItems,
+    item_net_total: itemNetTotal,
+    fittings_percentage: effectiveFittingsPct,
+    fittings_amount: fittingsAmount,
+    subtotal_before_gst: subtotalBeforeGst,
+    gst_percentage: effectiveGstPct,
+    gst_amount: gstAmount,
+    grand_total: grandTotal,
+  };
+}
+
+/**
+ * Calculate Commission Base from Quotation Subsidy Amount:
+ * Quotation Subsidy Amount in Government Excel includes +5% fittings and +5% GST added sequentially.
+ * Formula:
+ * Final = Base * 1.05 * 1.05
+ * Base = Quotation Subsidy Amount / 1.05 / 1.05
+ */
+export function calculateCommissionBase(quotationSubsidyAmount) {
+  const amount = parseFloat(quotationSubsidyAmount) || 0;
+  if (amount <= 0) return 0.0;
+  const base = amount / 1.05 / 1.05;
+  return Math.round(base * 100) / 100;
+}
+
+/**
+ * Calculate Dealer Commission from Quotation Subsidy Amount and Dealer Commission %
+ */
+export function calculateDealerCommission(quotationSubsidyAmount, commissionPercentage) {
+  const base = calculateCommissionBase(quotationSubsidyAmount);
+  const pct = parseFloat(commissionPercentage) || 0;
+  if (base <= 0 || pct <= 0) return 0.0;
+  return Math.round(((base * pct) / 100.0) * 100) / 100;
+}

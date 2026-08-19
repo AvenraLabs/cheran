@@ -231,10 +231,10 @@ export function EmployeesPage() {
               icon={UserCheck}
               onClick={() => handleOpenDailySheet()}
             >
-              Mark Daily Attendance
+              Attendance
             </Button>
             <Button size="sm" icon={Plus} onClick={handleOpenAddEmp}>
-              New Employee
+              Add
             </Button>
           </div>
         }
@@ -515,7 +515,7 @@ export function EmployeesPage() {
               Cancel
             </Button>
             <Button type="submit" loading={savingEmp}>
-              {editingEmp ? "Save Changes" : "Create Employee"}
+              {editingEmp ? "Save" : "Create"}
             </Button>
           </div>
         </form>
@@ -668,7 +668,7 @@ export function EmployeesPage() {
                 Cancel
               </Button>
               <Button type="submit" loading={savingBulk}>
-                Save Daily Attendance ({bulkRows.length} Staff)
+                Save
               </Button>
             </div>
           </div>

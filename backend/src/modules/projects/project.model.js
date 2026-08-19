@@ -247,6 +247,14 @@ const GovernmentProject = db.define(
       type: DataTypes.DECIMAL(15, 2),
       allowNull: true,
     },
+    bank_guarantee_deducted_pct: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    bank_guarantee_deducted_amount: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: true,
+    },
     // Current Government Status
     current_status: {
       type: DataTypes.STRING(255),

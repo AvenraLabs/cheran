@@ -120,7 +120,7 @@ export function DashboardPage() {
               Refresh
             </Button>
             <Link to="/imports">
-              <Button icon={UploadCloud}>Import Excel</Button>
+              <Button icon={UploadCloud}>Import</Button>
             </Link>
           </div>
         }

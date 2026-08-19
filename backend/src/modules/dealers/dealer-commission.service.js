@@ -7,6 +7,7 @@ import DealerCommission from "./dealer-commission.model.js";
 import Invoice from "../invoices/invoice.model.js";
 import AppError from "../../shared/appError.js";
 import { calculateDaysBetween } from "../../utils/dates.js";
+import { calculateCommissionBase } from "../../utils/finance.js";
 
 const FIRST_FUND_STATUSES = [
   "District First Fund Credited (UTR Updated)",
@@ -44,13 +45,22 @@ export async function calculateProjectDealerCommission(projectId) {
   const dealer = project.dealer;
   const invoices = project.invoices || [];
 
-  // Base Net Amount from linked invoices (sum of net_item_amount)
-  const netInvoicedAmount = invoices.reduce((sum, inv) => {
-    return sum + (parseFloat(inv.net_item_amount) || 0);
-  }, 0);
-
-  // Fallback to project invoice_amount if no detailed invoice records attached
-  const baseAmount = netInvoicedAmount > 0 ? netInvoicedAmount : parseFloat(project.invoice_amount) || 0;
+  // Base Net Amount:
+  // Rule: Quotation Subsidy / Invoice Amount in Government Excel includes +5% fittings + 5% GST sequentially.
+  // Commission base = amount / 1.05 / 1.05
+  let baseAmount = 0;
+  if (project.quotation_subsidy_amount && parseFloat(project.quotation_subsidy_amount) > 0) {
+    baseAmount = calculateCommissionBase(project.quotation_subsidy_amount);
+  } else {
+    const netInvoicedAmount = invoices.reduce((sum, inv) => {
+      return sum + (parseFloat(inv.net_item_amount) || 0);
+    }, 0);
+    if (netInvoicedAmount > 0) {
+      baseAmount = netInvoicedAmount;
+    } else if (project.invoice_amount && parseFloat(project.invoice_amount) > 0) {
+      baseAmount = calculateCommissionBase(project.invoice_amount);
+    }
+  }
 
   // If no dealer is assigned to this project, do not calculate or hardcode any commission!
   if (!dealer) {

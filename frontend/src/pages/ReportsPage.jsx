@@ -2,11 +2,8 @@ import React, { useEffect, useState } from "react";
 import {
   BarChart3,
   Users,
-  ShoppingCart,
   Receipt,
-  Download,
   RefreshCw,
-  TrendingUp,
   DollarSign,
 } from "lucide-react";
 import api from "../api/client.js";
@@ -16,9 +13,8 @@ import Button from "../components/common/Button.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 
 export function ReportsPage() {
-  const [activeTab, setActiveTab] = useState("dealers"); // 'dealers' | 'sales' | 'expenses' | 'employees'
+  const [activeTab, setActiveTab] = useState("dealers"); // 'dealers' | 'expenses' | 'employees'
   const [dealerReport, setDealerReport] = useState([]);
-  const [salesReport, setSalesReport] = useState({ summary: {}, sales: [] });
   const [expenseReport, setExpenseReport] = useState({ totalExpenses: 0, byCategory: [] });
   const [employeeReport, setEmployeeReport] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,15 +22,13 @@ export function ReportsPage() {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const [dealersRes, salesRes, expensesRes, employeesRes] = await Promise.all([
+      const [dealersRes, expensesRes, employeesRes] = await Promise.all([
         api.get("/reports/dealers"),
-        api.get("/reports/sales"),
         api.get("/reports/expenses"),
         api.get("/reports/employees"),
       ]);
 
       setDealerReport(dealersRes.data?.dealers || []);
-      setSalesReport(salesRes.data || { summary: {}, sales: [] });
       setExpenseReport(expensesRes.data || { totalExpenses: 0, byCategory: [] });
       setEmployeeReport(employeesRes.data?.employees || []);
     } catch (err) {
@@ -74,17 +68,6 @@ export function ReportsPage() {
             }`}
           >
             <Users size={14} /> Dealer Performance & Commissions
-          </button>
-
-          <button
-            onClick={() => setActiveTab("sales")}
-            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-colors cursor-pointer ${
-              activeTab === "sales"
-                ? "bg-[#2F6F5E] text-white"
-                : "text-[#52607D] hover:bg-[#FAFAF8]"
-            }`}
-          >
-            <ShoppingCart size={14} /> Direct Sales & Collections
           </button>
 
           <button
@@ -164,82 +147,7 @@ export function ReportsPage() {
               </div>
             )}
 
-            {/* SALES TAB */}
-            {activeTab === "sales" && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                  <MetricCard
-                    title="Total Sales Value"
-                    value={`₹${(salesReport.summary?.totalSalesValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Gross invoices"
-                    icon={ShoppingCart}
-                  />
-                  <MetricCard
-                    title="Total Collected"
-                    value={`₹${(salesReport.summary?.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Received payments"
-                    icon={TrendingUp}
-                  />
-                  <MetricCard
-                    title="Total Pending Balance"
-                    value={`₹${(salesReport.summary?.totalPendingBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Outstanding receivables"
-                    icon={DollarSign}
-                  />
-                </div>
 
-                <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
-                        <tr>
-                          <th className="py-3 px-4">Invoice / Date</th>
-                          <th className="py-3 px-4">Customer</th>
-                          <th className="py-3 px-4 text-right">Net Items</th>
-                          <th className="py-3 px-4 text-right">Fittings</th>
-                          <th className="py-3 px-4 text-right">Taxable</th>
-                          <th className="py-3 px-4 text-right">Total Invoice</th>
-                          <th className="py-3 px-4 text-right">Paid</th>
-                          <th className="py-3 px-4 text-right">Balance Due</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#EDEAE1]">
-                        {(salesReport.sales || []).map((s) => (
-                          <tr key={s.sale_id} className="hover:bg-[#FAFAF8] transition-colors">
-                            <td className="py-3 px-4 font-mono font-medium text-[#14213D]">
-                              {s.invoice_number || "—"} ({s.sale_date})
-                            </td>
-                            <td className="py-3 px-4 font-semibold text-[#14213D]">
-                              {s.customer_name}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                              ₹{(Number(s.net_item_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                              ₹{(Number(s.fittings_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                              ₹{(Number(s.taxable_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-sm text-[#14213D]">
-                              ₹{(Number(s.total_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono text-emerald-700">
-                              ₹{(Number(s.paid_amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-rose-700">
-                              ₹{(Number(s.balance_due) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* EXPENSES TAB */}
             {activeTab === "expenses" && (
               <div className="space-y-6">
                 <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">

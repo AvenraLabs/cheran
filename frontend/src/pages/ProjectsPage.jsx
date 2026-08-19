@@ -519,7 +519,7 @@ export function ProjectsPage() {
             <div className="flex items-center justify-between pt-3 border-t border-[#EDEAE1]">
               <Link to={`/projects/${selectedProject.id}`}>
                 <Button variant="secondary" size="sm" icon={ExternalLink}>
-                  Open Full Project Details
+                  Details
                 </Button>
               </Link>
 

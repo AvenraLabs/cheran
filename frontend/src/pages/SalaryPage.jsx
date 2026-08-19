@@ -225,7 +225,7 @@ export function SalaryPage() {
                 onClick={handlePayAll}
                 loading={payingBulk}
               >
-                Pay All ({unpaidRows.length} Staff)
+                Disburse
               </Button>
             )}
           </div>
@@ -442,7 +442,7 @@ export function SalaryPage() {
               Cancel
             </Button>
             <Button type="submit" loading={saving}>
-              Confirm & Mark Paid
+              Confirm
             </Button>
           </div>
         </form>

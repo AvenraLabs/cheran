@@ -177,7 +177,7 @@ export function ItemsPage() {
               Refresh
             </Button>
             <Button icon={Plus} onClick={handleOpenAdd}>
-              Add Item
+              Add
             </Button>
           </div>
         }
@@ -222,7 +222,7 @@ export function ItemsPage() {
               description="Register raw materials, finished pipes, valves, and accessories in your catalog."
               action={
                 <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
-                  Add Item
+                  Add
                 </Button>
               }
             />
@@ -422,7 +422,7 @@ export function ItemsPage() {
               Cancel
             </Button>
             <Button type="submit" loading={saving}>
-              {editingItem ? "Save Changes" : "Create Item"}
+              {editingItem ? "Save" : "Create"}
             </Button>
           </div>
         </form>

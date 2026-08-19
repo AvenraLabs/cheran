@@ -153,7 +153,7 @@ export function SettingsPage() {
 
             <div className="flex justify-end pt-4 border-t border-[#EDEAE1]">
               <Button type="submit" loading={saving} icon={Save}>
-                Save Settings
+                Save
               </Button>
             </div>
           </form>

@@ -133,6 +133,20 @@ const COLUMN_SYNONYMS = {
     "ae_restricted_amount",
     "ae_restriction_amount",
   ],
+  bank_guarantee_deducted_pct: [
+    "bank_gaurantee_deducted",
+    "bank_guarantee_deducted",
+    "bank_gaurantee_deducted_pct",
+    "bank_guarantee_deducted_pct",
+    "bank_gaurantee_deducted_percentage",
+    "bank_guarantee_deducted_percentage",
+  ],
+  bank_guarantee_deducted_amount: [
+    "bank_gaurantee_deducted_amount",
+    "bank_guarantee_deducted_amount",
+    "bg_deducted_amount",
+    "bank_guarantee_amount",
+  ],
   current_status: ["current_status", "status", "project_status", "present_status", "stage", "current_stage"],
   current_status_date: ["current_status_date", "status_date", "present_status_date", "stage_date", "last_status_date"],
   current_status_remarks: ["current_status_remarks", "remarks", "status_remarks", "comment", "remarks_if_any"],
@@ -305,6 +319,8 @@ export function parseExcelBuffer(fileBuffer, fileName = "import.xlsx") {
     rowObj.treasury_fund_utr_date = parseExcelDate(getVal("treasury_fund_utr_date"));
     rowObj.total_fund_released = parseDecimal(getVal("total_fund_released"));
     rowObj.ae_restricted_amount = parseDecimal(getVal("ae_restricted_amount"));
+    rowObj.bank_guarantee_deducted_pct = parseDecimal(getVal("bank_guarantee_deducted_pct"));
+    rowObj.bank_guarantee_deducted_amount = parseDecimal(getVal("bank_guarantee_deducted_amount"));
 
     // Current Status
     rowObj.current_status = cleanString(getVal("current_status"));

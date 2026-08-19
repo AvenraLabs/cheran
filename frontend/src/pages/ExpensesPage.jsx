@@ -197,7 +197,7 @@ export function ExpensesPage() {
               Refresh
             </Button>
             <Button icon={Plus} onClick={handleOpenAdd}>
-              Log Expense
+              Add
             </Button>
           </div>
         }
@@ -438,7 +438,7 @@ export function ExpensesPage() {
               Cancel
             </Button>
             <Button type="submit" loading={saving}>
-              Record Expense
+              Save
             </Button>
           </div>
         </form>
@@ -466,7 +466,7 @@ export function ExpensesPage() {
               className="flex-1 px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
             />
             <Button type="submit" loading={savingCat} icon={Plus}>
-              Create Category
+              Create
             </Button>
           </form>
 

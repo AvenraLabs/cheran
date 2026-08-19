@@ -107,7 +107,7 @@ export function ProjectDetailPage() {
         <p className="text-sm text-[#52607D]">Project record not found.</p>
         <Link to="/projects" className="mt-4">
           <Button variant="secondary" icon={ArrowLeft}>
-            Back to Projects
+            Back
           </Button>
         </Link>
       </div>
@@ -122,7 +122,7 @@ export function ProjectDetailPage() {
         actions={
           <Link to="/projects">
             <Button variant="secondary" icon={ArrowLeft}>
-              Back to List
+              Back
             </Button>
           </Link>
         }
@@ -279,6 +279,20 @@ export function ProjectDetailPage() {
                 <span className="text-[#52607D]">Supply Date:</span>
                 <p className="font-semibold text-[#14213D]">{project.supply_date || "—"}</p>
               </div>
+              <div>
+                <span className="text-[#52607D]">Bank Guarantee Deducted (%):</span>
+                <p className="font-semibold text-[#14213D]">
+                  {project.bank_guarantee_deducted_pct ? `${project.bank_guarantee_deducted_pct}%` : "—"}
+                </p>
+              </div>
+              <div>
+                <span className="text-[#52607D]">Bank Guarantee Amount:</span>
+                <p className="font-semibold text-[#14213D]">
+                  {project.bank_guarantee_deducted_amount
+                    ? `₹${parseFloat(project.bank_guarantee_deducted_amount).toLocaleString("en-IN")}`
+                    : "—"}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -337,9 +351,9 @@ export function ProjectDetailPage() {
                 </p>
               </div>
             </div>
-            <Link to="/sales">
+            <Link to="/imports/load-order">
               <Button size="xs" variant="outline">
-                New Invoice
+                Load Order
               </Button>
             </Link>
           </div>
@@ -555,7 +569,7 @@ export function ProjectDetailPage() {
                           setPayModalOpen(true);
                         }}
                       >
-                        Mark Part 1 Paid
+                        Pay
                       </Button>
                     )}
                   </div>
@@ -626,7 +640,7 @@ export function ProjectDetailPage() {
                           setPayModalOpen(true);
                         }}
                       >
-                        Mark Part 2 Paid
+                        Pay
                       </Button>
                     )}
                   </div>
@@ -789,7 +803,7 @@ export function ProjectDetailPage() {
               Cancel
             </Button>
             <Button type="submit" loading={savingPayment} icon={Check}>
-              Confirm Payout
+              Confirm
             </Button>
           </div>
         </form>

@@ -3,7 +3,6 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   FileSpreadsheet,
-  UploadCloud,
   FileText,
   Users,
   Sprout,
@@ -12,7 +11,6 @@ import {
   Package,
   Scale,
   Truck,
-  ShoppingCart,
   UserCheck,
   Receipt,
   UserCog,
@@ -23,6 +21,8 @@ import {
   X,
   Factory,
   ShieldCheck,
+  FileJson,
+  UploadCloud,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -37,7 +37,8 @@ export function Sidebar({ isOpen, onClose }) {
           items: [
             { label: "Dashboard", path: "/", icon: LayoutDashboard },
             { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
-            { label: "Tally Sales Import", path: "/imports/tally", icon: UploadCloud },
+            { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
+            { label: "Invoice Bulk Upload", path: "/imports/invoices", icon: FileJson },
             { label: "Excel Imports", path: "/imports", icon: FileText },
             { label: "Dealers Directory", path: "/dealers", icon: Users },
           ],
@@ -54,9 +55,8 @@ export function Sidebar({ isOpen, onClose }) {
           ],
         },
         {
-          title: "Sales & Commercial",
+          title: "Financials & Clients",
           items: [
-            { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
             { label: "Customers", path: "/customers", icon: UserCheck },
             { label: "Expenses", path: "/expenses", icon: Receipt },
           ],

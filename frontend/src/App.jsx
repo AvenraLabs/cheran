@@ -9,7 +9,8 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage.jsx";
 import ProjectDetailPage from "./pages/ProjectDetailPage.jsx";
 import ImportsPage from "./pages/ImportsPage.jsx";
-import TallyImportPage from "./pages/TallyImportPage.jsx";
+import InvoiceBulkUploadPage from "./pages/InvoiceBulkUploadPage.jsx";
+import LoadOrderUploadPage from "./pages/LoadOrderUploadPage.jsx";
 import DealersPage from "./pages/DealersPage.jsx";
 
 // Core ERP Pages
@@ -20,7 +21,6 @@ import InventoryStockPage from "./pages/InventoryStockPage.jsx";
 import StockReceiptsPage from "./pages/StockReceiptsPage.jsx";
 import ProductionPage from "./pages/ProductionPage.jsx";
 import CustomersPage from "./pages/CustomersPage.jsx";
-import DirectSalesPage from "./pages/DirectSalesPage.jsx";
 import ExpensesPage from "./pages/ExpensesPage.jsx";
 import EmployeesPage from "./pages/EmployeesPage.jsx";
 import SalaryPage from "./pages/SalaryPage.jsx";
@@ -74,17 +74,17 @@ export function App() {
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
           <Route path="imports" element={<ImportsPage />} />
+          <Route path="imports/invoices" element={<InvoiceBulkUploadPage />} />
+          <Route path="imports/load-order" element={<LoadOrderUploadPage />} />
           <Route path="dealers" element={<DealersPage />} />
 
           {/* Admin-Only Routes */}
-          <Route path="imports/tally" element={<AdminRoute><TallyImportPage /></AdminRoute>} />
           <Route path="inventory" element={<AdminRoute><InventoryStockPage /></AdminRoute>} />
           <Route path="inventory/receipts" element={<AdminRoute><StockReceiptsPage /></AdminRoute>} />
           <Route path="inventory/production" element={<AdminRoute><ProductionPage /></AdminRoute>} />
           <Route path="items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
           <Route path="units" element={<AdminRoute><UnitsPage /></AdminRoute>} />
           <Route path="suppliers" element={<AdminRoute><SuppliersPage /></AdminRoute>} />
-          <Route path="sales" element={<AdminRoute><DirectSalesPage /></AdminRoute>} />
           <Route path="customers" element={<AdminRoute><CustomersPage /></AdminRoute>} />
           <Route path="expenses" element={<AdminRoute><ExpensesPage /></AdminRoute>} />
           <Route path="employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />

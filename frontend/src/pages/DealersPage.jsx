@@ -195,10 +195,10 @@ export function DealersPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="secondary" icon={GitMerge} onClick={openMergeModal}>
-              Merge / Deduplicate
+              Merge
             </Button>
             <Button icon={Plus} onClick={() => setCreateModalOpen(true)}>
-              Add Dealer
+              Add
             </Button>
           </div>
         }
@@ -240,7 +240,7 @@ export function DealersPage() {
               description="Click 'Add Dealer' to register your first partner dealer."
               action={
                 <Button size="sm" icon={Plus} onClick={() => setCreateModalOpen(true)}>
-                  Add Dealer
+                  Add
                 </Button>
               }
             />
@@ -427,7 +427,7 @@ export function DealersPage() {
               disabled={!targetDealerId || !sourceDealerId || targetDealerId === sourceDealerId}
               icon={GitMerge}
             >
-              Confirm Merge & Reassign
+              Merge
             </Button>
           </div>
         </form>
@@ -474,7 +474,7 @@ export function DealersPage() {
               Cancel
             </Button>
             <Button type="submit" size="sm" loading={saving}>
-              Save Dealer
+              Save
             </Button>
           </div>
         </form>
@@ -532,7 +532,7 @@ export function DealersPage() {
               Cancel
             </Button>
             <Button type="submit" size="sm" loading={updating}>
-              Update Dealer
+              Save
             </Button>
           </div>
         </form>
@@ -568,7 +568,7 @@ export function DealersPage() {
               loading={deleting}
               onClick={handleDeleteDealer}
             >
-              Delete Dealer
+              Delete
             </Button>
           </div>
         </div>

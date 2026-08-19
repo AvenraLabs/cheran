@@ -42,8 +42,10 @@ export function LoginPage() {
     setIsInstalled(isStandalone);
 
     // Detect iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    const userAgent = (window.navigator.userAgent || "").toLowerCase();
+    const isIosDevice =
+      /iphone|ipad|ipod/.test(userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     setIsIOS(isIosDevice);
 
     // Listen for beforeinstallprompt event
@@ -70,17 +72,20 @@ export function LoginPage() {
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") {
-        setDeferredPrompt(null);
-        setIsInstalled(true);
+      try {
+        await deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === "accepted") {
+          setDeferredPrompt(null);
+          setIsInstalled(true);
+        }
+      } catch (err) {
+        console.error("Install prompt error:", err);
+        setShowIOSPrompt(true);
       }
-    } else if (isIOS) {
-      setShowIOSPrompt(true);
     } else {
-      // Fallback for browsers
-      alert("To install this app on your phone: tap your browser menu (⋮ or Share) and select 'Add to Home Screen' or 'Install App'.");
+      // For iOS Safari / Chrome or browsers without beforeinstallprompt, show step-by-step guide
+      setShowIOSPrompt(true);
     }
   };
 
@@ -170,9 +175,6 @@ export function LoginPage() {
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-snug">
               Precision Irrigation & Operations Portal.
             </h2>
-            <p className="text-xs sm:text-sm text-white/70 font-light leading-relaxed">
-              Centralized management for government projects, inventory ledger, and workforce.
-            </p>
 
             {/* Desktop PWA Install Card (Hidden on Mobile) */}
             {!isMobile && !isInstalled && (
@@ -292,67 +294,81 @@ export function LoginPage() {
                 <ArrowRight size={16} />
               </Button>
             </form>
-
-          {/* iOS Safari Install Guide Modal */}
-          {showIOSPrompt && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-4">
-              <div className="bg-white rounded-[16px] max-w-sm w-full p-5 space-y-4 border border-[#E4E1D8] shadow-2xl animate-in slide-in-from-bottom duration-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-[8px] bg-[#2F6F5E] text-white flex items-center justify-center">
-                      <Sprout size={16} />
-                    </div>
-                    <span className="text-sm font-bold text-[#14213D]">Install on iPhone / iPad</span>
-                  </div>
-                  <button
-                    onClick={() => setShowIOSPrompt(false)}
-                    className="text-[#8C97AB] hover:text-[#14213D] p-1"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                <ol className="space-y-2.5 text-xs text-[#52607D]">
-                  <li className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center shrink-0">
-                      1
-                    </span>
-                    <span>
-                      Tap the <strong className="text-[#14213D]">Share</strong> button in Safari's bottom toolbar (<Share size={12} className="inline text-[#2F6F5E]" />).
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center shrink-0">
-                      2
-                    </span>
-                    <span>
-                      Scroll down and select <strong className="text-[#14213D]">"Add to Home Screen"</strong>.
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center shrink-0">
-                      3
-                    </span>
-                    <span>
-                      Tap <strong className="text-[#14213D]">Add</strong> in the top right to launch Cheran from your home screen.
-                    </span>
-                  </li>
-                </ol>
-
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowIOSPrompt(false)}
-                  className="w-full font-bold"
-                >
-                  Got It
-                </Button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* iOS & Mobile Install Guide Modal */}
+      {showIOSPrompt && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-4"
+          onClick={() => setShowIOSPrompt(false)}
+        >
+          <div
+            className="bg-white rounded-[16px] max-w-sm w-full p-5 space-y-4 border border-[#E4E1D8] shadow-2xl animate-in slide-in-from-bottom duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-[8px] bg-[#2F6F5E] text-white flex items-center justify-center">
+                  <Sprout size={16} />
+                </div>
+                <div>
+                  <span className="text-sm font-bold text-[#14213D] block">
+                    Install Cheran App
+                  </span>
+                  <span className="text-[10px] text-[#52607D] block">
+                    Add to iPhone / iPad Home Screen
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIOSPrompt(false)}
+                className="text-[#8C97AB] hover:text-[#14213D] p-1 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <ol className="space-y-3 text-xs text-[#52607D]">
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">
+                  1
+                </span>
+                <span>
+                  Tap the <strong className="text-[#14213D]">Share</strong> button in Safari's bottom toolbar (<Share size={13} className="inline text-[#2F6F5E] align-middle" />) or browser menu.
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">
+                  2
+                </span>
+                <span>
+                  Scroll down the share sheet and select <strong className="text-[#14213D]">"Add to Home Screen"</strong>.
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center shrink-0 text-[11px] mt-0.5">
+                  3
+                </span>
+                <span>
+                  Tap <strong className="text-[#14213D]">Add</strong> in the top-right corner to install Cheran on your home screen.
+                </span>
+              </li>
+            </ol>
+
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowIOSPrompt(false)}
+              className="w-full font-bold"
+            >
+              Got It
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

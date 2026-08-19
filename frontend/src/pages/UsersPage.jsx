@@ -177,7 +177,7 @@ export function UsersPage() {
               Refresh
             </Button>
             <Button variant="primary" icon={UserPlus} onClick={handleOpenAdd}>
-              Add User
+              Add
             </Button>
           </div>
         }
@@ -197,7 +197,7 @@ export function UsersPage() {
               description="No user accounts match your search filters. Click 'Add User' to create a new user account."
               action={
                 <Button variant="primary" icon={UserPlus} onClick={handleOpenAdd}>
-                  Add New User
+                  Add
                 </Button>
               }
             />
@@ -415,7 +415,7 @@ export function UsersPage() {
               Cancel
             </Button>
             <Button variant="primary" type="submit" loading={saving}>
-              {editingUser ? "Save Changes" : "Create User"}
+              {editingUser ? "Save" : "Create"}
             </Button>
           </div>
         </form>
@@ -446,7 +446,7 @@ export function UsersPage() {
               onClick={handleConfirmDelete}
               icon={Trash2}
             >
-              Delete User
+              Delete
             </Button>
           </div>
         </div>
