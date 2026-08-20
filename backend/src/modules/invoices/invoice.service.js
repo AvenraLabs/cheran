@@ -11,7 +11,7 @@ import Customer from "../customers/customer.model.js";
 import GovernmentProject from "../projects/project.model.js";
 import Dealer from "../dealers/dealer.model.js";
 import DealerCommission from "../dealers/dealer-commission.model.js";
-import { recalculateItemStock } from "../inventory/inventory.service.js";
+import { recalculateItemStock, applyStockMovement } from "../inventory/inventory.service.js";
 import AppError from "../../shared/appError.js";
 
 /**
@@ -185,10 +185,11 @@ export async function createInvoice({
         throw new AppError(`Invalid unit price for item '${itemRecord.name}'`, 400);
       }
 
-      // Check stock availability
+      // Check stock availability with exclusive row lock to prevent concurrent race condition overselling
       if (!allowNegativeStockSetting) {
         const stockRecord = await InventoryStock.findOne({
           where: { item_id: itemRecord.id },
+          lock: transaction.LOCK.UPDATE,
           transaction,
         });
 
@@ -262,24 +263,19 @@ export async function createInvoice({
         { transaction }
       );
 
-      // Create Inventory Movement OUT (DISPATCH)
-      await InventoryMovement.create(
-        {
-          item_id: itemLine.item_id,
-          movement_type: "DISPATCH",
-          quantity: itemLine.quantity,
-          unit_id: itemLine.unit_id,
-          reference_type: "INVOICE",
-          reference_id: invoice.id,
-          movement_date: invoice_date,
-          unit_cost: itemLine.unit_price,
-          notes: `Invoice #${cleanInvoiceNo} (${invoice_type})`,
-        },
-        { transaction }
-      );
-
-      // Update cached on-hand stock
-      await recalculateItemStock(itemLine.item_id, transaction);
+      // Atomic O(1) Inventory Movement OUT (DISPATCH)
+      await applyStockMovement({
+        itemId: itemLine.item_id,
+        movementType: "DISPATCH",
+        quantity: itemLine.quantity,
+        unitId: itemLine.unit_id,
+        referenceType: "INVOICE",
+        referenceId: invoice.id,
+        movementDate: invoice_date,
+        unitCost: itemLine.unit_price,
+        notes: `Invoice #${cleanInvoiceNo} (${invoice_type})`,
+        transaction,
+      });
     }
 
     // 7. Calculate Dealer Commission on NET ITEM TOTAL if dealer present
@@ -461,22 +457,17 @@ export async function cancelInvoice(id, reason = null) {
   return await db.transaction(async (transaction) => {
     // 1. Create reversal movements for all invoice items
     for (const line of invoice.items || []) {
-      await InventoryMovement.create(
-        {
-          item_id: line.item_id,
-          movement_type: "REVERSAL",
-          quantity: line.quantity,
-          unit_id: line.unit_id,
-          reference_type: "INVOICE_CANCELLATION",
-          reference_id: invoice.id,
-          movement_date: new Date().toISOString().split("T")[0],
-          notes: `Reversal of Invoice #${invoice.invoice_number} cancellation: ${reason || "User cancelled"}`,
-        },
-        { transaction }
-      );
-
-      // Restore inventory stock
-      await recalculateItemStock(line.item_id, transaction);
+      await applyStockMovement({
+        itemId: line.item_id,
+        movementType: "REVERSAL",
+        quantity: line.quantity,
+        unitId: line.unit_id,
+        referenceType: "INVOICE_CANCELLATION",
+        referenceId: invoice.id,
+        movementDate: new Date().toISOString().split("T")[0],
+        notes: `Reversal of Invoice #${invoice.invoice_number} cancellation: ${reason || "User cancelled"}`,
+        transaction,
+      });
     }
 
     // 2. Cancel linked dealer commission if project was linked

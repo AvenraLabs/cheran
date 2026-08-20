@@ -53,7 +53,26 @@ export const umzugSeeders = new Umzug({
 });
 
 export async function runAutomatedMigrations() {
+  if (process.env.AUTO_MIGRATE === "false") {
+    console.log("⏭️ AUTO_MIGRATE is set to false. Skipping startup migration check.");
+    return;
+  }
+
+  const LOCK_ID = 884729104; // Unique 64-bit integer advisory lock key for Cheran ERP migrations
+  let lockAcquired = false;
+
   try {
+    // Attempt to acquire an advisory lock to prevent multiple PM2 instances from racing
+    const [lockResult] = await db.query(`SELECT pg_try_advisory_lock(${LOCK_ID}) AS acquired;`);
+    lockAcquired = lockResult[0]?.acquired === true || lockResult[0]?.acquired === "t";
+
+    if (!lockAcquired) {
+      console.log("🔒 Another instance is currently executing migrations. Waiting for schema update...");
+      // Block until lock is released by other instance
+      await db.query(`SELECT pg_advisory_lock(${LOCK_ID});`);
+      lockAcquired = true;
+    }
+
     console.log("🔄 Checking and executing pending database migrations...");
     const pending = await umzugMigrations.pending();
     if (pending.length > 0) {
@@ -74,5 +93,13 @@ export async function runAutomatedMigrations() {
   } catch (error) {
     console.error("❌ Migration runner error:", error);
     throw error;
+  } finally {
+    if (lockAcquired) {
+      try {
+        await db.query(`SELECT pg_advisory_unlock(${LOCK_ID});`);
+      } catch {
+        // ignore unlock error on process exit
+      }
+    }
   }
 }

@@ -78,7 +78,7 @@ export function Sidebar({ isOpen, onClose }) {
           { label: "Reports & Analytics", path: "/reports", icon: BarChart3 },
           { label: "User Management", path: "/users", icon: ShieldCheck },
           { label: "Scheme GST Settings", path: "/settings", icon: Settings },
-          { label: "Invoice Bulk Upload (One-Time)", path: "/imports/invoices", icon: FileJson },
+          { label: "Invoice Bulk Upload", path: "/imports/invoices", icon: FileJson },
         ],
       },
     ];

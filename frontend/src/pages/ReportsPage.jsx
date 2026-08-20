@@ -51,7 +51,7 @@ export function ReportsPage() {
       if (procEndDate) procParams.endDate = procEndDate;
 
       const [finRes, procRes, govtRes, dealersRes, expensesRes, employeesRes] =
-        await Promise.all([
+        await Promise.allSettled([
           api.get("/reports/financial-overview", { params: procParams }),
           api.get("/reports/procurement", { params: procParams }),
           api.get("/reports/govt-funds"),
@@ -60,12 +60,24 @@ export function ReportsPage() {
           api.get("/reports/employees"),
         ]);
 
-      setFinancialOverview(finRes.data?.data || null);
-      setProcurementReport(procRes.data?.data || null);
-      setGovtFundsReport(govtRes.data?.data || null);
-      setDealerReport(dealersRes.data?.data?.dealers || []);
-      setExpenseReport(expensesRes.data?.data || { totalExpenses: 0, byCategory: [] });
-      setEmployeeReport(employeesRes.data?.data?.employees || []);
+      if (finRes.status === "fulfilled") {
+        setFinancialOverview(finRes.value?.data || finRes.value || null);
+      }
+      if (procRes.status === "fulfilled") {
+        setProcurementReport(procRes.value?.data || procRes.value || null);
+      }
+      if (govtRes.status === "fulfilled") {
+        setGovtFundsReport(govtRes.value?.data || govtRes.value || null);
+      }
+      if (dealersRes.status === "fulfilled") {
+        setDealerReport(dealersRes.value?.data?.dealers || dealersRes.value?.dealers || []);
+      }
+      if (expensesRes.status === "fulfilled") {
+        setExpenseReport(expensesRes.value?.data || expensesRes.value || { totalExpenses: 0, byCategory: [] });
+      }
+      if (employeesRes.status === "fulfilled") {
+        setEmployeeReport(employeesRes.value?.data?.employees || employeesRes.value?.employees || []);
+      }
     } catch (err) {
       console.error("Failed to load analytics reports:", err);
     } finally {

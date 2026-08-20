@@ -13,30 +13,93 @@ import Supplier from "../suppliers/supplier.model.js";
 import AppError from "../../shared/appError.js";
 
 export const IN_MOVEMENT_TYPES = ["OPENING", "PURCHASE", "PRODUCTION_IN", "ADJUSTMENT_IN", "REVERSAL"];
-export const OUT_MOVEMENT_TYPES = ["PRODUCTION_OUT", "PRODUCTION_WASTAGE", "DISPATCH", "SALE", "ADJUSTMENT_OUT"];
+export const OUT_MOVEMENT_TYPES = ["PRODUCTION_OUT", "PRODUCTION_WASTAGE", "DISPATCH", "SALE", "ADJUSTMENT_OUT", "ISSUE"];
 
 /**
- * Recalculate true on-hand quantity from inventory_movements source of truth
+ * Fast O(1) Atomic Inventory Movement Recording with Row Lock.
+ * Updates inventory_stock in constant time without scanning entire historical ledger.
  */
-export async function recalculateItemStock(itemId, transaction = null) {
-  const movements = await InventoryMovement.findAll({
-    where: { item_id: itemId },
-    transaction,
-  });
-
-  let totalIn = 0;
-  let totalOut = 0;
-
-  for (const m of movements) {
-    const qty = parseFloat(m.quantity) || 0;
-    if (IN_MOVEMENT_TYPES.includes(m.movement_type)) {
-      totalIn += qty;
-    } else if (OUT_MOVEMENT_TYPES.includes(m.movement_type)) {
-      totalOut += qty;
-    }
+export async function applyStockMovement({
+  itemId,
+  movementType,
+  quantity,
+  unitId = null,
+  referenceType = null,
+  referenceId = null,
+  movementDate = new Date().toISOString().split("T")[0],
+  unitCost = null,
+  notes = null,
+  transaction = null,
+}) {
+  const qty = parseFloat(quantity);
+  if (isNaN(qty) || qty <= 0) {
+    throw new AppError("Movement quantity must be a positive number", 400);
   }
 
-  const netQuantity = parseFloat((totalIn - totalOut).toFixed(3));
+  const isPositive = IN_MOVEMENT_TYPES.includes(movementType);
+  const delta = isPositive ? qty : -qty;
+
+  // 1. Lock or initialize InventoryStock row for atomic update
+  let stockRecord = await InventoryStock.findOne({
+    where: { item_id: itemId },
+    transaction,
+    lock: transaction?.LOCK?.UPDATE || false,
+  });
+
+  if (!stockRecord) {
+    stockRecord = await InventoryStock.create(
+      { item_id: itemId, quantity_on_hand: 0 },
+      { transaction }
+    );
+  }
+
+  const currentQty = parseFloat(stockRecord.quantity_on_hand) || 0;
+  const newQty = parseFloat((currentQty + delta).toFixed(3));
+
+  // 2. Insert audit movement record
+  const movement = await InventoryMovement.create(
+    {
+      item_id: itemId,
+      movement_type: movementType,
+      quantity: qty,
+      unit_id: unitId,
+      reference_type: referenceType,
+      reference_id: referenceId,
+      movement_date: movementDate,
+      unit_cost: unitCost,
+      notes,
+    },
+    { transaction }
+  );
+
+  // 3. Atomically update balance
+  await stockRecord.update({ quantity_on_hand: newQty }, { transaction });
+
+  return {
+    movement,
+    current_stock: newQty,
+  };
+}
+
+/**
+ * High-performance SQL Aggregation for Ledger Auditing & Reconciliation.
+ * Executes in a single query directly on the PostgreSQL engine.
+ */
+export async function recalculateItemStock(itemId, transaction = null) {
+  const result = await db.query(
+    `SELECT 
+       COALESCE(SUM(CASE WHEN movement_type = ANY(ARRAY['OPENING','PURCHASE','PRODUCTION_IN','ADJUSTMENT_IN','REVERSAL']) THEN quantity ELSE 0 END), 0) -
+       COALESCE(SUM(CASE WHEN movement_type = ANY(ARRAY['PRODUCTION_OUT','PRODUCTION_WASTAGE','DISPATCH','SALE','ADJUSTMENT_OUT','ISSUE']) THEN quantity ELSE 0 END), 0) AS net_quantity
+     FROM inventory_movements
+     WHERE item_id = :itemId`,
+    {
+      replacements: { itemId },
+      type: db.QueryTypes.SELECT,
+      transaction,
+    }
+  );
+
+  const netQuantity = parseFloat(parseFloat(result[0]?.net_quantity || 0).toFixed(3));
 
   const [stockRecord] = await InventoryStock.findOrCreate({
     where: { item_id: itemId },
@@ -91,23 +154,19 @@ export async function createOpeningStock({
   }
 
   return await db.transaction(async (transaction) => {
-    const movement = await InventoryMovement.create(
-      {
-        item_id: item.id,
-        movement_type: "OPENING",
-        quantity: qty,
-        unit_id: unit_id || item.unit_id,
-        reference_type: "OPENING_STOCK",
-        movement_date,
-      },
-      { transaction }
-    );
-
-    const newStock = await recalculateItemStock(item.id, transaction);
+    const result = await applyStockMovement({
+      itemId: item.id,
+      movementType: "OPENING",
+      quantity: qty,
+      unitId: unit_id || item.unit_id,
+      referenceType: "OPENING_STOCK",
+      movementDate: movement_date,
+      transaction,
+    });
 
     return {
-      movement,
-      current_stock: newStock,
+      movement: result.movement,
+      current_stock: result.current_stock,
     };
   });
 }
@@ -194,7 +253,7 @@ export async function createStockReceipt({
       { transaction }
     );
 
-    // 2. Create Stock Receipt Items & Inventory Movements IN
+    // 2. Create Stock Receipt Items & Atomic Inventory Movements IN
     for (const line of validatedItems) {
       await StockReceiptItem.create(
         {
@@ -208,23 +267,18 @@ export async function createStockReceipt({
         { transaction }
       );
 
-      // Create Movement IN (PURCHASE)
-      await InventoryMovement.create(
-        {
-          item_id: line.item_id,
-          movement_type: "PURCHASE",
-          quantity: line.quantity,
-          unit_id: line.unit_id,
-          reference_type: "STOCK_RECEIPT",
-          reference_id: receipt.id,
-          movement_date: receipt_date,
-          unit_cost: line.unit_price,
-        },
-        { transaction }
-      );
-
-      // Update cached on-hand stock
-      await recalculateItemStock(line.item_id, transaction);
+      // Atomic O(1) Stock Movement IN (PURCHASE) with row lock
+      await applyStockMovement({
+        itemId: line.item_id,
+        movementType: "PURCHASE",
+        quantity: line.quantity,
+        unitId: line.unit_id,
+        referenceType: "STOCK_RECEIPT",
+        referenceId: receipt.id,
+        movementDate: receipt_date,
+        unitCost: line.unit_price,
+        transaction,
+      });
     }
 
     return receipt;
@@ -494,38 +548,31 @@ export async function createProductionEntry({
         { transaction }
       );
 
-      // Movement for actual consumption
-      await InventoryMovement.create(
-        {
-          item_id: mat.item.id,
-          movement_type: "PRODUCTION_OUT",
-          quantity: mat.quantity_used,
-          unit_id: mat.unit_id,
-          reference_type: "PRODUCTION_ENTRY",
-          reference_id: productionEntry.id,
-          movement_date: production_date,
-        },
-        { transaction }
-      );
+      // Atomic Stock Movement OUT (PRODUCTION_OUT)
+      await applyStockMovement({
+        itemId: mat.item.id,
+        movementType: "PRODUCTION_OUT",
+        quantity: mat.quantity_used,
+        unitId: mat.unit_id,
+        referenceType: "PRODUCTION_ENTRY",
+        referenceId: productionEntry.id,
+        movementDate: production_date,
+        transaction,
+      });
 
-      // Movement for wastage (if any)
+      // Atomic Stock Movement OUT for wastage (if any)
       if (mat.wastage_quantity > 0) {
-        await InventoryMovement.create(
-          {
-            item_id: mat.item.id,
-            movement_type: "PRODUCTION_WASTAGE",
-            quantity: mat.wastage_quantity,
-            unit_id: mat.unit_id,
-            reference_type: "PRODUCTION_ENTRY",
-            reference_id: productionEntry.id,
-            movement_date: production_date,
-          },
-          { transaction }
-        );
+        await applyStockMovement({
+          itemId: mat.item.id,
+          movementType: "PRODUCTION_WASTAGE",
+          quantity: mat.wastage_quantity,
+          unitId: mat.unit_id,
+          referenceType: "PRODUCTION_ENTRY",
+          referenceId: productionEntry.id,
+          movementDate: production_date,
+          transaction,
+        });
       }
-
-      // Recalculate material stock
-      await recalculateItemStock(mat.item.id, transaction);
     }
 
     // 5. Create ProductionOutput records & Movement (PRODUCTION_IN)
@@ -540,22 +587,17 @@ export async function createProductionEntry({
         { transaction }
       );
 
-      // Movement for finished good production IN
-      await InventoryMovement.create(
-        {
-          item_id: out.item.id,
-          movement_type: "PRODUCTION_IN",
-          quantity: out.quantity_produced,
-          unit_id: out.unit_id,
-          reference_type: "PRODUCTION_ENTRY",
-          reference_id: productionEntry.id,
-          movement_date: production_date,
-        },
-        { transaction }
-      );
-
-      // Recalculate finished good stock
-      await recalculateItemStock(out.item.id, transaction);
+      // Atomic Stock Movement IN (PRODUCTION_IN)
+      await applyStockMovement({
+        itemId: out.item.id,
+        movementType: "PRODUCTION_IN",
+        quantity: out.quantity_produced,
+        unitId: out.unit_id,
+        referenceType: "PRODUCTION_ENTRY",
+        referenceId: productionEntry.id,
+        movementDate: production_date,
+        transaction,
+      });
     }
 
     return productionEntry;
@@ -704,23 +746,36 @@ export async function createStockAdjustment({
   }
 
   return await db.transaction(async (transaction) => {
-    const movement = await InventoryMovement.create(
-      {
-        item_id: item.id,
-        movement_type: adjustment_type,
-        quantity: qty,
-        unit_id: item.unit_id,
-        reference_type: "MANUAL_ADJUSTMENT",
-        movement_date,
-      },
-      { transaction }
-    );
+    // If reducing stock, validate available on-hand balance with exclusive row lock
+    if (adjustment_type === "ADJUSTMENT_OUT") {
+      const stock = await InventoryStock.findOne({
+        where: { item_id: item.id },
+        lock: transaction.LOCK.UPDATE,
+        transaction,
+      });
 
-    const newStock = await recalculateItemStock(item.id, transaction);
+      const available = stock ? parseFloat(stock.quantity_on_hand) : 0.0;
+      if (available < qty) {
+        throw new AppError(
+          `Cannot reduce stock by ${qty} ${item.unit?.symbol || "units"}. Available on-hand is only ${available} ${item.unit?.symbol || "units"}.`,
+          400
+        );
+      }
+    }
+
+    const result = await applyStockMovement({
+      itemId: item.id,
+      movementType: adjustment_type,
+      quantity: qty,
+      unitId: item.unit_id,
+      referenceType: "MANUAL_ADJUSTMENT",
+      movementDate: movement_date,
+      transaction,
+    });
 
     return {
-      movement,
-      current_stock: newStock,
+      movement: result.movement,
+      current_stock: result.current_stock,
     };
   });
 }

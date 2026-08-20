@@ -49,7 +49,7 @@ export async function getProcurementReport({ startDate, endDate } = {}) {
       {
         model: Supplier,
         as: "supplier",
-        attributes: ["id", "name", "contact_person", "phone"],
+        attributes: ["id", "name", "phone"],
       },
       {
         model: StockReceiptItem,
@@ -301,7 +301,7 @@ export async function getFinancialOverviewReport({ startDate, endDate } = {}) {
       "total_amount",
       "paid_amount",
       "payment_status",
-      "sale_type",
+      "invoice_type",
     ],
   });
 

@@ -7,7 +7,7 @@ import LoadOrderBatch from "./load-order-batch.model.js";
 import Item from "../items/item.model.js";
 import Unit from "../units/unit.model.js";
 import InventoryMovement from "../inventory/inventory-movement.model.js";
-import { recalculateItemStock } from "../inventory/inventory.service.js";
+import { recalculateItemStock, applyStockMovement } from "../inventory/inventory.service.js";
 import { normalizeApplicationId } from "../../utils/normalization.js";
 import AppError from "../../shared/appError.js";
 
@@ -113,23 +113,18 @@ export async function commitLoadOrder({
     for (const item of sanitizedActualItems) {
       if (item.quantity > 0) {
         const itemRecord = itemCache.get(item.item_id);
-        await InventoryMovement.create(
-          {
-            item_id: item.item_id,
-            movement_type: "ISSUE",
-            quantity: item.quantity,
-            unit_id: itemRecord?.unit_id || null,
-            reference_type: "LOAD_ORDER_BATCH",
-            reference_id: batch.id,
-            movement_date: cleanInvoiceDate,
-            unit_cost: item.unit_price,
-            notes: `Load Order Batch #${batchNumber} dispatch`,
-          },
-          { transaction }
-        );
-
-        // Recalculate on-hand inventory stock
-        await recalculateItemStock(item.item_id, transaction);
+        await applyStockMovement({
+          itemId: item.item_id,
+          movementType: "ISSUE",
+          quantity: item.quantity,
+          unitId: itemRecord?.unit_id || null,
+          referenceType: "LOAD_ORDER_BATCH",
+          referenceId: batch.id,
+          movementDate: cleanInvoiceDate,
+          unitCost: item.unit_price,
+          notes: `Load Order Batch #${batchNumber} dispatch`,
+          transaction,
+        });
       }
     }
 
