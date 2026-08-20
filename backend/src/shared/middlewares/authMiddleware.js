@@ -69,15 +69,19 @@ export const authorize = (...allowedRoles) => {
 
 /**
  * Global Role Module Access Middleware:
- * For 'USER' role: strictly allows ONLY the 4 authorized modules:
- * 1. Dashboard (/api/dashboard)
- * 2. Govt Projects (/api/government/projects)
- * 3. Excel Imports (/api/government/imports)
- * 4. Dealers Directory (/api/dealers)
- * + Reference Statuses (/api/government/statuses) & Auth (/api/auth)
- *
- * All other modules (Invoices, Inventory, Items, Units, Suppliers, Customers, Sales, Expenses, Employees, Reports, Settings, Tally, Users)
- * are restricted to ADMIN role.
+ * 1. 'ADMIN': Full access to all modules and configuration.
+ * 2. 'USER': Allowed:
+ *    - Dashboard (/api/dashboard)
+ *    - Govt Projects (/api/government/projects, /api/government/statuses)
+ *    - Direct Sales (/api/sales, /api/customers, /api/items, /api/units)
+ *    - Load Order Upload (/api/invoices/load-order)
+ *    - Excel Imports (/api/government/imports)
+ *    - Dealers Directory (/api/dealers)
+ * 3. 'DEALER': Allowed ONLY:
+ *    - Govt Projects (/api/government/projects, /api/government/statuses)
+ *    - Excel Imports (/api/government/imports)
+ *    - Dealers Directory (/api/dealers)
+ *    - Auth (/api/auth) & Health (/api/health)
  */
 export const enforceRoleModuleAccess = (req, res, next) => {
   if (!req.user) {
@@ -92,28 +96,60 @@ export const enforceRoleModuleAccess = (req, res, next) => {
   // Full path prefix check
   const fullPath = (req.originalUrl || req.url || "").split("?")[0];
 
-  const allowedPrefixes = [
-    "/api/auth",
-    "/api/dashboard",
-    "/api/government/projects",
-    "/api/government/imports",
-    "/api/dealers",
-    "/api/government/statuses",
-    "/api/health",
-  ];
-
-  const isAllowed = allowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
-
-  if (!isAllowed) {
-    return next(
-      new AppError(
-        `Access forbidden. User role is restricted to Dashboard, Govt Projects, Excel Imports, and Dealers Directory.`,
-        403
-      )
-    );
+  // Common infrastructure routes
+  const commonPrefixes = ["/api/auth", "/api/health"];
+  if (commonPrefixes.some((prefix) => fullPath.startsWith(prefix))) {
+    return next();
   }
 
-  next();
+  if (role === "DEALER") {
+    const dealerAllowedPrefixes = [
+      "/api/government/projects",
+      "/api/government/statuses",
+      "/api/government/imports",
+      "/api/dealers",
+    ];
+
+    const isAllowed = dealerAllowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
+    if (!isAllowed) {
+      return next(
+        new AppError(
+          `Access forbidden. Dealer role is restricted to Govt Projects, Excel Imports, and Dealers Directory.`,
+          403
+        )
+      );
+    }
+    return next();
+  }
+
+  // 'USER' role
+  if (role === "USER") {
+    const userAllowedPrefixes = [
+      "/api/dashboard",
+      "/api/government/projects",
+      "/api/government/statuses",
+      "/api/sales",
+      "/api/customers",
+      "/api/items",
+      "/api/units",
+      "/api/invoices/load-order",
+      "/api/government/imports",
+      "/api/dealers",
+    ];
+
+    const isAllowed = userAllowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
+    if (!isAllowed) {
+      return next(
+        new AppError(
+          `Access forbidden. User role is restricted to Dashboard, Govt Projects, Direct Sales, Load Order, Excel Imports, and Dealers Directory.`,
+          403
+        )
+      );
+    }
+    return next();
+  }
+
+  return next();
 };
 
 export default requireAuth;

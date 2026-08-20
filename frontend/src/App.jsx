@@ -28,6 +28,7 @@ import EmployeesPage from "./pages/EmployeesPage.jsx";
 import SalaryPage from "./pages/SalaryPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
+import SettingsPage from "./pages/SettingsPage.jsx";
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -50,15 +51,46 @@ function ProtectedLayout() {
   return <Layout />;
 }
 
+/**
+ * Route guard for Admin-only pages
+ */
 function AdminRoute({ children }) {
   const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
+  const role = (user?.role || "USER").toUpperCase();
 
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
+  if (role !== "ADMIN") {
+    return <Navigate to={role === "DEALER" ? "/projects" : "/"} replace />;
   }
 
   return children;
+}
+
+/**
+ * Route guard for User + Admin pages (excludes DEALER)
+ */
+function UserOrAdminRoute({ children }) {
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+
+  if (role === "DEALER") {
+    return <Navigate to="/projects" replace />;
+  }
+
+  return children;
+}
+
+/**
+ * Index Route Handler: Dealers land on /projects, others on Dashboard
+ */
+function IndexRoute() {
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+
+  if (role === "DEALER") {
+    return <Navigate to="/projects" replace />;
+  }
+
+  return <DashboardPage />;
 }
 
 export function App() {
@@ -68,32 +100,156 @@ export function App() {
         {/* Public Login Route */}
         <Route path="/login" element={<LoginPage />} />
 
-        {/* Protected Dashboard & Operations Routes */}
+        {/* Protected Application Routes */}
         <Route path="/" element={<ProtectedLayout />}>
-          {/* Operations & Government (Allowed for USER & ADMIN) */}
-          <Route index element={<DashboardPage />} />
+          {/* Index Route */}
+          <Route index element={<IndexRoute />} />
+
+          {/* Common Routes for All 3 Roles (ADMIN, USER, DEALER) */}
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
-          <Route path="sales" element={<DirectSalesPage />} />
-          <Route path="sales/new" element={<CreateDirectSalePage />} />
           <Route path="imports" element={<ImportsPage />} />
-          <Route path="imports/invoices" element={<InvoiceBulkUploadPage />} />
-          <Route path="imports/load-order" element={<LoadOrderUploadPage />} />
           <Route path="dealers" element={<DealersPage />} />
 
+          {/* Operations Routes (Allowed for USER & ADMIN, Forbidden for DEALER) */}
+          <Route
+            path="sales"
+            element={
+              <UserOrAdminRoute>
+                <DirectSalesPage />
+              </UserOrAdminRoute>
+            }
+          />
+          <Route
+            path="sales/new"
+            element={
+              <UserOrAdminRoute>
+                <CreateDirectSalePage />
+              </UserOrAdminRoute>
+            }
+          />
+          <Route
+            path="imports/load-order"
+            element={
+              <UserOrAdminRoute>
+                <LoadOrderUploadPage />
+              </UserOrAdminRoute>
+            }
+          />
+
           {/* Admin-Only Routes */}
-          <Route path="inventory" element={<AdminRoute><InventoryStockPage /></AdminRoute>} />
-          <Route path="inventory/receipts" element={<AdminRoute><StockReceiptsPage /></AdminRoute>} />
-          <Route path="inventory/production" element={<AdminRoute><ProductionPage /></AdminRoute>} />
-          <Route path="items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
-          <Route path="units" element={<AdminRoute><UnitsPage /></AdminRoute>} />
-          <Route path="suppliers" element={<AdminRoute><SuppliersPage /></AdminRoute>} />
-          <Route path="customers" element={<AdminRoute><CustomersPage /></AdminRoute>} />
-          <Route path="expenses" element={<AdminRoute><ExpensesPage /></AdminRoute>} />
-          <Route path="employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
-          <Route path="salary" element={<AdminRoute><SalaryPage /></AdminRoute>} />
-          <Route path="reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
-          <Route path="users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+          <Route
+            path="inventory"
+            element={
+              <AdminRoute>
+                <InventoryStockPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="inventory/receipts"
+            element={
+              <AdminRoute>
+                <StockReceiptsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="inventory/production"
+            element={
+              <AdminRoute>
+                <ProductionPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="items"
+            element={
+              <AdminRoute>
+                <ItemsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="units"
+            element={
+              <AdminRoute>
+                <UnitsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="suppliers"
+            element={
+              <AdminRoute>
+                <SuppliersPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="customers"
+            element={
+              <AdminRoute>
+                <CustomersPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="expenses"
+            element={
+              <AdminRoute>
+                <ExpensesPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="employees"
+            element={
+              <AdminRoute>
+                <EmployeesPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="salary"
+            element={
+              <AdminRoute>
+                <SalaryPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="reports"
+            element={
+              <AdminRoute>
+                <ReportsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="users"
+            element={
+              <AdminRoute>
+                <UsersPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <AdminRoute>
+                <SettingsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="imports/invoices"
+            element={
+              <AdminRoute>
+                <InvoiceBulkUploadPage />
+              </AdminRoute>
+            }
+          />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -77,6 +77,7 @@ export async function createInvoice({
         current_status: "INVOICED",
         current_status_date: invoice_date,
         invoice_date: invoice_date,
+        invoice_number: cleanInvoiceNo,
         invoice_amount: 0, // will be updated below once grandTotal is calculated
         dealer_id: resolvedDealerId || null,
       });
@@ -301,6 +302,17 @@ export async function createInvoice({
           { transaction }
         );
       }
+    }
+
+    if (resolvedProjectId) {
+      await GovernmentProject.update(
+        {
+          invoice_amount: grandTotal,
+          invoice_date: invoice_date,
+          invoice_number: cleanInvoiceNo,
+        },
+        { where: { id: resolvedProjectId }, transaction }
+      );
     }
 
     return invoice;

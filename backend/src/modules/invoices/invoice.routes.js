@@ -28,6 +28,9 @@ router.post(
   invoiceController.commitLoadOrder
 );
 
+router.get("/load-order/batches", invoiceController.listLoadOrderBatches);
+router.get("/load-order/batches/:id", invoiceController.getLoadOrderBatchById);
+
 // 2. Standard Invoice CRUD
 router
   .route("/")

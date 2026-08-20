@@ -19,6 +19,11 @@ const GovernmentStatus = db.define(
       allowNull: false,
       defaultValue: true,
     },
+    sequence_order: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 999,
+    },
   },
   {
     tableName: "government_statuses",

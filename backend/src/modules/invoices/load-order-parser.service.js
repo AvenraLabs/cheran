@@ -33,6 +33,7 @@ export async function parseLoadOrderBuffer(fileBuffer) {
 
   const extractedAppIds = new Set();
   const rawProjectDetails = new Map();
+  let overallDetectedDate = null;
 
   // Pattern for typical Govt Project / Application IDs (e.g. H-DPR-dpr-..., A-DPR-..., H-KGI-...)
   const appIdRegex = /([A-Za-z]-[A-Za-z0-9]{2,6}-[A-Za-z0-9]+-\d+-\d{2,4}-\d{2,4})/i;
@@ -56,10 +57,31 @@ export async function parseLoadOrderBuffer(fileBuffer) {
     let villageColIndex = -1;
     let blockColIndex = -1;
     let areaColIndex = -1;
+    let sheetDetectedDate = null;
 
+    // Check top 10 rows for date and column headers
     for (let r = 0; r < Math.min(rows.length, 10); r++) {
       const row = rows[r];
       if (!Array.isArray(row)) continue;
+
+      // Check if any cell in row has date format
+      for (const cell of row) {
+        if (!sheetDetectedDate && cell) {
+          if (cell instanceof Date && !isNaN(cell.getTime())) {
+            sheetDetectedDate = cell.toISOString().split("T")[0];
+          } else if (typeof cell === "string") {
+            const dateMatch = cell.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+            if (dateMatch) {
+              const p1 = parseInt(dateMatch[1], 10);
+              const p2 = parseInt(dateMatch[2], 10);
+              const yr = parseInt(dateMatch[3], 10) < 100 ? 2000 + parseInt(dateMatch[3], 10) : parseInt(dateMatch[3], 10);
+              const mm = p2 <= 12 ? String(p2).padStart(2, "0") : String(p1).padStart(2, "0");
+              const dd = p2 <= 12 ? String(p1).padStart(2, "0") : String(p2).padStart(2, "0");
+              sheetDetectedDate = `${yr}-${mm}-${dd}`;
+            }
+          }
+        }
+      }
 
       row.forEach((cell, colIdx) => {
         if (!cell || typeof cell !== "string") return;
@@ -81,6 +103,9 @@ export async function parseLoadOrderBuffer(fileBuffer) {
         }
       });
 
+      if (sheetDetectedDate && !overallDetectedDate) {
+        overallDetectedDate = sheetDetectedDate;
+      }
       if (appIdColIndex !== -1) break;
     }
 
@@ -210,7 +235,7 @@ export async function parseLoadOrderBuffer(fileBuffer) {
     totalProjectsFound: appIdsList.length,
     existingProjectsCount: existingProjects.length,
     newProjectsCount: appIdsList.length - existingProjects.length,
-    defaultInvoiceDate: todayKolkata,
+    defaultInvoiceDate: overallDetectedDate || todayKolkata,
     projects: projectsSummary,
     availableFinishedGoods: formattedFinishedGoods,
   };

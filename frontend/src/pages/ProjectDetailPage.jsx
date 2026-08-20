@@ -18,6 +18,10 @@ import {
   Percent,
   ChevronDown,
   ChevronUp,
+  ListOrdered,
+  CheckCircle2,
+  Circle,
+  Layers,
 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -34,6 +38,8 @@ export function ProjectDetailPage() {
   const [invoices, setInvoices] = useState([]);
   const [dispatchedMaterials, setDispatchedMaterials] = useState([]);
   const [commissionData, setCommissionData] = useState(null);
+  const [masterStatuses, setMasterStatuses] = useState([]);
+  const [showAllMilestones, setShowAllMilestones] = useState(true);
   const [loading, setLoading] = useState(true);
 
   // Commission Payment Modal State
@@ -48,17 +54,19 @@ export function ProjectDetailPage() {
   const loadProjectDetails = async () => {
     try {
       setLoading(true);
-      const [projRes, histRes, invRes, commRes] = await Promise.all([
+      const [projRes, histRes, invRes, commRes, statRes] = await Promise.all([
         api.get(`/government/projects/${id}`),
         api.get(`/government/projects/${id}/status-history`),
         api.get(`/government/projects/${id}/invoices`).catch(() => ({ data: { invoices: [], dispatchedMaterials: [] } })),
         api.get(`/government/projects/${id}/commission`).catch(() => ({ data: null })),
+        api.get("/government/statuses").catch(() => ({ data: { statuses: [] } })),
       ]);
       setProject(projRes.data?.project);
       setHistoryData(histRes.data?.history || []);
       setInvoices(invRes.data?.invoices || []);
       setDispatchedMaterials(invRes.data?.dispatchedMaterials || []);
       setCommissionData(commRes?.data || commRes || null);
+      setMasterStatuses(statRes.data?.statuses || []);
     } catch (err) {
       console.error("Failed to load project details:", err);
     } finally {
@@ -259,14 +267,18 @@ export function ProjectDetailPage() {
                 </p>
               </div>
               <div>
-                <span className="text-[#52607D]">Invoice Amount:</span>
-                <p className="font-semibold text-[#2F6F5E]">
-                  {project.invoice_amount ? `₹${parseFloat(project.invoice_amount).toLocaleString("en-IN")}` : "—"}
-                </p>
+                <span className="text-[#52607D]">Invoice Number:</span>
+                <p className="font-semibold font-mono text-[#14213D]">{project.invoice_number || "—"}</p>
               </div>
               <div>
                 <span className="text-[#52607D]">Invoice Date:</span>
                 <p className="font-semibold text-[#14213D]">{formatDate(project.invoice_date)}</p>
+              </div>
+              <div>
+                <span className="text-[#52607D]">Invoice Amount:</span>
+                <p className="font-semibold text-[#2F6F5E]">
+                  {project.invoice_amount ? `₹${parseFloat(project.invoice_amount).toLocaleString("en-IN")}` : "—"}
+                </p>
               </div>
               <div>
                 <span className="text-[#52607D]">Work Order No & Date:</span>
@@ -464,6 +476,24 @@ export function ProjectDetailPage() {
             </div>
           ) : (
             <>
+              {/* Scheme Tax Slab Rate Badge */}
+              {commissionData?.applicable_tax_slab && (
+                <div className="p-2.5 bg-[#EAF3F0] border border-[#2F6F5E]/20 rounded-[8px] flex items-center justify-between text-xs text-[#14213D]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#2F6F5E]">Scheme GST Deduction:</span>
+                    <span className="font-mono font-bold px-2 py-0.5 rounded-full bg-white border border-[#2F6F5E]/30 text-[#14213D] text-[11px]">
+                      {commissionData.applicable_tax_slab.gst_percentage}% GST + {commissionData.applicable_tax_slab.fittings_percentage}% Fittings
+                    </span>
+                    <span className="text-[#52607D] text-[11px]">
+                      ({commissionData.applicable_tax_slab.description || "Active Scheme Rate"})
+                    </span>
+                  </div>
+                  <div className="font-mono text-[11px] text-[#52607D]">
+                    Base Formula: Subsidy / {(1 + commissionData.applicable_tax_slab.gst_percentage / 100).toFixed(2)} / {(1 + commissionData.applicable_tax_slab.fittings_percentage / 100).toFixed(2)}
+                  </div>
+                </div>
+              )}
+
               {/* Overview KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] space-y-1">
@@ -671,46 +701,210 @@ export function ProjectDetailPage() {
           )}
         </div>
 
-        {/* Observed Status History Timeline */}
-        <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-3">
-            <History size={18} className="text-[#2F6F5E]" />
-            <h2 className="text-sm font-bold font-display text-[#14213D]">Status Change History</h2>
-          </div>
+        {/* Complete 56-Stage Government Lifecycle Roadmap & Status History */}
+        {(() => {
+          // Build normalized lookup of recorded statuses
+          const historyMap = new Map();
+          (historyData || []).forEach((h) => {
+            if (h.status) {
+              historyMap.set(h.status.trim().toUpperCase(), h);
+            }
+          });
 
-          {historyData.length === 0 ? (
-            <p className="text-xs text-[#52607D] py-4 text-center">No status transitions recorded yet.</p>
-          ) : (
-            <div className="relative pl-6 border-l-2 border-[#E4E1D8] space-y-6 my-2">
-              {historyData.map((item, index) => (
-                <div key={item.id || index} className="relative group">
-                  {/* Timeline bullet dot */}
-                  <div className="absolute -left-[27px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white bg-[#2F6F5E] shadow-xs" />
+          // Include current active status if missing from history
+          if (project?.current_status) {
+            const key = project.current_status.trim().toUpperCase();
+            if (!historyMap.has(key)) {
+              historyMap.set(key, {
+                status: project.current_status,
+                status_date: project.current_status_date,
+                observed_at: project.created_at,
+                remarks: "Current active project status",
+              });
+            }
+          }
 
-                  <div className="bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={item.status} size="sm" />
-                        {index > 0 && item.days_since_previous !== null && (
-                          <span className="text-[11px] font-semibold text-[#52607D] bg-white border border-[#E4E1D8] px-2 py-0.5 rounded-full">
-                            +{item.days_since_previous} days from prior stage
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-[#52607D]">
-                        Status Date: <strong className="text-[#14213D]">{formatDate(item.status_date)}</strong> · Observed at:{" "}
-                        {formatDateTime(item.observed_at)}
-                      </div>
-                      {item.remarks && (
-                        <div className="text-xs text-[#52607D] italic">Remarks: {item.remarks}</div>
-                      )}
-                    </div>
+          // Include INVOICED date if project has invoice_date
+          if (project?.invoice_date && !historyMap.has("INVOICED")) {
+            historyMap.set("INVOICED", {
+              status: "INVOICED",
+              status_date: project.invoice_date,
+              observed_at: project.created_at,
+              remarks: "Invoice generated from Load Order dispatch",
+            });
+          }
+
+          const rawStatuses = masterStatuses && masterStatuses.length > 0 ? masterStatuses : [];
+          const fullRoadmap = rawStatuses.map((st, idx) => {
+            const statusName = st.name;
+            const historyEntry = historyMap.get(statusName.trim().toUpperCase());
+            const isCurrent =
+              project?.current_status &&
+              project.current_status.trim().toUpperCase() === statusName.trim().toUpperCase();
+            const hasOccurred = Boolean(historyEntry);
+
+            return {
+              sequence: st.sequence_order || idx + 1,
+              name: statusName,
+              isCurrent,
+              hasOccurred,
+              status_date: historyEntry?.status_date || (isCurrent ? project?.current_status_date : null),
+              observed_at: historyEntry?.observed_at || (isCurrent ? project?.created_at : null),
+              remarks: historyEntry?.remarks || (isCurrent ? "Current active status" : null),
+              days_since_previous: historyEntry?.days_since_previous ?? null,
+            };
+          });
+
+          const recordedCount = fullRoadmap.filter((s) => s.hasOccurred).length;
+          const displayList = showAllMilestones
+            ? fullRoadmap
+            : fullRoadmap.filter((s) => s.hasOccurred || s.isCurrent);
+
+          return (
+            <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <ListOrdered size={18} className="text-[#2F6F5E]" />
+                    <h2 className="text-sm font-bold font-display text-[#14213D]">
+                      Government Scheme Lifecycle Roadmap
+                    </h2>
+                    <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      {recordedCount} of {fullRoadmap.length} Stages Recorded
+                    </span>
                   </div>
+                  <p className="text-xs text-[#52607D]">
+                    Chronological government pipeline. Shows recorded status dates and pending milestones.
+                  </p>
                 </div>
-              ))}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllMilestones(!showAllMilestones)}
+                    className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      showAllMilestones
+                        ? "bg-[#2F6F5E] text-white border-[#2F6F5E] shadow-xs"
+                        : "bg-[#FAFAF8] text-[#52607D] border-[#E4E1D8] hover:bg-gray-100"
+                    }`}
+                  >
+                    <Layers size={14} />
+                    {showAllMilestones ? "Showing All Stages (56)" : "Showing Recorded Only"}
+                  </button>
+                </div>
+              </div>
+
+              {displayList.length === 0 ? (
+                <p className="text-xs text-[#52607D] py-4 text-center">No lifecycle milestones found.</p>
+              ) : (
+                <div className="relative pl-6 border-l-2 border-[#E4E1D8] space-y-4 my-2">
+                  {displayList.map((step) => {
+                    const isPassed = step.hasOccurred;
+                    const isCurrent = step.isCurrent;
+
+                    return (
+                      <div key={step.sequence} className="relative group">
+                        {/* Bullet indicator */}
+                        <div
+                          className={`absolute -left-[31px] top-2 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center transition-all ${
+                            isCurrent
+                              ? "bg-amber-500 ring-4 ring-amber-100 scale-110"
+                              : isPassed
+                              ? "bg-[#2F6F5E] shadow-xs"
+                              : "bg-[#D1D5DB]"
+                          }`}
+                        >
+                          {isPassed && !isCurrent && (
+                            <Check size={9} className="text-white stroke-[3]" />
+                          )}
+                        </div>
+
+                        <div
+                          className={`border rounded-[10px] p-3.5 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isCurrent
+                              ? "bg-amber-50/70 border-amber-300 shadow-xs ring-1 ring-amber-200"
+                              : isPassed
+                              ? "bg-[#FAFAF8] border-[#EDEAE1] hover:bg-white"
+                              : "bg-gray-50/50 border-gray-200 opacity-65"
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-[10px] font-bold text-[#8C97AB] bg-white px-1.5 py-0.5 rounded border border-[#E4E1D8]">
+                                Stage #{step.sequence}
+                              </span>
+
+                              <span
+                                className={`text-xs font-bold ${
+                                  isCurrent
+                                    ? "text-amber-900"
+                                    : isPassed
+                                    ? "text-[#14213D]"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {step.name}
+                              </span>
+
+                              {isCurrent && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+                                  CURRENT ACTIVE STAGE
+                                </span>
+                              )}
+
+                              {isPassed && step.days_since_previous !== null && (
+                                <span className="text-[10px] font-semibold text-[#52607D] bg-white border border-[#E4E1D8] px-2 py-0.5 rounded-full">
+                                  +{step.days_since_previous} days
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-xs text-[#52607D] flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5">
+                              <div>
+                                Status Date:{" "}
+                                {step.status_date ? (
+                                  <strong className="text-[#14213D] font-mono">
+                                    {formatDate(step.status_date)}
+                                  </strong>
+                                ) : (
+                                  <span className="italic text-gray-400">— (Pending)</span>
+                                )}
+                              </div>
+
+                              {step.observed_at && (
+                                <div className="text-[11px] text-[#8C97AB]">
+                                  Observed at: {formatDateTime(step.observed_at)}
+                                </div>
+                              )}
+                            </div>
+
+                            {step.remarks && (
+                              <div className="text-[11px] text-[#52607D] italic">
+                                Remarks: {step.remarks}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            {isPassed ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                                <CheckCircle2 size={12} /> Recorded
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-medium text-gray-400 bg-white border border-gray-200 px-2.5 py-1 rounded-full">
+                                Pending
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()}
       </main>
 
       {/* Payout Record Modal */}

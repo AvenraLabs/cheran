@@ -72,6 +72,7 @@ const COLUMN_SYNONYMS = {
     "inv_amount",
     "invoice_value",
   ],
+  invoice_number: ["invoice_number", "invoice_no", "inv_no", "bill_no", "voucher_no"],
   invoice_date: ["invoice_date", "inv_date", "date_of_invoice"],
   state_restricted_amount: [
     "state_restricted_amount_rs_100",

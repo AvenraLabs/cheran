@@ -41,6 +41,7 @@ export function DashboardPage() {
   const [dealerDistData, setDealerDistData] = useState([]);
   const [districtDistData, setDistrictDistData] = useState([]);
   const [stageDurationsData, setStageDurationsData] = useState([]);
+  const [financialOverview, setFinancialOverview] = useState(null);
 
   const fetchDashboardData = async (isManualRefresh = false) => {
     try {
@@ -53,7 +54,7 @@ export function DashboardPage() {
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
       };
 
-      const [summaryRes, statusRes, dealerRes, districtRes, durationRes, allDealersRes] =
+      const [summaryRes, statusRes, dealerRes, districtRes, durationRes, allDealersRes, finRes] =
         await Promise.all([
           api.get("/dashboard/government/summary", { params }),
           api.get("/dashboard/government/status-distribution", { params }),
@@ -61,6 +62,7 @@ export function DashboardPage() {
           api.get("/dashboard/government/district-distribution", { params }),
           api.get("/dashboard/government/stage-durations"),
           api.get("/dealers?limit=250"),
+          api.get("/reports/financial-overview").catch(() => ({ data: { data: null } })),
         ]);
 
       setSummaryData(summaryRes.data);
@@ -69,6 +71,7 @@ export function DashboardPage() {
       setDistrictDistData(districtRes.data?.distribution || []);
       setStageDurationsData(durationRes.data?.stageDurations || []);
       setDealersList(allDealersRes.data?.dealers || []);
+      setFinancialOverview(finRes.data?.data || null);
 
       // Extract unique districts if not already populated
       if (districtRes.data?.distribution?.length > 0 && districtsList.length === 0) {
@@ -216,6 +219,64 @@ export function DashboardPage() {
                 icon={IndianRupee}
               />
             </div>
+
+            {/* Executive Financial Flow & Milestones Banner */}
+            {financialOverview && (
+              <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
+                      <TrendingUp size={18} className="text-[#2F6F5E]" />
+                      <span>Executive Cash Flow & Fund Milestones</span>
+                    </h3>
+                    <p className="text-xs text-[#52607D] mt-0.5">
+                      Government 55% / 45% Fund Milestones Inflow vs Raw Materials & Company Cost Outflows
+                    </p>
+                  </div>
+
+                  <Link
+                    to="/reports"
+                    className="text-xs font-semibold text-[#2F6F5E] hover:underline inline-flex items-center gap-1 shrink-0"
+                  >
+                    Full Reports & P&L <ArrowRight size={14} />
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="bg-emerald-50/70 p-3.5 rounded-[10px] border border-emerald-200">
+                    <div className="text-[11px] font-semibold text-emerald-900">Govt 1st Fund (55%)</div>
+                    <div className="text-base font-extrabold font-mono text-emerald-950 mt-0.5">
+                      ₹{financialOverview.inflows.govt_first_fund_55_pct.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                    </div>
+                    <div className="text-[10px] text-emerald-800 mt-0.5">1st Fund Credited</div>
+                  </div>
+
+                  <div className="bg-blue-50/70 p-3.5 rounded-[10px] border border-blue-200">
+                    <div className="text-[11px] font-semibold text-blue-900">Govt Final Fund (45%)</div>
+                    <div className="text-base font-extrabold font-mono text-blue-950 mt-0.5">
+                      ₹{financialOverview.inflows.govt_second_fund_45_pct.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                    </div>
+                    <div className="text-[10px] text-blue-800 mt-0.5">Final Fund Credited</div>
+                  </div>
+
+                  <div className="bg-rose-50/70 p-3.5 rounded-[10px] border border-rose-200">
+                    <div className="text-[11px] font-semibold text-rose-900">Raw Material Purchases</div>
+                    <div className="text-base font-extrabold font-mono text-rose-950 mt-0.5">
+                      ₹{financialOverview.outflows.raw_materials_procurement.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                    </div>
+                    <div className="text-[10px] text-rose-800 mt-0.5">Procurement Spend</div>
+                  </div>
+
+                  <div className="bg-[#2F6F5E] p-3.5 rounded-[10px] text-white shadow-xs">
+                    <div className="text-[11px] font-semibold text-white/80">Net Cash Position</div>
+                    <div className="text-base font-extrabold font-mono text-white mt-0.5">
+                      ₹{financialOverview.net_operating_cash_position.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                    </div>
+                    <div className="text-[10px] text-white/70 mt-0.5">Inflow - All Outflows</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Middle Section: Status Distribution & Observed Stage Durations */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

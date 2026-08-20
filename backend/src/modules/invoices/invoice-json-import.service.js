@@ -40,6 +40,8 @@ export async function importHistoricalInvoiceJson(jsonData) {
     const cleanAppId = rawId.trim().toUpperCase();
     const rawDate = rec.invoice_date || rec.date || new Date().toISOString().split("T")[0];
     const cleanDate = String(rawDate).trim().slice(0, 10);
+    const rawInvNo = rec.invoice_number || rec.invoice_no || rec.inv_no || rec.bill_no || rec.voucher_no;
+    const cleanInvNo = rawInvNo ? String(rawInvNo).trim() : null;
 
     if (projectMap.has(cleanAppId)) {
       duplicateCount++;
@@ -47,10 +49,14 @@ export async function importHistoricalInvoiceJson(jsonData) {
       if (cleanDate && (!existing.invoice_date || cleanDate < existing.invoice_date)) {
         existing.invoice_date = cleanDate;
       }
+      if (cleanInvNo && !existing.invoice_number) {
+        existing.invoice_number = cleanInvNo;
+      }
     } else {
       projectMap.set(cleanAppId, {
         application_id: cleanAppId,
         invoice_date: cleanDate,
+        invoice_number: cleanInvNo,
       });
     }
   }
@@ -80,6 +86,7 @@ export async function importHistoricalInvoiceJson(jsonData) {
               current_status: "INVOICED",
               current_status_date: item.invoice_date || null,
               invoice_date: item.invoice_date || null,
+              invoice_number: item.invoice_number || null,
             },
             { transaction }
           );
@@ -90,7 +97,9 @@ export async function importHistoricalInvoiceJson(jsonData) {
               project_id: project.id,
               status: "INVOICED",
               status_date: item.invoice_date || null,
-              remarks: "Historical invoice import",
+              remarks: item.invoice_number
+                ? `Historical invoice import (Invoice #${item.invoice_number})`
+                : "Historical invoice import",
               observed_at: new Date(),
             },
             { transaction }
@@ -113,7 +122,9 @@ export async function importHistoricalInvoiceJson(jsonData) {
                 project_id: project.id,
                 status: "INVOICED",
                 status_date: item.invoice_date || null,
-                remarks: "Historical invoice import",
+                remarks: item.invoice_number
+                  ? `Historical invoice import (Invoice #${item.invoice_number})`
+                  : "Historical invoice import",
                 observed_at: new Date(),
               },
               { transaction }
@@ -128,22 +139,22 @@ export async function importHistoricalInvoiceJson(jsonData) {
             );
           }
 
-          // Preserve earliest invoice date on project
-          if (!project.invoice_date || (item.invoice_date && item.invoice_date < project.invoice_date)) {
-            await project.update(
-              { invoice_date: item.invoice_date },
-              { transaction }
-            );
+          // Update invoice details on existing project
+          const updatePayload = {};
+          if (item.invoice_number && !project.invoice_number) {
+            updatePayload.invoice_number = item.invoice_number;
           }
-
-          // If project was created with INVOICED status, also preserve earliest current_status_date
+          if (!project.invoice_date || (item.invoice_date && item.invoice_date < project.invoice_date)) {
+            updatePayload.invoice_date = item.invoice_date;
+          }
           if (project.current_status === "INVOICED") {
             if (!project.current_status_date || (item.invoice_date && item.invoice_date < project.current_status_date)) {
-              await project.update(
-                { current_status_date: item.invoice_date },
-                { transaction }
-              );
+              updatePayload.current_status_date = item.invoice_date;
             }
+          }
+
+          if (Object.keys(updatePayload).length > 0) {
+            await project.update(updatePayload, { transaction });
           }
 
           existingProjectsLinked++;

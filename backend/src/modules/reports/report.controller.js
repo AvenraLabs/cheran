@@ -1,6 +1,30 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import * as reportService from "./report.service.js";
 
+export const getFinancialOverviewReport = asyncHandler(async (req, res) => {
+  const result = await reportService.getFinancialOverviewReport(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+export const getProcurementReport = asyncHandler(async (req, res) => {
+  const result = await reportService.getProcurementReport(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+export const getGovernmentFundsReport = asyncHandler(async (req, res) => {
+  const result = await reportService.getGovernmentFundsReport(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
 export const getDealerReport = asyncHandler(async (req, res) => {
   const result = await reportService.getDealerReport();
   res.status(200).json({
@@ -8,7 +32,6 @@ export const getDealerReport = asyncHandler(async (req, res) => {
     data: { dealers: result },
   });
 });
-
 
 export const getExpenseReport = asyncHandler(async (req, res) => {
   const result = await reportService.getExpenseReport(req.query);

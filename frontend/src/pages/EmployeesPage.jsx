@@ -213,7 +213,7 @@ export function EmployeesPage() {
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
       <Navbar
-        title="Staff & Daily Attendance"
+        title="Staff"
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -223,7 +223,7 @@ export function EmployeesPage() {
               onClick={fetchEmployees}
               loading={loading}
             >
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
             <Button
               variant="primary"
@@ -240,19 +240,19 @@ export function EmployeesPage() {
         }
       />
 
-      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-5 flex-1 overflow-y-auto">
         {/* KPI Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard
-            title="Total Active Staff"
+            title="Active Staff"
             value={employees.filter((e) => e.is_active).length}
-            subtitle={`${employees.length} registered total`}
+            subtitle={`${employees.length} total`}
             icon={Users}
           />
           <MetricCard
-            title="Monthly Payroll Commitment"
+            title="Monthly Payroll"
             value={`₹${(Number(totalMonthlyPayroll) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-            subtitle="Combined base salaries"
+            subtitle="Base salaries"
             icon={DollarSign}
           />
           <MetricCard
@@ -264,7 +264,7 @@ export function EmployeesPage() {
         </div>
 
         {/* Tab Toggle */}
-        <div className="flex items-center justify-between border-b border-[#E4E1D8] pb-2">
+        <div className="flex items-center justify-between border-b border-[#E4E1D8] pb-2 gap-2">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab("employees")}
@@ -274,7 +274,7 @@ export function EmployeesPage() {
                   : "text-[#52607D] hover:bg-[#FAFAF8]"
               }`}
             >
-              Staff Directory ({employees.length})
+              Staff ({employees.length})
             </button>
             <button
               onClick={() => setActiveTab("attendance")}
@@ -284,7 +284,7 @@ export function EmployeesPage() {
                   : "text-[#52607D] hover:bg-[#FAFAF8]"
               }`}
             >
-              Attendance History ({attendances.length})
+              History ({attendances.length})
             </button>
           </div>
 
@@ -293,9 +293,9 @@ export function EmployeesPage() {
             size="sm"
             icon={UserCheck}
             onClick={() => handleOpenDailySheet()}
-            className="text-[#2F6F5E] border-[#2F6F5E]/30 hover:bg-[#EAF3F0]"
+            className="hidden sm:inline-flex text-[#2F6F5E] border-[#2F6F5E]/30 hover:bg-[#EAF3F0]"
           >
-            Open Daily Attendance Sheet
+            Daily Sheet
           </Button>
         </div>
 
@@ -308,11 +308,11 @@ export function EmployeesPage() {
               </div>
             ) : employees.length === 0 ? (
               <EmptyState
-                title="No employees registered"
-                description="Add machine operators, supervisors, and administrative team members."
+                title="No staff registered"
+                description="Add staff members to manage directory and daily attendance."
                 action={
                   <Button size="sm" icon={Plus} onClick={handleOpenAddEmp}>
-                    Add Employee
+                    Add Staff
                   </Button>
                 }
               />

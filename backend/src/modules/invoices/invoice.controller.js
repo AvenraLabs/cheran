@@ -2,7 +2,11 @@ import asyncHandler from "../../shared/asyncHandler.js";
 import * as invoiceService from "./invoice.service.js";
 import { importHistoricalInvoiceJson as importJsonService } from "./invoice-json-import.service.js";
 import { parseLoadOrderBuffer } from "./load-order-parser.service.js";
-import { commitLoadOrder as commitLoadOrderService } from "./load-order-commit.service.js";
+import {
+  commitLoadOrder as commitLoadOrderService,
+  listLoadOrderBatches as listLoadOrderBatchesService,
+  getLoadOrderBatchById as getLoadOrderBatchByIdService,
+} from "./load-order-commit.service.js";
 import AppError from "../../shared/appError.js";
 
 export const createInvoice = asyncHandler(async (req, res) => {
@@ -99,7 +103,23 @@ export const commitLoadOrder = asyncHandler(async (req, res) => {
   const result = await commitLoadOrderService(req.body);
   res.status(200).json({
     status: "success",
-    message: result.message,
+    message: "Load Order batch committed successfully",
     data: result,
+  });
+});
+
+export const listLoadOrderBatches = asyncHandler(async (req, res) => {
+  const result = await listLoadOrderBatchesService(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+export const getLoadOrderBatchById = asyncHandler(async (req, res) => {
+  const batch = await getLoadOrderBatchByIdService(req.params.id);
+  res.status(200).json({
+    status: "success",
+    data: { batch },
   });
 });

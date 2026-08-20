@@ -1,7 +1,7 @@
 {
   "short_name": "Cheran",
   "name": "Cheran Irrigation ERP",
-  "description": "AI-Powered Horticulture Project & Irrigation ERP System",
+  "description": "Cheran Irrigation Horticulture & ERP Management System",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -11,6 +11,24 @@
   "theme_color": "#2F6F5E",
   "categories": ["business", "productivity", "utilities"],
   "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
@@ -22,18 +40,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "/icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -42,14 +48,14 @@
       "short_name": "Projects",
       "description": "View Government Projects",
       "url": "/projects",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon.png", "sizes": "192x192" }]
     },
     {
-      "name": "Sales & Invoices",
+      "name": "Direct Sales",
       "short_name": "Sales",
       "description": "Create Manual Invoices & Dispatches",
       "url": "/sales",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon.png", "sizes": "192x192" }]
     }
   ]
 }

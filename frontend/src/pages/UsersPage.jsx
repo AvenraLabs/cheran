@@ -245,16 +245,18 @@ export function UsersPage() {
                           </div>
                         </td>
 
-                        <td className="py-3 px-4 font-mono text-[#52607D]">{u.username}</td>
-
                         <td className="py-3 px-4">
-                          {isAdmin ? (
+                          {u.role === "ADMIN" ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20">
                               <Shield size={12} /> Admin (Full Access)
                             </span>
+                          ) : u.role === "DEALER" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <UsersIcon size={12} /> Dealer (Projects & Imports)
+                            </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8]">
-                              <User size={12} /> User (4 Pages Only)
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
+                              <User size={12} /> User (Operations & Sales)
                             </span>
                           )}
                         </td>
@@ -390,8 +392,9 @@ export function UsersPage() {
                 value={formData.role}
                 onChange={(val) => setFormData({ ...formData, role: val })}
                 options={[
-                  { value: "USER", label: "USER (4 Pages Only)" },
-                  { value: "ADMIN", label: "ADMIN (Full ERP Access)" },
+                  { value: "ADMIN", label: "Admin (Full ERP Access)" },
+                  { value: "USER", label: "User (Dashboard, Projects, Sales & Uploads)" },
+                  { value: "DEALER", label: "Dealer (Projects, Imports & Directory Only)" },
                 ]}
               />
             </div>

@@ -138,6 +138,10 @@ const GovernmentProject = db.define(
       type: DataTypes.DECIMAL(15, 2),
       allowNull: true,
     },
+    invoice_number: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
     invoice_amount: {
       type: DataTypes.DECIMAL(15, 2),
       allowNull: true,

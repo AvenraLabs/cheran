@@ -32,15 +32,14 @@ export function CreateDirectSalePage() {
   // Customer & Invoice Metadata
   const [customers, setCustomers] = useState([]);
   const [allFinishedGoods, setAllFinishedGoods] = useState([]);
-  const [invoiceNumber, setInvoiceNumber] = useState(`INV-DS-${Date.now().toString().slice(-6)}`);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [walkinCustomerName, setWalkinCustomerName] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Commercial Pricing & Rates
-  const [fittingsPct] = useState(5.0); // 5% Standard
-  const [gstRate, setGstRate] = useState(5); // 5 or 18
+  // Commercial Pricing & Rates (No fittings cost for Direct Sales)
+  const [gstRate, setGstRate] = useState(5); // 0, 5, or 18
 
   // Item Lines in Form: Array of { item_id, name, code, unit, unit_price, available_stock, quantity }
   const [items, setItems] = useState([]);
@@ -177,9 +176,8 @@ export function CreateDirectSalePage() {
     }
   }
   netItemsTotal = Math.round(netItemsTotal * 100) / 100;
-  const fittingsAmount = Math.round(((netItemsTotal * fittingsPct) / 100.0) * 100) / 100;
-  const taxableAmount = Math.round((netItemsTotal + fittingsAmount) * 100) / 100;
-  const gstAmount = Math.round(((taxableAmount * gstRate) / 100.0) * 100) / 100;
+  const taxableAmount = netItemsTotal;
+  const gstAmount = gstRate > 0 ? Math.round(((taxableAmount * gstRate) / 100.0) * 100) / 100 : 0;
   const grandTotal = Math.round((taxableAmount + gstAmount) * 100) / 100;
 
   // Unselected items that can be added back
@@ -227,7 +225,7 @@ export function CreateDirectSalePage() {
         invoice_type: "DIRECT_SALE",
         customer_id: selectedCustomerId || null,
         customer_name: custName,
-        fittings_percentage: fittingsPct,
+        fittings_percentage: 0,
         gst_percentage: gstRate,
         notes: notes.trim() || null,
         items: validItems,
@@ -310,7 +308,7 @@ export function CreateDirectSalePage() {
                   <User size={16} className="text-[#2F6F5E]" /> Customer & Dispatch Information
                 </h3>
                 <span className="text-[11px] text-[#52607D]">
-                  Standard 5% Fittings & Selectable GST
+                  Commercial Direct Sale · Selectable GST (0%, 5%, 18%)
                 </span>
               </div>
 
@@ -321,6 +319,7 @@ export function CreateDirectSalePage() {
                   </label>
                   <input
                     type="text"
+                    placeholder="e.g. 501"
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
                     className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] font-mono font-bold text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
@@ -548,79 +547,76 @@ export function CreateDirectSalePage() {
                     Tax & GST Rate Applicable
                   </h4>
                   <p className="text-xs text-[#52607D] mt-0.5">
-                    Select GST rate applicable for this commercial invoice
+                    Select GST rate applicable for this direct sale invoice (or 0% Non-GST)
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGstRate(0)}
+                    className={`px-3.5 py-2 rounded-[8px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      gstRate === 0
+                        ? "bg-[#2F6F5E] text-white shadow-xs"
+                        : "bg-[#FAFAF8] border border-[#E4E1D8] text-[#52607D] hover:bg-gray-100"
+                    }`}
+                  >
+                    <span>0% GST</span>
+                    <span className="text-[10px] font-normal opacity-90">(Non-GST / Exempt)</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setGstRate(5)}
-                    className={`px-4 py-2 rounded-[8px] text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    className={`px-3.5 py-2 rounded-[8px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                       gstRate === 5
                         ? "bg-[#2F6F5E] text-white shadow-xs"
                         : "bg-[#FAFAF8] border border-[#E4E1D8] text-[#52607D] hover:bg-gray-100"
                     }`}
                   >
                     <span>5% GST</span>
-                    <span className="text-[10px] font-normal opacity-90">(Drip & Agriculture)</span>
+                    <span className="text-[10px] font-normal opacity-90">(Agri / Drip)</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setGstRate(18)}
-                    className={`px-4 py-2 rounded-[8px] text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    className={`px-3.5 py-2 rounded-[8px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                       gstRate === 18
                         ? "bg-[#2F6F5E] text-white shadow-xs"
                         : "bg-[#FAFAF8] border border-[#E4E1D8] text-[#52607D] hover:bg-gray-100"
                     }`}
                   >
                     <span>18% GST</span>
-                    <span className="text-[10px] font-normal opacity-90">(Commercial Pipes)</span>
+                    <span className="text-[10px] font-normal opacity-90">(Commercial / Regular)</span>
                   </button>
                 </div>
               </div>
 
               {/* Financial Calculation Formula Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5 text-center">
-                <div className="bg-[#FAFAF8] p-3.5 rounded-[10px] border border-[#E4E1D8]">
-                  <div className="text-[11px] font-semibold text-[#52607D]">Items Net Total</div>
-                  <div className="text-sm sm:text-base font-extrabold font-mono text-[#14213D] mt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                <div className="bg-[#FAFAF8] p-4 rounded-[10px] border border-[#E4E1D8]">
+                  <div className="text-xs font-semibold text-[#52607D]">Items Net / Taxable Total</div>
+                  <div className="text-base sm:text-lg font-extrabold font-mono text-[#14213D] mt-1">
                     ₹{netItemsTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </div>
-                  <div className="text-[10px] text-[#8C97AB] mt-0.5">{activeItemCount} items selected</div>
+                  <div className="text-[11px] text-[#8C97AB] mt-0.5">{activeItemCount} items selected</div>
                 </div>
 
-                <div className="bg-[#FAFAF8] p-3.5 rounded-[10px] border border-[#E4E1D8]">
-                  <div className="text-[11px] font-semibold text-[#D97706]">Fittings (5%)</div>
-                  <div className="text-sm sm:text-base font-extrabold font-mono text-[#D97706] mt-1">
-                    +₹{fittingsAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                <div className="bg-[#FAFAF8] p-4 rounded-[10px] border border-[#E4E1D8]">
+                  <div className="text-xs font-semibold text-blue-700">GST ({gstRate}%)</div>
+                  <div className="text-base sm:text-lg font-extrabold font-mono text-blue-700 mt-1">
+                    {gstRate > 0 ? `+₹${gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "₹0.00 (Exempt)"}
                   </div>
-                  <div className="text-[10px] text-[#8C97AB] mt-0.5">5% of Net Total</div>
+                  <div className="text-[11px] text-[#8C97AB] mt-0.5">{gstRate === 0 ? "Non-GST Sale" : `${gstRate}% on Net Total`}</div>
                 </div>
 
-                <div className="bg-[#FAFAF8] p-3.5 rounded-[10px] border border-[#E4E1D8]">
-                  <div className="text-[11px] font-semibold text-[#14213D]">Taxable Subtotal</div>
-                  <div className="text-sm sm:text-base font-extrabold font-mono text-[#14213D] mt-1">
-                    ₹{taxableAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-[10px] text-[#8C97AB] mt-0.5">Items + Fittings</div>
-                </div>
-
-                <div className="bg-[#FAFAF8] p-3.5 rounded-[10px] border border-[#E4E1D8]">
-                  <div className="text-[11px] font-semibold text-blue-700">GST ({gstRate}%)</div>
-                  <div className="text-sm sm:text-base font-extrabold font-mono text-blue-700 mt-1">
-                    +₹{gstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-[10px] text-[#8C97AB] mt-0.5">{gstRate}% on Taxable</div>
-                </div>
-
-                <div className="bg-[#2F6F5E] p-3.5 rounded-[10px] text-white shadow-xs col-span-2 sm:col-span-1">
-                  <div className="text-[11px] font-semibold text-white/80">Grand Total Amount</div>
-                  <div className="text-base sm:text-lg font-black font-mono text-white mt-1">
+                <div className="bg-[#2F6F5E] p-4 rounded-[10px] text-white shadow-xs">
+                  <div className="text-xs font-semibold text-white/80">Grand Total Payable</div>
+                  <div className="text-lg sm:text-xl font-black font-mono text-white mt-1">
                     ₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </div>
-                  <div className="text-[10px] text-[#A4E0D1] mt-0.5">All Inclusive</div>
+                  <div className="text-[11px] text-white/70 mt-0.5">All Inclusive Value</div>
                 </div>
               </div>
             </div>

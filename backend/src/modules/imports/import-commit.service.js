@@ -3,6 +3,7 @@ import GovernmentImport from "./import.model.js";
 import GovernmentImportRow from "./import-row.model.js";
 import GovernmentProject from "../projects/project.model.js";
 import GovernmentProjectStatusHistory from "../projects/project-history.model.js";
+import GovernmentStatus from "../statuses/status.model.js";
 import AppError from "../../shared/appError.js";
 
 export async function commitImport(importId) {
@@ -68,6 +69,15 @@ export async function commitImport(importId) {
       const cleanAppId = application_id ? String(application_id).trim().toUpperCase() : null;
       if (!cleanAppId) continue;
 
+      // Auto-ensure status exists in master statuses
+      if (importedStatus && importedStatus.trim()) {
+        await GovernmentStatus.findOrCreate({
+          where: { name: importedStatus.trim() },
+          defaults: { is_active: true, sequence_order: 999 },
+          transaction,
+        });
+      }
+
       // Check if project exists in database (case-insensitive)
       let project = await GovernmentProject.findOne({
         where: db.where(db.fn("UPPER", db.col("application_id")), cleanAppId),
@@ -107,6 +117,7 @@ export async function commitImport(importId) {
           quotation_subsidy_amount: rowData.quotation_subsidy_amount || null,
           quotation_saca_subsidy_amount: rowData.quotation_saca_subsidy_amount || null,
           farmer_contribution: rowData.farmer_contribution || null,
+          invoice_number: rowData.invoice_number || null,
           invoice_amount: rowData.invoice_amount || null,
           invoice_date: rowData.invoice_date || null,
           state_restricted_amount: rowData.state_restricted_amount || null,
@@ -200,6 +211,7 @@ export async function commitImport(importId) {
           quotation_subsidy_amount: updateVal(rowData.quotation_subsidy_amount, project.quotation_subsidy_amount),
           quotation_saca_subsidy_amount: updateVal(rowData.quotation_saca_subsidy_amount, project.quotation_saca_subsidy_amount),
           farmer_contribution: updateVal(rowData.farmer_contribution, project.farmer_contribution),
+          invoice_number: updateVal(rowData.invoice_number, project.invoice_number),
           invoice_amount: updateVal(rowData.invoice_amount, project.invoice_amount),
           invoice_date: updateVal(rowData.invoice_date, project.invoice_date),
           state_restricted_amount: updateVal(rowData.state_restricted_amount, project.state_restricted_amount),

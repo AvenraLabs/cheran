@@ -8,6 +8,7 @@ import Invoice from "../invoices/invoice.model.js";
 import AppError from "../../shared/appError.js";
 import { calculateDaysBetween } from "../../utils/dates.js";
 import { calculateCommissionBase } from "../../utils/finance.js";
+import { getEffectiveSchemeTaxSlab } from "../settings/settings.service.js";
 
 const FIRST_FUND_STATUSES = [
   "District First Fund Credited (UTR Updated)",
@@ -45,12 +46,25 @@ export async function calculateProjectDealerCommission(projectId) {
   const dealer = project.dealer;
   const invoices = project.invoices || [];
 
+  // Determine Project Date for Scheme GST Tax Slab lookup
+  const projectDate =
+    project.invoice_date ||
+    project.current_status_date ||
+    (project.created_at ? new Date(project.created_at).toISOString().split("T")[0] : null);
+
+  const effectiveSlab = await getEffectiveSchemeTaxSlab(projectDate);
+  const applicableGstPct = effectiveSlab.gst_percentage;
+  const applicableFittingsPct = effectiveSlab.fittings_percentage;
+
   // Base Net Amount:
-  // Rule: Quotation Subsidy / Invoice Amount in Government Excel includes +5% fittings + 5% GST sequentially.
-  // Commission base = amount / 1.05 / 1.05
+  // Dynamically uses effective GST rate (e.g. 12% for pre-22-Sep-2025, 5% for post-22-Sep-2025)
   let baseAmount = 0;
   if (project.quotation_subsidy_amount && parseFloat(project.quotation_subsidy_amount) > 0) {
-    baseAmount = calculateCommissionBase(project.quotation_subsidy_amount);
+    baseAmount = calculateCommissionBase(
+      project.quotation_subsidy_amount,
+      applicableGstPct,
+      applicableFittingsPct
+    );
   } else {
     const netInvoicedAmount = invoices.reduce((sum, inv) => {
       return sum + (parseFloat(inv.net_item_amount) || 0);
@@ -58,7 +72,11 @@ export async function calculateProjectDealerCommission(projectId) {
     if (netInvoicedAmount > 0) {
       baseAmount = netInvoicedAmount;
     } else if (project.invoice_amount && parseFloat(project.invoice_amount) > 0) {
-      baseAmount = calculateCommissionBase(project.invoice_amount);
+      baseAmount = calculateCommissionBase(
+        project.invoice_amount,
+        applicableGstPct,
+        applicableFittingsPct
+      );
     }
   }
 
@@ -289,6 +307,12 @@ export async function calculateProjectDealerCommission(projectId) {
           commission_percentage: basePercentage,
         }
       : null,
+    applicable_tax_slab: {
+      gst_percentage: applicableGstPct,
+      fittings_percentage: applicableFittingsPct,
+      description: effectiveSlab.description,
+      project_date_used: projectDate,
+    },
     base_amount: baseAmount,
     base_percentage: basePercentage,
     original_commission_amount: originalTotalCommission,

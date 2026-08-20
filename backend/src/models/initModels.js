@@ -36,6 +36,8 @@ import EmployeeSalaryRecord from "../modules/employees/employee-salary-record.mo
 import Customer from "../modules/customers/customer.model.js";
 import Invoice from "../modules/invoices/invoice.model.js";
 import InvoiceItem from "../modules/invoices/invoice-item.model.js";
+import LoadOrderBatch from "../modules/invoices/load-order-batch.model.js";
+import SchemeTaxSlab from "../modules/settings/scheme-tax-slab.model.js";
 
 // ==========================================
 // 1. Government Module Associations
@@ -402,4 +404,6 @@ export {
   Customer,
   Invoice,
   InvoiceItem,
+  LoadOrderBatch,
+  SchemeTaxSlab,
 };

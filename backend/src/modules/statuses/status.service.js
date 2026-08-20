@@ -9,7 +9,7 @@ export async function listStatuses({ is_active } = {}) {
 
   const statuses = await GovernmentStatus.findAll({
     where,
-    order: [["name", "ASC"]],
+    order: [["sequence_order", "ASC"], ["name", "ASC"]],
   });
 
   return statuses;

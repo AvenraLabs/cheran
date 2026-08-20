@@ -100,12 +100,10 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
       duplicateRowsCount++;
     }
     // Rule 3: Validate status string
-    else if (!importedStatus || !validStatuses.has(importedStatus.trim())) {
+    else if (!importedStatus || !importedStatus.trim()) {
       action = "ERROR";
       resolutionStatus = "REJECTED";
-      errorMessage = importedStatus
-        ? `Unknown government status: '${importedStatus}'. Must match one of the 27 approved government statuses.`
-        : "Current Status is missing";
+      errorMessage = "Current Status is missing or empty";
       errorRowsCount++;
       seenAppIdsInFile.add(appId);
     }

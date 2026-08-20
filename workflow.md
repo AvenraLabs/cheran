@@ -86,12 +86,14 @@ flowchart TD
 
 Cheran ERP supports **two distinct sales channels**:
 
-#### Channel A: Government Horticulture Schemes & Load Orders
-1. Staff uploads the **Load Order Excel** at `/imports/load-order`.
-2. The ERP generates official invoices for all listed Government Application IDs.
-3. **Calculation Formula**:
-   $$\text{Net Items} + \text{5\% Fittings Cost} + \text{5\% GST} = \text{100\% Total Invoiced Amount}$$
-4. Finished goods stock is atomically deducted upon dispatch.
+#### Channel A: Government Horticulture Schemes & Batch Load Orders (`/imports/load-order`)
+1. Staff uploads the **Daily Load Order Excel** at `/imports/load-order`.
+2. The ERP extracts the dispatch date, government project IDs, and presents the **Batch Material Entry**:
+   - **Govt Count**: Official on-paper scheme materials.
+   - **Actual Count**: Physical materials loaded onto the lorry/vehicle.
+   - **Inventory Deduction**: Stock is deducted **ONLY for the Actual Count**.
+3. **Sequential Invoice Numbers**: Entering a pure number (e.g. `300`) on row 1 automatically auto-increments and populates all following projects (`301`, `302`, ...), while remaining editable.
+4. Linked projects are transitioned to **`INVOICED`** status with their respective invoice numbers and preserved in the **Batch Upload History**.
 
 #### Channel B: Direct Commercial Sales (`/sales`)
 1. Staff opens `/sales` and clicks **New Direct Sale**.

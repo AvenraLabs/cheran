@@ -252,22 +252,27 @@ export function LoginPage() {
         </div>
       </div>
 
-      {/* iOS & Mobile Install Modal */}
+      {/* Device-Specific PWA Installation Guide Modal */}
       {showIOSPrompt && (
         <div
           className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-4"
           onClick={() => setShowIOSPrompt(false)}
         >
           <div
-            className="bg-white rounded-[16px] max-w-xs w-full p-5 space-y-4 border border-[#E4E1D8] shadow-2xl animate-in slide-in-from-bottom duration-200"
+            className="bg-white rounded-[16px] max-w-sm w-full p-5 space-y-4 border border-[#E4E1D8] shadow-2xl animate-in slide-in-from-bottom duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
               <div className="flex items-center gap-2.5">
                 <img src="/icon.png" alt="Cheran Logo" className="w-8 h-8 rounded-[8px] object-contain shrink-0" />
-                <span className="text-sm font-bold text-[#14213D]">
-                  Install App
-                </span>
+                <div>
+                  <span className="text-sm font-bold text-[#14213D] block">
+                    Install Cheran ERP App
+                  </span>
+                  <span className="text-[10px] text-[#52607D]">
+                    {isIOS ? "iOS Safari Guide" : isMobile ? "Android Chrome Guide" : "Desktop Browser Guide"}
+                  </span>
+                </div>
               </div>
               <button
                 type="button"
@@ -278,27 +283,74 @@ export function LoginPage() {
               </button>
             </div>
 
-            <div className="py-1 text-xs text-[#52607D] space-y-2">
-              <div className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
-                  1
-                </span>
-                <span>Tap <Share size={12} className="inline text-[#2F6F5E] align-text-bottom" /> <strong>Share</strong> in Safari</span>
+            {/* iOS Instructions */}
+            {isIOS ? (
+              <div className="py-1 text-xs text-[#52607D] space-y-2.5">
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    1
+                  </span>
+                  <span>Tap the <Share size={13} className="inline text-[#2F6F5E] align-text-bottom mx-0.5" /> <strong>Share</strong> button at the bottom of Safari</span>
+                </div>
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    2
+                  </span>
+                  <span>Scroll down and tap <strong>Add to Home Screen</strong></span>
+                </div>
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    3
+                  </span>
+                  <span>Tap <strong>Add</strong> in the top right corner</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
-                  2
-                </span>
-                <span>Tap <strong>Add to Home Screen</strong></span>
+            ) : isMobile ? (
+              /* Android Instructions */
+              <div className="py-1 text-xs text-[#52607D] space-y-2.5">
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    1
+                  </span>
+                  <span>Tap the <strong>three dots menu (⋮)</strong> at the top right of Chrome</span>
+                </div>
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    2
+                  </span>
+                  <span>Tap <strong>"Install app"</strong> (or <strong>"Add to Home screen"</strong>)</span>
+                </div>
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    3
+                  </span>
+                  <span>Tap <strong>Install</strong> to add Cheran ERP to your apps</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Desktop Instructions */
+              <div className="py-1 text-xs text-[#52607D] space-y-2.5">
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    1
+                  </span>
+                  <span>Click the <strong>Install App icon (⊕ / ⤓)</strong> in your browser address bar</span>
+                </div>
+                <div className="flex items-center gap-2.5 p-2 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                  <span className="w-5 h-5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] font-bold flex items-center justify-center text-[10px] shrink-0">
+                    2
+                  </span>
+                  <span>Click <strong>Install</strong> in the popup to add to your desktop</span>
+                </div>
+              </div>
+            )}
 
             <button
               type="button"
               onClick={() => setShowIOSPrompt(false)}
-              className="w-full py-2 bg-[#2F6F5E] hover:bg-[#255b4d] text-white font-bold text-xs rounded-[8px] transition-colors cursor-pointer"
+              className="w-full py-2.5 bg-[#2F6F5E] hover:bg-[#255b4d] text-white font-bold text-xs rounded-[8px] transition-colors cursor-pointer"
             >
-              Done
+              Got it
             </button>
           </div>
         </div>

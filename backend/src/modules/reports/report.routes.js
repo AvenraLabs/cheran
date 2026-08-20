@@ -3,6 +3,9 @@ import * as reportController from "./report.controller.js";
 
 const router = Router();
 
+router.get("/financial-overview", reportController.getFinancialOverviewReport);
+router.get("/procurement", reportController.getProcurementReport);
+router.get("/govt-funds", reportController.getGovernmentFundsReport);
 router.get("/dealers", reportController.getDealerReport);
 router.get("/expenses", reportController.getExpenseReport);
 router.get("/employees", reportController.getEmployeeReport);

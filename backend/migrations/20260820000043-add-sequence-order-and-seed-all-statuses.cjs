@@ -21,7 +21,7 @@ const ORDERED_GOVERNMENT_STATUSES = [
   "DD Upload Skipped",
   "Payment done via Payment Gateway",
   "Farmer Acceptance Letter Uploaded",
-  "INVOICED", // Custom dispatch milestone placed before Issue Work Order
+  "INVOICED", // Company dispatch milestone placed before Issue Work Order
   "Issue Work Order (Auto Quotation)",
   "Issued Work Order",
   "Quotation Prepared by Block (Auto Quotation)",
@@ -59,8 +59,20 @@ const ORDERED_GOVERNMENT_STATUSES = [
   "Final Fund Credited (UTR Updated)",
 ];
 
+/** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // 1. Add sequence_order column to government_statuses table if not exists
+    const tableInfo = await queryInterface.describeTable("government_statuses");
+    if (!tableInfo.sequence_order) {
+      await queryInterface.addColumn("government_statuses", "sequence_order", {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        defaultValue: 999,
+      });
+    }
+
+    // 2. Upsert all 56 ordered statuses with their sequence number
     for (let index = 0; index < ORDERED_GOVERNMENT_STATUSES.length; index++) {
       const name = ORDERED_GOVERNMENT_STATUSES[index];
       const sequence = index + 1;
@@ -69,7 +81,7 @@ module.exports = {
         `INSERT INTO government_statuses (id, name, sequence_order, is_active, created_at, updated_at)
          VALUES (gen_random_uuid(), :name, :sequence, true, NOW(), NOW())
          ON CONFLICT (name) DO UPDATE 
-         SET sequence_order = :sequence, is_active = true, updated_at = NOW()`,
+         SET sequence_order = :sequence, is_active = true, updated_at = NOW();`,
         {
           replacements: { name, sequence },
         }
@@ -77,7 +89,7 @@ module.exports = {
     }
   },
 
-  async down(queryInterface) {
-    await queryInterface.bulkDelete("government_statuses", null, {});
+  async down(queryInterface, Sequelize) {
+    // Non-destructive
   },
 };

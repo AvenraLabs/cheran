@@ -49,23 +49,24 @@ export function calculateInvoiceTotals(items = [], fittingsPct = 5.0, gstPct = 5
 
 /**
  * Calculate Commission Base from Quotation Subsidy Amount:
- * Quotation Subsidy Amount in Government Excel includes +5% fittings and +5% GST added sequentially.
+ * Quotation Subsidy Amount in Government Excel includes +Fittings % and +GST % added sequentially.
  * Formula:
- * Final = Base * 1.05 * 1.05
- * Base = Quotation Subsidy Amount / 1.05 / 1.05
+ * Base = Quotation Subsidy Amount / (1 + GST% / 100) / (1 + Fittings% / 100)
  */
-export function calculateCommissionBase(quotationSubsidyAmount) {
+export function calculateCommissionBase(quotationSubsidyAmount, gstPercentage = 5.0, fittingsPercentage = 5.0) {
   const amount = parseFloat(quotationSubsidyAmount) || 0;
   if (amount <= 0) return 0.0;
-  const base = amount / 1.05 / 1.05;
+  const gstFactor = 1 + (parseFloat(gstPercentage) || 0) / 100.0;
+  const fittingsFactor = 1 + (parseFloat(fittingsPercentage) || 0) / 100.0;
+  const base = amount / gstFactor / fittingsFactor;
   return Math.round(base * 100) / 100;
 }
 
 /**
  * Calculate Dealer Commission from Quotation Subsidy Amount and Dealer Commission %
  */
-export function calculateDealerCommission(quotationSubsidyAmount, commissionPercentage) {
-  const base = calculateCommissionBase(quotationSubsidyAmount);
+export function calculateDealerCommission(quotationSubsidyAmount, commissionPercentage, gstPercentage = 5.0, fittingsPercentage = 5.0) {
+  const base = calculateCommissionBase(quotationSubsidyAmount, gstPercentage, fittingsPercentage);
   const pct = parseFloat(commissionPercentage) || 0;
   if (base <= 0 || pct <= 0) return 0.0;
   return Math.round(((base * pct) / 100.0) * 100) / 100;
