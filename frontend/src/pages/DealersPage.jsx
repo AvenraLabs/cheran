@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Users, Search, RefreshCw, Edit2, Trash2, GitMerge, ArrowRight } from "lucide-react";
+import { Plus, Users, Search, RefreshCw, Edit2, Trash2, GitMerge, ArrowRight, Info } from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -344,13 +344,21 @@ export function DealersPage() {
         isOpen={mergeModalOpen}
         onClose={() => setMergeModalOpen(false)}
         title="Merge & Deduplicate Dealers"
+        size="md"
       >
         <form onSubmit={handleMergeDealers} className="space-y-4 text-xs">
-          <div className="space-y-4">
+          <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] flex items-start gap-2.5 text-[#52607D]">
+            <Info size={16} className="text-[#2F6F5E] shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed">
+              Consolidate duplicate dealer entries into one master record. All transactions, sales, and item records linked to the duplicate will be transferred to the master dealer, and the duplicate will be safely removed.
+            </p>
+          </div>
+
+          <div className="space-y-3.5">
             {/* Target Dealer to Preserve */}
             <div>
               <label className="font-semibold text-[#14213D] block mb-1">
-                1. Select Correct / Primary Dealer (To Keep):
+                1. Select Correct / Primary Dealer (To Keep): <span className="text-[#B0403A]">*</span>
               </label>
               <CustomSelect
                 options={allDealersForSelect
@@ -370,7 +378,7 @@ export function DealersPage() {
             {/* Source Duplicate Dealer to Merge */}
             <div>
               <label className="font-semibold text-[#14213D] block mb-1">
-                2. Select Misspelled / Duplicate Dealer (To Merge & Remove):
+                2. Select Misspelled / Duplicate Dealer (To Merge & Remove): <span className="text-[#B0403A]">*</span>
               </label>
               <CustomSelect
                 options={allDealersForSelect
@@ -391,22 +399,22 @@ export function DealersPage() {
           {/* Merge Preview Flow */}
           {targetDealerObj && sourceDealerObj && (
             <div className="p-3 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] flex items-center justify-between gap-3 text-center">
-              <div className="flex-1 p-2 bg-[#FDF2F1] border border-[#F8D7D5] rounded-[6px]">
-                <span className="text-[10px] text-[#B0403A] font-bold uppercase block">Duplicate</span>
-                <span className="font-bold text-xs text-[#14213D] truncate block">
+              <div className="flex-1 p-2.5 bg-[#FDF2F1] border border-[#F8D7D5] rounded-[6px]">
+                <span className="text-[10px] text-[#B0403A] font-bold uppercase tracking-wider block">Duplicate</span>
+                <span className="font-bold text-xs text-[#14213D] truncate block mt-0.5">
                   {sourceDealerObj.name}
                 </span>
-                <span className="text-[10px] text-[#52607D] block">(Will be deleted)</span>
+                <span className="text-[10px] text-[#52607D] block mt-0.5">(Will be removed)</span>
               </div>
 
               <ArrowRight size={18} className="text-[#2F6F5E] shrink-0" />
 
-              <div className="flex-1 p-2 bg-[#EAF3F0] border border-[#D3E6E0] rounded-[6px]">
-                <span className="text-[10px] text-[#2F6F5E] font-bold uppercase block">Master Dealer</span>
-                <span className="font-bold text-xs text-[#2F6F5E] truncate block">
+              <div className="flex-1 p-2.5 bg-[#EAF3F0] border border-[#D3E6E0] rounded-[6px]">
+                <span className="text-[10px] text-[#2F6F5E] font-bold uppercase tracking-wider block">Master Dealer</span>
+                <span className="font-bold text-xs text-[#2F6F5E] truncate block mt-0.5">
                   {targetDealerObj.name}
                 </span>
-                <span className="text-[10px] text-[#52607D] block">(Will receive all records)</span>
+                <span className="text-[10px] text-[#52607D] block mt-0.5">(Will retain all records)</span>
               </div>
             </div>
           )}
@@ -427,7 +435,7 @@ export function DealersPage() {
               disabled={!targetDealerId || !sourceDealerId || targetDealerId === sourceDealerId}
               icon={GitMerge}
             >
-              Merge
+              Merge Dealers
             </Button>
           </div>
         </form>
