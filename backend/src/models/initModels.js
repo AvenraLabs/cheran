@@ -20,8 +20,7 @@ import ProductionEntry from "../modules/inventory/production-entry.model.js";
 import ProductionMaterial from "../modules/inventory/production-material.model.js";
 import ProductionOutput from "../modules/inventory/production-output.model.js";
 
-// Settings & Commissions
-import BusinessSetting from "../modules/settings/business-setting.model.js";
+// Commissions
 import DealerCommission from "../modules/dealers/dealer-commission.model.js";
 
 // Expenses
@@ -394,7 +393,6 @@ export {
   ProductionEntry,
   ProductionMaterial,
   ProductionOutput,
-  BusinessSetting,
   DealerCommission,
   ExpenseCategory,
   Expense,

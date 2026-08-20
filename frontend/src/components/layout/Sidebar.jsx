@@ -15,13 +15,13 @@ import {
   UserCog,
   DollarSign,
   BarChart3,
-  Sliders,
   LogOut,
   X,
   Factory,
   ShieldCheck,
   FileJson,
   UploadCloud,
+  ShoppingCart,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -36,6 +36,7 @@ export function Sidebar({ isOpen, onClose }) {
           items: [
             { label: "Dashboard", path: "/", icon: LayoutDashboard },
             { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+            { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
             { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
             { label: "Invoice Bulk Upload", path: "/imports/invoices", icon: FileJson },
             { label: "Excel Imports", path: "/imports", icon: FileText },
@@ -71,7 +72,6 @@ export function Sidebar({ isOpen, onClose }) {
           title: "Reports & Configuration",
           items: [
             { label: "Reports & Analytics", path: "/reports", icon: BarChart3 },
-            { label: "Business Settings", path: "/settings", icon: Sliders },
             { label: "User Management", path: "/users", icon: ShieldCheck },
           ],
         },
@@ -82,6 +82,7 @@ export function Sidebar({ isOpen, onClose }) {
           items: [
             { label: "Dashboard", path: "/", icon: LayoutDashboard },
             { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+            { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
             { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
             { label: "Invoice Bulk Upload", path: "/imports/invoices", icon: FileJson },
             { label: "Excel Imports", path: "/imports", icon: FileText },

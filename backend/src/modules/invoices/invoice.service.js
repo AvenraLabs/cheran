@@ -12,7 +12,6 @@ import GovernmentProject from "../projects/project.model.js";
 import Dealer from "../dealers/dealer.model.js";
 import DealerCommission from "../dealers/dealer-commission.model.js";
 import { recalculateItemStock } from "../inventory/inventory.service.js";
-import { getSettingValue } from "../settings/setting.service.js";
 import AppError from "../../shared/appError.js";
 
 /**
@@ -148,20 +147,17 @@ export async function createInvoice({
     }
   }
 
-  // 3. Retrieve system settings for calculations
-  const allowNegativeStockSetting = await getSettingValue("ALLOW_NEGATIVE_STOCK", false);
-  const defaultFittingsPct = await getSettingValue("FITTINGS_PERCENTAGE", 5.0);
-  const defaultGstPct = await getSettingValue("DEFAULT_GST_PERCENTAGE", 5.0);
-
+  // 3. Calculation parameters
+  const allowNegativeStockSetting = false;
   const effectiveFittingsPct =
     fittings_percentage !== null && fittings_percentage !== undefined
       ? parseFloat(fittings_percentage)
-      : parseFloat(defaultFittingsPct);
+      : 5.0;
 
   const effectiveGstPct =
     gst_percentage !== null && gst_percentage !== undefined
       ? parseFloat(gst_percentage)
-      : parseFloat(defaultGstPct);
+      : 5.0;
 
   return await db.transaction(async (transaction) => {
     let netItemTotal = 0;

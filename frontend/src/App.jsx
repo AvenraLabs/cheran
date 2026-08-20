@@ -11,6 +11,8 @@ import ProjectDetailPage from "./pages/ProjectDetailPage.jsx";
 import ImportsPage from "./pages/ImportsPage.jsx";
 import InvoiceBulkUploadPage from "./pages/InvoiceBulkUploadPage.jsx";
 import LoadOrderUploadPage from "./pages/LoadOrderUploadPage.jsx";
+import DirectSalesPage from "./pages/DirectSalesPage.jsx";
+import CreateDirectSalePage from "./pages/CreateDirectSalePage.jsx";
 import DealersPage from "./pages/DealersPage.jsx";
 
 // Core ERP Pages
@@ -25,7 +27,6 @@ import ExpensesPage from "./pages/ExpensesPage.jsx";
 import EmployeesPage from "./pages/EmployeesPage.jsx";
 import SalaryPage from "./pages/SalaryPage.jsx";
 import ReportsPage from "./pages/ReportsPage.jsx";
-import SettingsPage from "./pages/SettingsPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 
 function ProtectedLayout() {
@@ -73,6 +74,8 @@ export function App() {
           <Route index element={<DashboardPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
+          <Route path="sales" element={<DirectSalesPage />} />
+          <Route path="sales/new" element={<CreateDirectSalePage />} />
           <Route path="imports" element={<ImportsPage />} />
           <Route path="imports/invoices" element={<InvoiceBulkUploadPage />} />
           <Route path="imports/load-order" element={<LoadOrderUploadPage />} />
@@ -90,7 +93,6 @@ export function App() {
           <Route path="employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
           <Route path="salary" element={<AdminRoute><SalaryPage /></AdminRoute>} />
           <Route path="reports" element={<AdminRoute><ReportsPage /></AdminRoute>} />
-          <Route path="settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
           <Route path="users" element={<AdminRoute><UsersPage /></AdminRoute>} />
 
           {/* Fallback */}
