@@ -28,20 +28,21 @@ jobs:
 
             echo "=== [2/5] Installing Backend Dependencies & Running Migrations ==="
             cd ~/cheran/backend
-            npm ci
+            npm ci --prefer-offline --no-audit
+            npm run migrate
 
-            echo "=== [3/5] Restarting Backend Service via PM2 ==="
-            pm2 restart cheran-backend || pm2 start src/server.js --name cheran-backend
+            echo "=== [3/5] Reloading Backend Service via PM2 ==="
+            pm2 reload cheran-backend --update-env || pm2 start src/server.js --name cheran-backend
             pm2 save
 
             echo "=== [4/5] Verifying Backend Health ==="
             HEALTH_URL="http://127.0.0.1:5000/api/health"
             HEALTHY=0
-            for i in $(seq 1 6); do
-              echo "Checking backend health (attempt $i/6)..."
+            for i in $(seq 1 8); do
+              echo "Checking backend health (attempt $i/8)..."
               HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || true)
               if [ "$HTTP_CODE" = "200" ]; then
-                echo "Backend is healthy (HTTP 200)!"
+                echo "✅ Backend is healthy (HTTP 200)!"
                 HEALTHY=1
                 break
               fi
@@ -57,7 +58,7 @@ jobs:
 
             echo "=== [5/5] Building Frontend App ==="
             cd ~/cheran/frontend
-            npm ci
+            npm ci --prefer-offline --no-audit
             npm run build
 
-            echo "=== Deployment Finished Successfully! ==="
+            echo "=== 🚀 Deployment Finished Successfully! ==="

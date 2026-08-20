@@ -1,6 +1,7 @@
-"use strict";
+import db from "../config/db.js";
+import GovernmentStatus from "../modules/statuses/status.model.js";
 
-const ORDERED_GOVERNMENT_STATUSES = [
+export const ORDERED_GOVERNMENT_STATUSES = [
   "Kgi files",
   "Pre Inspection - Request for Revised Layout and GPS",
   "Automation without MI Application Received",
@@ -21,7 +22,7 @@ const ORDERED_GOVERNMENT_STATUSES = [
   "DD Upload Skipped",
   "Payment done via Payment Gateway",
   "Farmer Acceptance Letter Uploaded",
-  "INVOICED", // Company dispatch milestone placed before Issue Work Order
+  "INVOICED",
   "Issue Work Order (Auto Quotation)",
   "Issued Work Order",
   "Quotation Prepared by Block (Auto Quotation)",
@@ -59,37 +60,38 @@ const ORDERED_GOVERNMENT_STATUSES = [
   "Final Fund Credited (UTR Updated)",
 ];
 
-/** @type {import('sequelize-cli').Migration} */
-module.exports = {
-  async up(queryInterface, Sequelize) {
-    // 1. Add sequence_order column to government_statuses table if not exists
-    const tableInfo = await queryInterface.describeTable("government_statuses");
-    if (!tableInfo.sequence_order) {
-      await queryInterface.addColumn("government_statuses", "sequence_order", {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        defaultValue: 999,
-      });
-    }
+export async function seedGovernmentStatuses() {
+  for (let index = 0; index < ORDERED_GOVERNMENT_STATUSES.length; index++) {
+    const name = ORDERED_GOVERNMENT_STATUSES[index];
+    const sequence = index + 1;
 
-    // 2. Upsert all 56 ordered statuses with their sequence number
-    for (let index = 0; index < ORDERED_GOVERNMENT_STATUSES.length; index++) {
-      const name = ORDERED_GOVERNMENT_STATUSES[index];
-      const sequence = index + 1;
+    await db.query(
+      `INSERT INTO government_statuses (id, name, sequence_order, is_active, created_at, updated_at)
+       VALUES (gen_random_uuid(), :name, :sequence, true, NOW(), NOW())
+       ON CONFLICT (name) DO UPDATE 
+       SET sequence_order = :sequence, is_active = true, updated_at = NOW();`,
+      {
+        replacements: { name, sequence },
+      }
+    );
+  }
+  console.log(`✅ ${ORDERED_GOVERNMENT_STATUSES.length} Government Statuses verified & seeded.`);
+}
 
-      await queryInterface.sequelize.query(
-        `INSERT INTO government_statuses (id, name, sequence_order, is_active, created_at, updated_at)
-         VALUES (gen_random_uuid(), :name, :sequence, true, NOW(), NOW())
-         ON CONFLICT (name) DO UPDATE 
-         SET sequence_order = :sequence, is_active = true, updated_at = NOW();`,
-        {
-          replacements: { name, sequence },
-        }
-      );
-    }
-  },
-
-  async down(queryInterface, Sequelize) {
-    // Non-destructive
-  },
-};
+// Standalone runner
+if (process.argv[1] && process.argv[1].endsWith("seedStatuses.js")) {
+  db.authenticate()
+    .then(async () => {
+      console.log("🔌 Connected to database. Seeding government statuses...");
+      await seedGovernmentStatuses();
+      await db.close();
+      process.exit(0);
+    })
+    .catch(async (err) => {
+      console.error("❌ Failed to seed government statuses:", err);
+      try {
+        await db.close();
+      } catch {}
+      process.exit(1);
+    });
+}

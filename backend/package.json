@@ -7,9 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "migrate": "sequelize-cli --config config/config.cjs db:migrate",
-    "migrate:undo": "sequelize-cli --config config/config.cjs db:migrate:undo",
-    "seed": "sequelize-cli --config config/config.cjs db:seed:all",
+    "migrate": "node src/scripts/migrate.js",
+    "seed:statuses": "node src/scripts/seedStatuses.js",
     "seed:admin": "node src/scripts/seedAdmin.js"
   },
   "dependencies": {

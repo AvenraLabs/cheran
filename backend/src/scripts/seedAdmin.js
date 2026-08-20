@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import db from "../config/db.js";
 import User from "../modules/auth/user.model.js";
-import { runAutomatedMigrations } from "../config/runMigrations.js";
+import "../models/initModels.js";
 
 async function seedAdmin() {
   const args = process.argv.slice(2);
@@ -13,8 +13,8 @@ async function seedAdmin() {
   await db.authenticate();
   console.log("✅ Database connected.");
 
-  // Ensure all database tables exist via migrations
-  await runAutomatedMigrations();
+  // Ensure all database tables exist
+  await db.sync({ force: false });
 
   const salt = await bcrypt.genSalt(10);
   const password_hash = await bcrypt.hash(password, salt);

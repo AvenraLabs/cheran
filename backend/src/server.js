@@ -1,7 +1,8 @@
 import app from "./app.js";
 import db from "./config/db.js";
 import env from "./config/env.js";
-import { runAutomatedMigrations } from "./config/runMigrations.js";
+import "./models/initModels.js";
+import { seedGovernmentStatuses } from "./scripts/seedStatuses.js";
 
 async function startServer() {
   try {
@@ -9,8 +10,13 @@ async function startServer() {
     await db.authenticate();
     console.log("✅ PostgreSQL connected successfully.");
 
-    // Run database migrations and seeders automatically
-    await runAutomatedMigrations();
+    // Sync schema with models (creates any missing tables)
+    console.log("🔄 Synchronizing database tables...");
+    await db.sync({ force: false });
+    console.log("✅ Database schema synchronized.");
+
+    // Ensure government statuses are seeded
+    await seedGovernmentStatuses();
 
     const server = app.listen(env.PORT, () => {
       console.log(`🚀 Cheran Horticulture Backend Server running on port ${env.PORT} in [${env.NODE_ENV}] mode`);
