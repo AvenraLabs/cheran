@@ -1,12 +1,15 @@
-const CACHE_NAME = "cheran-pwa-v1";
+const CACHE_NAME = "cheran-pwa-v2";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
-  "/favicon.svg",
+  "/favicon.ico",
+  "/favicon.png",
+  "/icon.png",
   "/manifest.json",
+  "/icons/icon.png",
   "/icons/icon-192x192.png",
   "/icons/icon-512x512.png",
-  "/icons/icon.svg",
+  "/icons/apple-touch-icon.png",
 ];
 
 // Install Event

@@ -5,7 +5,6 @@ import {
   FileSpreadsheet,
   FileText,
   Users,
-  Sprout,
   Boxes,
   ClipboardList,
   Package,
@@ -111,15 +110,17 @@ export function Sidebar({ isOpen, onClose }) {
         {/* Brand Header */}
         <div className="h-16 px-5 border-b border-[#EDEAE1] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-[8px] bg-[#2F6F5E] text-white flex items-center justify-center font-bold font-display shadow-xs shrink-0">
-              <Sprout size={20} />
-            </div>
+            <img
+              src="/icon.png"
+              alt="Cheran Logo"
+              className="w-9 h-9 object-contain shrink-0"
+            />
             <div className="min-w-0">
               <div className="text-sm font-bold font-display tracking-tight text-[#14213D] truncate">
                 CHERAN IRRIGATION
               </div>
               <div className="text-[10px] font-medium text-[#52607D] truncate">
-                Enterprise School / ERP
+                Horticulture & Irrigation ERP
               </div>
             </div>
           </div>
