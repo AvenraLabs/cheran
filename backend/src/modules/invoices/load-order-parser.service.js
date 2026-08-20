@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { Op } from "sequelize";
 import db from "../../config/db.js";
 import "../../models/initModels.js";
 import GovernmentProject from "../projects/project.model.js";
@@ -101,7 +102,7 @@ export async function parseLoadOrderBuffer(fileBuffer) {
 
       // 1. If explicit appIdColIndex found, check that column
       if (appIdColIndex !== -1 && row[appIdColIndex]) {
-        const val = String(row[appIdColIndex]).trim();
+        const val = String(row[appIdColIndex]).trim().toUpperCase();
         if (isValidAppId(val)) {
           extractedAppIds.add(val);
           if (!rawProjectDetails.has(val)) {
@@ -120,7 +121,7 @@ export async function parseLoadOrderBuffer(fileBuffer) {
           if (!cell || typeof cell !== "string") continue;
           const match = cell.trim().match(appIdRegex);
           if (match && match[1]) {
-            const appId = match[1].trim();
+            const appId = match[1].trim().toUpperCase();
             if (isValidAppId(appId)) {
               extractedAppIds.add(appId);
               if (!rawProjectDetails.has(appId)) {
@@ -144,16 +145,19 @@ export async function parseLoadOrderBuffer(fileBuffer) {
 
   const appIdsList = Array.from(extractedAppIds);
 
-  // Check each Application ID in the database
+  // Check each Application ID in the database (case-insensitive)
   const existingProjects = await GovernmentProject.findAll({
-    where: {
-      application_id: appIdsList,
-    },
+    where: db.where(db.fn("UPPER", db.col("application_id")), {
+      [Op.in]: appIdsList,
+    }),
     attributes: ["id", "application_id", "farmer_name", "district", "block", "village", "current_status", "current_status_date", "invoice_date"],
   });
 
   const existingMap = new Map();
-  existingProjects.forEach((p) => existingMap.set(p.application_id, p));
+  existingProjects.forEach((p) => {
+    existingMap.set(p.application_id, p);
+    existingMap.set(p.application_id.toUpperCase(), p);
+  });
 
   const projectsSummary = appIdsList.map((appId) => {
     const dbProj = existingMap.get(appId);

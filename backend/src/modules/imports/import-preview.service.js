@@ -46,18 +46,19 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
   const dealerMap = new Map();
   allDealers.forEach((d) => dealerMap.set(d.normalized_name, d));
 
-  // Extract all non-empty application IDs
-  const appIds = rows.map((r) => r.application_id).filter(Boolean);
+  // Extract all non-empty application IDs normalized to uppercase
+  const appIds = rows.map((r) => normalizeApplicationId(r.application_id)).filter(Boolean);
   const existingProjects = await GovernmentProject.findAll({
-    where: {
-      application_id: {
-        [Op.in]: appIds,
-      },
-    },
+    where: db.where(db.fn("UPPER", db.col("application_id")), {
+      [Op.in]: appIds,
+    }),
     attributes: ["id", "application_id", "current_status", "current_status_date", "dealer_id"],
   });
   const projectMap = new Map();
-  existingProjects.forEach((p) => projectMap.set(p.application_id, p));
+  existingProjects.forEach((p) => {
+    projectMap.set(p.application_id, p);
+    projectMap.set(p.application_id.toUpperCase(), p);
+  });
 
   // 4. Staging calculation
   const stagedRows = [];

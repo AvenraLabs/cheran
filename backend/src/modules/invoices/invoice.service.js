@@ -63,9 +63,9 @@ export async function createInvoice({
       throw new AppError("Application ID is required for Government invoices.", 400);
     }
 
-    const cleanAppId = application_id.trim();
+    const cleanAppId = application_id.trim().toUpperCase();
     let project = await GovernmentProject.findOne({
-      where: { application_id: cleanAppId },
+      where: db.where(db.fn("UPPER", db.col("application_id")), cleanAppId),
     });
 
     if (!project) {

@@ -65,9 +65,12 @@ export async function commitImport(importId) {
       const importedStatus = stagedRow.imported_status || rowData.current_status;
       const importedStatusDate = stagedRow.imported_status_date || rowData.current_status_date;
 
-      // Check if project exists in database
+      const cleanAppId = application_id ? String(application_id).trim().toUpperCase() : null;
+      if (!cleanAppId) continue;
+
+      // Check if project exists in database (case-insensitive)
       let project = await GovernmentProject.findOne({
-        where: { application_id },
+        where: db.where(db.fn("UPPER", db.col("application_id")), cleanAppId),
         transaction,
       });
 

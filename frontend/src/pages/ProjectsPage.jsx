@@ -149,6 +149,7 @@ export function ProjectsPage() {
 
   const dealerOptions = [
     { value: "", label: "All Dealers" },
+    { value: "UNASSIGNED", label: "⚠️ Unassigned / No Dealer" },
     ...dealers.map((d) => ({
       value: d.id,
       label: d.name,

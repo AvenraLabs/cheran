@@ -26,12 +26,12 @@ export function normalizeColumnHeader(header) {
 }
 
 /**
- * Normalizes Application IDs as deterministic strings.
- * Prevents scientific notation or accidental truncation.
+ * Normalizes Application IDs as deterministic strings (uppercase, trimmed).
+ * Prevents casing mismatch (e.g. A-ERD-Tvd-... vs A-ERD-TVD-...) or accidental whitespace.
  */
 export function normalizeApplicationId(appId) {
   if (appId === null || appId === undefined) return "";
-  return String(appId).trim();
+  return String(appId).trim().toUpperCase();
 }
 
 /**

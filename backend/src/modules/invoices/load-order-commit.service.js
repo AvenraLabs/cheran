@@ -72,7 +72,8 @@ export async function commitLoadOrder({
 
   try {
     for (const projItem of projects) {
-      const appId = typeof projItem === "string" ? projItem.trim() : projItem.application_id?.trim();
+      const rawAppId = typeof projItem === "string" ? projItem : projItem?.application_id;
+      const appId = rawAppId ? String(rawAppId).trim().toUpperCase() : null;
       if (!appId) continue;
 
       const farmerName = typeof projItem === "object" ? projItem.farmer_name : null;
@@ -95,9 +96,9 @@ export async function commitLoadOrder({
 
       totalBatchInvoiceAmount += projectInvoiceTotals.grand_total;
 
-      // 2. Find or Create Government Project
+      // 2. Find or Create Government Project (case-insensitive)
       let project = await GovernmentProject.findOne({
-        where: { application_id: appId },
+        where: db.where(db.fn("UPPER", db.col("application_id")), appId),
         transaction,
       });
 

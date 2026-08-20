@@ -37,7 +37,7 @@ export async function importHistoricalInvoiceJson(jsonData) {
       continue;
     }
 
-    const cleanAppId = rawId.trim();
+    const cleanAppId = rawId.trim().toUpperCase();
     const rawDate = rec.invoice_date || rec.date || new Date().toISOString().split("T")[0];
     const cleanDate = String(rawDate).trim().slice(0, 10);
 
@@ -68,7 +68,7 @@ export async function importHistoricalInvoiceJson(jsonData) {
     try {
       for (const item of batch) {
         let project = await GovernmentProject.findOne({
-          where: { application_id: item.application_id },
+          where: db.where(db.fn("UPPER", db.col("application_id")), item.application_id),
           transaction,
         });
 

@@ -31,7 +31,13 @@ export async function listProjects(filters = {}) {
   if (district) where.district = { [Op.iLike]: `%${district}%` };
   if (block) where.block = { [Op.iLike]: `%${block}%` };
   if (village) where.village = { [Op.iLike]: `%${village}%` };
-  if (dealer_id) where.dealer_id = dealer_id;
+  if (dealer_id) {
+    if (dealer_id === "UNASSIGNED" || dealer_id === "NONE" || dealer_id === "null") {
+      where.dealer_id = null;
+    } else {
+      where.dealer_id = dealer_id;
+    }
+  }
   if (year) where.year = year;
   if (farmer_name) where.farmer_name = { [Op.iLike]: `%${farmer_name}%` };
   if (application_id) where.application_id = { [Op.iLike]: `%${application_id}%` };
@@ -105,27 +111,38 @@ export async function listProjects(filters = {}) {
 }
 
 export async function getProjectById(id) {
-  const project = await GovernmentProject.findByPk(id, {
-    include: [
-      {
-        model: Dealer,
-        as: "dealer",
-        attributes: ["id", "name", "normalized_name", "commission_percentage"],
-      },
-      {
-        model: GovernmentProjectStatusHistory,
-        as: "status_history",
-        include: [
-          {
-            model: GovernmentImport,
-            as: "source_import",
-            attributes: ["id", "file_name", "uploaded_at"],
-          },
-        ],
-      },
-    ],
-    order: [[{ model: GovernmentProjectStatusHistory, as: "status_history" }, "observed_at", "ASC"]],
-  });
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const include = [
+    {
+      model: Dealer,
+      as: "dealer",
+      attributes: ["id", "name", "normalized_name", "commission_percentage"],
+    },
+    {
+      model: GovernmentProjectStatusHistory,
+      as: "status_history",
+      include: [
+        {
+          model: GovernmentImport,
+          as: "source_import",
+          attributes: ["id", "file_name", "uploaded_at"],
+        },
+      ],
+    },
+  ];
+  const order = [[{ model: GovernmentProjectStatusHistory, as: "status_history" }, "observed_at", "ASC"]];
+
+  let project = null;
+  if (isUuid) {
+    project = await GovernmentProject.findByPk(id, { include, order });
+  }
+  if (!project) {
+    project = await GovernmentProject.findOne({
+      where: db.where(db.fn("UPPER", db.col("application_id")), String(id).trim().toUpperCase()),
+      include,
+      order,
+    });
+  }
 
   if (!project) {
     throw new AppError(`Government Project not found with ID ${id}`, 404);
