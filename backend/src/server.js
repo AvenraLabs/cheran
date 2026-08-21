@@ -59,9 +59,9 @@ async function startServer() {
     process.on("SIGTERM", () => shutdown("SIGTERM"));
     process.on("SIGINT", () => shutdown("SIGINT"));
 
-    process.on("unhandledRejection", (err) => {
-      console.error("💥 UNHANDLED REJECTION! Shutting down...", err);
-      shutdown("UNHANDLED_REJECTION");
+    process.on("unhandledRejection", (reason, promise) => {
+      console.error("⚠️ UNHANDLED REJECTION caught at:", promise, "reason:", reason);
+      // Non-fatal: do not kill the server process on temporary unhandled promise rejection
     });
 
     process.on("uncaughtException", (err) => {

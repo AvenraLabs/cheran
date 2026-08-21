@@ -3,7 +3,6 @@ import db from "../../config/db.js";
 import "../../models/initModels.js";
 import GovernmentProject from "../projects/project.model.js";
 import Dealer from "../dealers/dealer.model.js";
-import DealerCommission from "../dealers/dealer-commission.model.js";
 import StockReceipt from "../inventory/stock-receipt.model.js";
 import StockReceiptItem from "../inventory/stock-receipt-item.model.js";
 import Supplier from "../suppliers/supplier.model.js";
@@ -13,45 +12,78 @@ import Expense from "../expenses/expense.model.js";
 import ExpenseCategory from "../expenses/expense-category.model.js";
 import Employee from "../employees/employee.model.js";
 import EmployeeSalaryRecord from "../employees/employee-salary-record.model.js";
-import Invoice from "../invoices/invoice.model.js";
-import ProceedingBatchProject from "../proceedings/proceeding-batch-project.model.js";
-
-// First Fund Milestone Statuses
-const FIRST_FUND_STATUSES = [
-  "District First Fund Credited (UTR Updated)",
-  "First Fund Credited (UTR Updated)",
-  "District First Fund Proceeding Completed",
-  "Iamwarm Fund Credited (UTR Updated)",
-];
-
-// Final Fund Milestone Statuses
-const FINAL_FUND_STATUSES = [
-  "Final Fund Credited (UTR Updated)",
-  "Final Fund Release Recommended by District Office",
-  "Iamwarm Fund Credited (UTR Updated)",
-];
 
 // ==========================================
-// 1. Raw Materials Purchase & Procurement Report
+// 1. Raw Materials Purchase & Procurement Report (SQL Aggregated)
 // ==========================================
 export async function getProcurementReport({ startDate, endDate } = {}) {
-  const where = {};
+  let dateFilter = "";
+  const replacements = {};
   if (startDate && endDate) {
-    where.receipt_date = { [Op.between]: [startDate, endDate] };
+    dateFilter = " WHERE sr.receipt_date BETWEEN :startDate AND :endDate";
+    replacements.startDate = startDate;
+    replacements.endDate = endDate;
   } else if (startDate) {
-    where.receipt_date = { [Op.gte]: startDate };
+    dateFilter = " WHERE sr.receipt_date >= :startDate";
+    replacements.startDate = startDate;
   } else if (endDate) {
-    where.receipt_date = { [Op.lte]: endDate };
+    dateFilter = " WHERE sr.receipt_date <= :endDate";
+    replacements.endDate = endDate;
   }
 
-  const receipts = await StockReceipt.findAll({
-    where,
+  // 1. Overall totals
+  const [totalRes] = await db.query(
+    `SELECT 
+       COALESCE(SUM(sr.total_amount), 0)::float AS total_spend,
+       COUNT(*)::integer AS receipts_count
+     FROM stock_receipts sr ${dateFilter}`,
+    { replacements, type: QueryTypes.SELECT }
+  );
+
+  // 2. By Supplier
+  const bySupplier = await db.query(
+    `SELECT 
+       COALESCE(s.name, sr.supplier_name, 'Direct / Unspecified Vendor') AS name,
+       COUNT(*)::integer AS count,
+       COALESCE(SUM(sr.total_amount), 0)::float AS total_spend
+     FROM stock_receipts sr
+     LEFT JOIN suppliers s ON sr.supplier_id = s.id
+     ${dateFilter}
+     GROUP BY COALESCE(s.name, sr.supplier_name, 'Direct / Unspecified Vendor')
+     ORDER BY total_spend DESC
+     LIMIT 50`,
+    { replacements, type: QueryTypes.SELECT }
+  );
+
+  // 3. By Item
+  const byItem = await db.query(
+    `SELECT 
+       i.name,
+       i.category,
+       u.symbol AS unit,
+       COALESCE(SUM(sri.quantity), 0)::float AS total_quantity,
+       COALESCE(SUM(COALESCE(sri.total_amount, sri.quantity * sri.unit_price)), 0)::float AS total_spend
+     FROM stock_receipt_items sri
+     JOIN stock_receipts sr ON sri.stock_receipt_id = sr.id
+     JOIN items i ON sri.item_id = i.id
+     LEFT JOIN units u ON i.unit_id = u.id
+     ${dateFilter}
+     GROUP BY i.id, i.name, i.category, u.symbol
+     ORDER BY total_spend DESC
+     LIMIT 50`,
+    { replacements, type: QueryTypes.SELECT }
+  );
+
+  // 4. Recent Receipts (Bounded to 50)
+  const whereReceipt = {};
+  if (startDate && endDate) whereReceipt.receipt_date = { [Op.between]: [startDate, endDate] };
+  else if (startDate) whereReceipt.receipt_date = { [Op.gte]: startDate };
+  else if (endDate) whereReceipt.receipt_date = { [Op.lte]: endDate };
+
+  const recentReceipts = await StockReceipt.findAll({
+    where: whereReceipt,
     include: [
-      {
-        model: Supplier,
-        as: "supplier",
-        attributes: ["id", "name", "phone"],
-      },
+      { model: Supplier, as: "supplier", attributes: ["id", "name", "phone"] },
       {
         model: StockReceiptItem,
         as: "items",
@@ -66,83 +98,110 @@ export async function getProcurementReport({ startDate, endDate } = {}) {
       },
     ],
     order: [["receipt_date", "DESC"], ["created_at", "DESC"]],
+    limit: 50,
   });
 
-  let grandTotalProcurement = 0;
-  const supplierSpendMap = new Map();
-  const itemSpendMap = new Map();
-
-  const formattedReceipts = receipts.map((r) => {
-    const totalAmt = parseFloat(r.total_amount) || 0;
-    grandTotalProcurement += totalAmt;
-
-    const supName = r.supplier?.name || r.supplier_name || "Direct / Unspecified Vendor";
-    const existingSup = supplierSpendMap.get(supName) || { name: supName, count: 0, total_spend: 0 };
-    existingSup.count += 1;
-    existingSup.total_spend += totalAmt;
-    supplierSpendMap.set(supName, existingSup);
-
-    const itemsSummary = (r.items || []).map((it) => {
-      const itName = it.item?.name || "Raw Material";
-      const itCategory = it.item?.category || "Material";
-      const itUnit = it.item?.unit?.symbol || "KG";
-      const qty = parseFloat(it.quantity) || 0;
-      const unitPrice = parseFloat(it.unit_price) || 0;
-      const itTotal = parseFloat(it.total_amount) || qty * unitPrice;
-
-      const existingItem = itemSpendMap.get(itName) || {
-        name: itName,
-        category: itCategory,
-        unit: itUnit,
-        total_quantity: 0,
-        total_spend: 0,
-      };
-      existingItem.total_quantity += qty;
-      existingItem.total_spend += itTotal;
-      itemSpendMap.set(itName, existingItem);
-
-      return {
-        item_id: it.item_id,
-        name: itName,
-        category: itCategory,
-        unit: itUnit,
-        quantity: qty,
-        unit_price: unitPrice,
-        total_amount: itTotal,
-      };
-    });
-
-    return {
-      id: r.id,
-      receipt_date: r.receipt_date,
-      reference_number: r.reference_number || "—",
-      supplier_name: supName,
-      total_amount: totalAmt,
-      notes: r.notes || null,
-      items_count: itemsSummary.length,
-      items: itemsSummary,
-    };
-  });
+  const formattedReceipts = recentReceipts.map((r) => ({
+    id: r.id,
+    receipt_date: r.receipt_date,
+    reference_number: r.reference_number || "—",
+    supplier_name: r.supplier?.name || r.supplier_name || "Direct / Unspecified Vendor",
+    total_amount: parseFloat(r.total_amount) || 0,
+    notes: r.notes || null,
+    items_count: (r.items || []).length,
+    items: (r.items || []).map((it) => ({
+      item_id: it.item_id,
+      name: it.item?.name || "Raw Material",
+      category: it.item?.category || "Material",
+      unit: it.item?.unit?.symbol || "KG",
+      quantity: parseFloat(it.quantity) || 0,
+      unit_price: parseFloat(it.unit_price) || 0,
+      total_amount: parseFloat(it.total_amount) || 0,
+    })),
+  }));
 
   return {
-    totalProcurementSpend: parseFloat(grandTotalProcurement.toFixed(2)),
-    receiptsCount: receipts.length,
-    bySupplier: Array.from(supplierSpendMap.values()).sort((a, b) => b.total_spend - a.total_spend),
-    byItem: Array.from(itemSpendMap.values()).sort((a, b) => b.total_spend - a.total_spend),
+    totalProcurementSpend: totalRes?.total_spend || 0,
+    receiptsCount: totalRes?.receipts_count || 0,
+    bySupplier,
+    byItem,
     receipts: formattedReceipts,
   };
 }
 
 // ==========================================
-// 2. Government Fund Milestone Inflows (55% & 45%)
+// 2. Government Fund Milestone Inflows (SQL Aggregated)
 // ==========================================
 export async function getGovernmentFundsReport({ year, district } = {}) {
-  const where = {};
-  if (year) where.year = year;
-  if (district) where.district = { [Op.iLike]: `%${district}%` };
+  let whereClause = "";
+  const replacements = {};
+  const conditions = [];
+  if (year) {
+    conditions.push("year = :year");
+    replacements.year = year;
+  }
+  if (district) {
+    conditions.push("district ILIKE :district");
+    replacements.district = `%${district}%`;
+  }
+  if (conditions.length > 0) {
+    whereClause = " WHERE " + conditions.join(" AND ");
+  }
 
-  const projects = await GovernmentProject.findAll({
-    where,
+  // 1. Aggregate Totals
+  const [totals] = await db.query(
+    `SELECT 
+       COUNT(*)::integer AS total_projects_count,
+       COALESCE(SUM(COALESCE(invoice_amount, quotation_subsidy_amount, 0)), 0)::float AS total_invoiced_amount,
+       COALESCE(SUM(COALESCE(first_fund_amount, 0)), 0)::float AS total_first_fund_received,
+       COALESCE(SUM(COALESCE(second_fund_amount, 0)), 0)::float AS total_second_fund_received,
+       COALESCE(SUM(COALESCE(total_fund_released, 0)), 0)::float AS total_released_amount,
+       COUNT(CASE WHEN first_fund_amount > 0 OR first_fund_utr_no IS NOT NULL THEN 1 END)::integer AS first_fund_projects_count,
+       COUNT(CASE WHEN second_fund_amount > 0 OR final_fund_utr_no IS NOT NULL THEN 1 END)::integer AS final_fund_projects_count
+     FROM government_projects ${whereClause}`,
+    { replacements, type: QueryTypes.SELECT }
+  );
+
+  // 2. By Status
+  const byStatus = await db.query(
+    `SELECT 
+       COALESCE(current_status, 'Unknown') AS status,
+       COUNT(*)::integer AS count,
+       COALESCE(SUM(COALESCE(invoice_amount, quotation_subsidy_amount, 0)), 0)::float AS total_invoiced,
+       COALESCE(SUM(COALESCE(total_fund_released, 0)), 0)::float AS total_received
+     FROM government_projects
+     ${whereClause}
+     GROUP BY current_status
+     ORDER BY count DESC`,
+    { replacements, type: QueryTypes.SELECT }
+  );
+
+  // 3. By District
+  const byDistrict = await db.query(
+    `SELECT 
+       COALESCE(district, 'Unassigned District') AS district,
+       COUNT(*)::integer AS count,
+       COALESCE(SUM(COALESCE(invoice_amount, quotation_subsidy_amount, 0)), 0)::float AS total_invoiced,
+       COALESCE(SUM(COALESCE(total_fund_released, 0)), 0)::float AS total_received
+     FROM government_projects
+     ${whereClause}
+     GROUP BY district
+     ORDER BY total_received DESC
+     LIMIT 50`,
+    { replacements, type: QueryTypes.SELECT }
+  );
+
+  const totalInvoiced = totals?.total_invoiced_amount || 0;
+  const totalReleased = totals?.total_released_amount || 0;
+  const pendingReceivable = Math.max(0, totalInvoiced - totalReleased);
+
+  // 4. Recent Projects (Bounded to 50)
+  const whereObj = {};
+  if (year) whereObj.year = year;
+  if (district) whereObj.district = { [Op.iLike]: `%${district}%` };
+
+  const recentProjects = await GovernmentProject.findAll({
+    where: whereObj,
     attributes: [
       "id",
       "application_id",
@@ -156,98 +215,17 @@ export async function getGovernmentFundsReport({ year, district } = {}) {
       "quotation_subsidy_amount",
       "first_fund_amount",
       "first_fund_utr_no",
-      "first_fund_utr_date",
       "second_fund_amount",
       "final_fund_utr_no",
-      "final_fund_utr_date",
       "total_fund_released",
     ],
     order: [["created_at", "DESC"]],
+    limit: 50,
   });
 
-  let totalInvoicedAmount = 0;
-  let totalFirstFundReceived = 0;
-  let totalSecondFundReceived = 0;
-  let totalReleasedAmount = 0;
-  let firstFundProjectsCount = 0;
-  let finalFundProjectsCount = 0;
-
-  const byStatusMap = new Map();
-  const byDistrictMap = new Map();
-
-  const formattedProjects = projects.map((p) => {
-    const rawInvoice =
-      parseFloat(p.invoice_amount) || parseFloat(p.quotation_subsidy_amount) || 0;
-    totalInvoicedAmount += rawInvoice;
-
-    const status = p.current_status || "UNKNOWN";
-
-    // Check Milestone 1 (55%)
-    let firstFundReceived = 0;
-    const isFirstFundEligible =
-      FIRST_FUND_STATUSES.includes(status) ||
-      FINAL_FUND_STATUSES.includes(status) ||
-      Boolean(p.first_fund_utr_no) ||
-      parseFloat(p.first_fund_amount) > 0;
-
-    if (isFirstFundEligible) {
-      firstFundReceived =
-        parseFloat(p.first_fund_amount) > 0
-          ? parseFloat(p.first_fund_amount)
-          : parseFloat((rawInvoice * 0.55).toFixed(2));
-      totalFirstFundReceived += firstFundReceived;
-      firstFundProjectsCount++;
-    }
-
-    // Check Milestone 2 (45%)
-    let secondFundReceived = 0;
-    const isFinalFundEligible =
-      FINAL_FUND_STATUSES.includes(status) ||
-      Boolean(p.final_fund_utr_no) ||
-      parseFloat(p.second_fund_amount) > 0;
-
-    if (isFinalFundEligible) {
-      secondFundReceived =
-        parseFloat(p.second_fund_amount) > 0
-          ? parseFloat(p.second_fund_amount)
-          : parseFloat((rawInvoice * 0.45).toFixed(2));
-      totalSecondFundReceived += secondFundReceived;
-      finalFundProjectsCount++;
-    }
-
-    const projectTotalReleased =
-      parseFloat(p.total_fund_released) > 0
-        ? parseFloat(p.total_fund_released)
-        : firstFundReceived + secondFundReceived;
-    totalReleasedAmount += projectTotalReleased;
-
-    const pendingReceivable = Math.max(0, rawInvoice - projectTotalReleased);
-
-    // Grouping by Status
-    const statusGroup = byStatusMap.get(status) || {
-      status,
-      count: 0,
-      total_invoiced: 0,
-      total_received: 0,
-    };
-    statusGroup.count++;
-    statusGroup.total_invoiced += rawInvoice;
-    statusGroup.total_received += projectTotalReleased;
-    byStatusMap.set(status, statusGroup);
-
-    // Grouping by District
-    const dist = p.district || "Unassigned District";
-    const distGroup = byDistrictMap.get(dist) || {
-      district: dist,
-      count: 0,
-      total_invoiced: 0,
-      total_received: 0,
-    };
-    distGroup.count++;
-    distGroup.total_invoiced += rawInvoice;
-    distGroup.total_received += projectTotalReleased;
-    byDistrictMap.set(dist, distGroup);
-
+  const formattedProjects = recentProjects.map((p) => {
+    const rawInv = parseFloat(p.invoice_amount) || parseFloat(p.quotation_subsidy_amount) || 0;
+    const rel = parseFloat(p.total_fund_released) || (parseFloat(p.first_fund_amount) || 0) + (parseFloat(p.second_fund_amount) || 0);
     return {
       id: p.id,
       application_id: p.application_id,
@@ -255,34 +233,31 @@ export async function getGovernmentFundsReport({ year, district } = {}) {
       district: p.district,
       block: p.block,
       village: p.village,
-      current_status: status,
+      current_status: p.current_status,
       current_status_date: p.current_status_date,
-      invoiced_amount: rawInvoice,
-      first_fund_received: firstFundReceived,
+      invoiced_amount: rawInv,
+      first_fund_received: parseFloat(p.first_fund_amount) || 0,
       first_fund_utr: p.first_fund_utr_no,
-      second_fund_received: secondFundReceived,
+      second_fund_received: parseFloat(p.second_fund_amount) || 0,
       final_fund_utr: p.final_fund_utr_no,
-      total_released: projectTotalReleased,
-      pending_receivable: parseFloat(pendingReceivable.toFixed(2)),
+      total_released: rel,
+      pending_receivable: parseFloat(Math.max(0, rawInv - rel).toFixed(2)),
     };
   });
 
   return {
-    totalProjectsCount: projects.length,
-    totalInvoicedAmount: parseFloat(totalInvoicedAmount.toFixed(2)),
-    totalFirstFundReceived: parseFloat(totalFirstFundReceived.toFixed(2)),
-    firstFundProjectsCount,
-    totalSecondFundReceived: parseFloat(totalSecondFundReceived.toFixed(2)),
-    finalFundProjectsCount,
-    totalReleasedAmount: parseFloat(totalReleasedAmount.toFixed(2)),
-    totalPendingReceivable: parseFloat(Math.max(0, totalInvoicedAmount - totalReleasedAmount).toFixed(2)),
-    recoveryPercentage:
-      totalInvoicedAmount > 0
-        ? parseFloat(((totalReleasedAmount / totalInvoicedAmount) * 100).toFixed(2))
-        : 0,
-    byStatus: Array.from(byStatusMap.values()).sort((a, b) => b.count - a.count),
-    byDistrict: Array.from(byDistrictMap.values()).sort((a, b) => b.total_received - a.total_received),
-    projects: formattedProjects.slice(0, 100), // Top 100 recent rows
+    totalProjectsCount: totals?.total_projects_count || 0,
+    totalInvoicedAmount: totalInvoiced,
+    totalFirstFundReceived: totals?.total_first_fund_received || 0,
+    firstFundProjectsCount: totals?.first_fund_projects_count || 0,
+    totalSecondFundReceived: totals?.total_second_fund_received || 0,
+    finalFundProjectsCount: totals?.final_fund_projects_count || 0,
+    totalReleasedAmount: totalReleased,
+    totalPendingReceivable: parseFloat(pendingReceivable.toFixed(2)),
+    recoveryPercentage: totalInvoiced > 0 ? parseFloat(((totalReleased / totalInvoiced) * 100).toFixed(2)) : 0,
+    byStatus,
+    byDistrict,
+    projects: formattedProjects,
   };
 }
 
@@ -396,168 +371,101 @@ export async function getFinancialOverviewReport({ startDate, endDate } = {}) {
 }
 
 // ==========================================
-// 4. Dealer Performance & Commission Report
+// 4. Dealer Performance & Commission Report (SQL Aggregated)
 // ==========================================
 export async function getDealerReport({ start_date, end_date, year, dealer_id } = {}) {
-  const whereDealer = {};
+  let whereDealer = "";
+  const replacements = {};
   if (dealer_id) {
-    whereDealer.id = dealer_id;
+    whereDealer = " WHERE d.id = :dealerId";
+    replacements.dealerId = dealer_id;
   }
 
-  const projectWhere = {};
-  if (start_date && end_date) {
-    projectWhere.created_at = {
-      [Op.between]: [new Date(`${start_date}T00:00:00.000Z`), new Date(`${end_date}T23:59:59.999Z`)],
-    };
-  } else if (year) {
-    projectWhere.created_at = {
-      [Op.between]: [new Date(`${year}-01-01T00:00:00.000Z`), new Date(`${year}-12-31T23:59:59.999Z`)],
-    };
-  }
-
-  const dealers = await Dealer.findAll({
-    where: whereDealer,
-    attributes: ["id", "name", "commission_percentage"],
-    include: [
-      {
-        model: GovernmentProject,
-        as: "projects",
-        where: Object.keys(projectWhere).length > 0 ? projectWhere : undefined,
-        required: false,
-        attributes: ["id", "quotation_subsidy_amount", "total_fund_released", "current_status", "created_at"],
-      },
-      {
-        model: ProceedingBatchProject,
-        as: "proceeding_projects",
-        required: false,
-        attributes: [
-          "id",
-          "commission_amount",
-          "fittings_amount",
-          "penalty_amount",
-          "adjusted_penalty_amount",
-          "is_paid_to_dealer",
-          "dealer_paid_date",
-          "dealer_paid_ref",
-          "created_at",
-        ],
-      },
-      {
-        model: DealerCommission,
-        as: "commissions",
-        required: false,
-        attributes: [
-          "id",
-          "commission_amount",
-          "fittings_amount",
-          "status",
-          "fittings_status",
-          "created_at",
-        ],
-      },
-    ],
-    order: [["name", "ASC"]],
-  });
+  const dealers = await db.query(
+    `SELECT 
+       d.id AS dealer_id,
+       d.name AS dealer_name,
+       COALESCE(d.commission_percentage, 0)::float AS commission_percentage,
+       COUNT(DISTINCT gp.id)::integer AS total_projects,
+       COALESCE(SUM(gp.quotation_subsidy_amount), 0)::float AS total_subsidy_amount,
+       COALESCE(SUM(gp.total_fund_released), 0)::float AS total_fund_released,
+       COALESCE(SUM(CASE WHEN pbp.is_paid_to_dealer = true THEN pbp.commission_amount ELSE 0 END), 0)::float AS commission_paid,
+       COALESCE(SUM(CASE WHEN pbp.is_paid_to_dealer = false THEN pbp.commission_amount ELSE 0 END), 0)::float AS commission_pending,
+       COALESCE(SUM(CASE WHEN pbp.is_paid_to_dealer = true THEN pbp.fittings_amount ELSE 0 END), 0)::float AS fittings_paid,
+       COALESCE(SUM(CASE WHEN pbp.is_paid_to_dealer = false THEN pbp.fittings_amount ELSE 0 END), 0)::float AS fittings_pending,
+       COALESCE(SUM(pbp.adjusted_penalty_amount), 0)::float AS total_penalties
+     FROM dealers d
+     LEFT JOIN government_projects gp ON gp.dealer_id = d.id
+     LEFT JOIN proceeding_batch_projects pbp ON pbp.dealer_id = d.id
+     ${whereDealer}
+     GROUP BY d.id, d.name, d.commission_percentage
+     ORDER BY d.name ASC`,
+    { replacements, type: QueryTypes.SELECT }
+  );
 
   return dealers.map((d) => {
-    const totalProjects = (d.projects || []).length;
-    const totalSubsidy = (d.projects || []).reduce(
-      (acc, p) => acc + (parseFloat(p.quotation_subsidy_amount) || 0),
-      0
-    );
-    const totalReleased = (d.projects || []).reduce(
-      (acc, p) => acc + (parseFloat(p.total_fund_released) || 0),
-      0
-    );
-
-    let commissionPending = 0;
-    let commissionPaid = 0;
-    let fittingsPending = 0;
-    let fittingsPaid = 0;
-    let penaltyTotal = 0;
-
-    // Aggregate from Live Proceedings Batches
-    for (const p of d.proceeding_projects || []) {
-      const commAmt = parseFloat(p.commission_amount) || 0;
-      const fitAmt = parseFloat(p.fittings_amount) || 0;
-      const penAmt = parseFloat(p.adjusted_penalty_amount || p.penalty_amount) || 0;
-      penaltyTotal += penAmt;
-
-      if (p.is_paid_to_dealer) {
-        commissionPaid += commAmt;
-        fittingsPaid += fitAmt;
-      } else {
-        commissionPending += commAmt;
-        fittingsPending += fitAmt;
-      }
-    }
-
-    // Also combine legacy DealerCommission records if any exist
-    for (const c of d.commissions || []) {
-      const commAmt = parseFloat(c.commission_amount) || 0;
-      const fitAmt = parseFloat(c.fittings_amount) || 0;
-
-      if (c.status === "PAID") commissionPaid += commAmt;
-      else commissionPending += commAmt;
-
-      if (c.fittings_status === "PAID") fittingsPaid += fitAmt;
-      else fittingsPending += fitAmt;
-    }
-
-    const totalPayoutPaid = parseFloat((commissionPaid + fittingsPaid).toFixed(2));
-    const totalPayoutPending = parseFloat((commissionPending + fittingsPending).toFixed(2));
+    const commPaid = parseFloat(d.commission_paid || 0);
+    const fitPaid = parseFloat(d.fittings_paid || 0);
+    const commPend = parseFloat(d.commission_pending || 0);
+    const fitPend = parseFloat(d.fittings_pending || 0);
+    const totalPaid = commPaid + fitPaid;
+    const totalPending = commPend + fitPend;
 
     return {
-      dealer_id: d.id,
-      dealer_name: d.name,
-      commission_percentage: d.commission_percentage ? parseFloat(d.commission_percentage) : 0,
-      total_projects: totalProjects,
-      total_subsidy_amount: parseFloat(totalSubsidy.toFixed(2)),
-      total_fund_released: parseFloat(totalReleased.toFixed(2)),
-      commission_paid: parseFloat(commissionPaid.toFixed(2)),
-      commission_pending: parseFloat(commissionPending.toFixed(2)),
-      fittings_paid: parseFloat(fittingsPaid.toFixed(2)),
-      fittings_pending: parseFloat(fittingsPending.toFixed(2)),
-      total_penalties: parseFloat(penaltyTotal.toFixed(2)),
-      total_payout_paid: totalPayoutPaid,
-      total_payout_pending: totalPayoutPending,
-      total_payout_amount: parseFloat((totalPayoutPaid + totalPayoutPending).toFixed(2)),
+      dealer_id: d.dealer_id,
+      dealer_name: d.dealer_name,
+      commission_percentage: d.commission_percentage,
+      total_projects: d.total_projects,
+      total_subsidy_amount: d.total_subsidy_amount,
+      total_fund_released: d.total_fund_released,
+      commission_paid: commPaid,
+      commission_pending: commPend,
+      fittings_paid: fitPaid,
+      fittings_pending: fitPend,
+      total_penalties: d.total_penalties,
+      total_payout_paid: parseFloat(totalPaid.toFixed(2)),
+      total_payout_pending: parseFloat(totalPending.toFixed(2)),
+      total_payout_amount: parseFloat((totalPaid + totalPending).toFixed(2)),
     };
   });
 }
 
 // ==========================================
-// 5. Operating Expense Report
+// 5. Operating Expense Report (SQL Aggregated)
 // ==========================================
 export async function getExpenseReport({ year } = {}) {
-  const where = {};
+  let whereClause = "";
+  const replacements = {};
   if (year) {
-    where.expense_date = {
-      [Op.between]: [`${year}-01-01`, `${year}-12-31`],
-    };
+    whereClause = " WHERE e.expense_date BETWEEN :startDate AND :endDate";
+    replacements.startDate = `${year}-01-01`;
+    replacements.endDate = `${year}-12-31`;
   }
 
-  const expenses = await Expense.findAll({
-    where,
-    include: [{ model: ExpenseCategory, as: "category", attributes: ["name"] }],
-  });
+  const [totalRes] = await db.query(
+    `SELECT COALESCE(SUM(amount), 0)::float AS grand_total FROM expenses e ${whereClause}`,
+    { replacements, type: QueryTypes.SELECT }
+  );
+  const grandTotal = parseFloat(totalRes?.grand_total || 0);
 
-  const byCategory = {};
-  let grandTotal = 0;
-
-  for (const e of expenses) {
-    const catName = e.category?.name || "Miscellaneous";
-    const amt = parseFloat(e.amount) || 0;
-    byCategory[catName] = (byCategory[catName] || 0) + amt;
-    grandTotal += amt;
-  }
+  const categories = await db.query(
+    `SELECT 
+       COALESCE(ec.name, 'Miscellaneous') AS category,
+       COALESCE(SUM(e.amount), 0)::float AS amount
+     FROM expenses e
+     LEFT JOIN expense_categories ec ON e.category_id = ec.id
+     ${whereClause}
+     GROUP BY ec.name
+     ORDER BY amount DESC`,
+    { replacements, type: QueryTypes.SELECT }
+  );
 
   return {
-    totalExpenses: parseFloat(grandTotal.toFixed(2)),
-    byCategory: Object.entries(byCategory).map(([category, amount]) => ({
-      category,
-      amount: parseFloat(amount.toFixed(2)),
-      percentage: grandTotal > 0 ? parseFloat(((amount / grandTotal) * 100).toFixed(2)) : 0,
+    totalExpenses: grandTotal,
+    byCategory: categories.map((c) => ({
+      category: c.category,
+      amount: c.amount,
+      percentage: grandTotal > 0 ? parseFloat(((c.amount / grandTotal) * 100).toFixed(2)) : 0,
     })),
   };
 }

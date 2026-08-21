@@ -18,10 +18,10 @@ const db = new Sequelize(env.DB_URI, {
   dialect: "postgres",
   logging: env.NODE_ENV === "development" ? (msg) => console.log(`[SQL] ${msg}`) : false,
   pool: {
-    max: env.DB_POOL_MAX || 15,
-    min: env.DB_POOL_MIN || 2,
-    acquire: 15000,
-    idle: 10000,
+    max: env.DB_POOL_MAX || 25,
+    min: env.DB_POOL_MIN || 5,
+    acquire: env.DB_POOL_ACQUIRE || 30000,
+    idle: env.DB_POOL_IDLE || 10000,
     evict: 10000,
   },
   timezone: "+05:30", // India Standard Time
