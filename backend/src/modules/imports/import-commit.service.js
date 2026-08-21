@@ -216,8 +216,11 @@ export async function commitImport(importId) {
         // Helper for non-destructive updates (preserves existing DB value if Excel cell is null/undefined, preserves 0)
         const updateVal = (newVal, existingVal) => (newVal !== null && newVal !== undefined ? newVal : existingVal);
 
-        // Keep existing valid invoice_number if imported value is null or 'Sales'
-        const targetInvoiceNo = cleanImportedInvoiceNo || project.invoice_number;
+        // Keep existing authoritative invoice_number if already set in DB, else use valid imported value
+        const targetInvoiceNo = project.invoice_number || cleanImportedInvoiceNo;
+
+        // Keep existing authoritative invoice_date if already set in DB, else use imported value
+        const targetInvoiceDate = project.invoice_date || updateVal(rowData.invoice_date, project.invoice_date);
 
         // Build updated fields payload from latest Excel
         const updatePayload = {
@@ -252,7 +255,7 @@ export async function commitImport(importId) {
           farmer_contribution: updateVal(rowData.farmer_contribution, project.farmer_contribution),
           invoice_number: targetInvoiceNo,
           invoice_amount: updateVal(rowData.invoice_amount, project.invoice_amount),
-          invoice_date: updateVal(rowData.invoice_date, project.invoice_date),
+          invoice_date: targetInvoiceDate,
           state_restricted_amount: updateVal(rowData.state_restricted_amount, project.state_restricted_amount),
           work_order_date: updateVal(rowData.work_order_date, project.work_order_date),
           work_order_no: updateVal(rowData.work_order_no, project.work_order_no),
@@ -329,7 +332,7 @@ export async function commitImport(importId) {
                 { transaction }
               );
               historyCreatedCount++;
-            } else if (!existingHist.status_date || existingHist.status_date !== mDate) {
+            } else if (m.status !== "INVOICED" && (!existingHist.status_date || existingHist.status_date !== mDate)) {
               await existingHist.update({ status_date: mDate }, { transaction });
             }
           }

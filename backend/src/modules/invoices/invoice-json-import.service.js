@@ -2,6 +2,8 @@ import db from "../../config/db.js";
 import "../../models/initModels.js";
 import GovernmentProject from "../projects/project.model.js";
 import GovernmentProjectStatusHistory from "../projects/project-history.model.js";
+import { parseExcelDate } from "../../utils/dates.js";
+import { normalizeApplicationId } from "../../utils/normalization.js";
 import AppError from "../../shared/appError.js";
 
 /**
@@ -27,29 +29,57 @@ export async function importHistoricalInvoiceJson(jsonData) {
     throw new AppError("The uploaded JSON contains 0 invoice records.", 400);
   }
 
-  // Deduplicate and group by government_project_id, keeping the earliest invoice_date
+  // Deduplicate and group by government_project_id, keeping the earliest invoice_date and paired invoice_number
   const projectMap = new Map();
   let duplicateCount = 0;
 
   for (const rec of records) {
-    const rawId = rec.government_project_id || rec.application_id || rec.project_id || rec.id;
+    const rawId =
+      rec.government_project_id ||
+      rec.government_application_id ||
+      rec.application_id ||
+      rec.project_id ||
+      rec.id;
+
     if (!rawId || typeof rawId !== "string" || !rawId.trim()) {
       continue;
     }
 
-    const cleanAppId = rawId.trim().toUpperCase();
-    const rawDate = rec.invoice_date || rec.date || new Date().toISOString().split("T")[0];
-    const cleanDate = String(rawDate).trim().slice(0, 10);
-    const rawInvNo = rec.invoice_number || rec.invoice_no || rec.inv_no || rec.bill_no || rec.voucher_no;
-    const cleanInvNo = rawInvNo ? String(rawInvNo).trim() : null;
+    const cleanAppId = normalizeApplicationId(rawId);
+    if (!cleanAppId) continue;
+
+    const rawDate =
+      rec.invoice_date ||
+      rec.inv_date ||
+      rec.date_of_invoice ||
+      rec.invoiceDate ||
+      rec.date ||
+      rec["Invoice Date"];
+
+    const cleanDate = parseExcelDate(rawDate);
+
+    const rawInvNo =
+      rec.invoice_number ||
+      rec.invoice_no ||
+      rec.inv_no ||
+      rec.bill_no ||
+      rec.voucher_no ||
+      rec.invoiceNumber ||
+      rec["Invoice Number"];
+
+    const cleanInvNo = rawInvNo !== undefined && rawInvNo !== null ? String(rawInvNo).trim() : null;
 
     if (projectMap.has(cleanAppId)) {
       duplicateCount++;
       const existing = projectMap.get(cleanAppId);
+
+      // If this record has a cleaner/earlier date, update both date and its paired invoice number
       if (cleanDate && (!existing.invoice_date || cleanDate < existing.invoice_date)) {
         existing.invoice_date = cleanDate;
-      }
-      if (cleanInvNo) {
+        if (cleanInvNo) {
+          existing.invoice_number = cleanInvNo;
+        }
+      } else if (!existing.invoice_number && cleanInvNo) {
         existing.invoice_number = cleanInvNo;
       }
     } else {
@@ -107,7 +137,23 @@ export async function importHistoricalInvoiceJson(jsonData) {
 
           newProjectsCreated++;
         } else {
-          // Project exists: ensure INVOICED status history exists
+          // Update invoice details on existing project authoritatively
+          const updatePayload = {};
+          if (item.invoice_number) {
+            updatePayload.invoice_number = item.invoice_number;
+          }
+          if (item.invoice_date) {
+            updatePayload.invoice_date = item.invoice_date;
+          }
+          if (project.current_status === "INVOICED" && item.invoice_date) {
+            updatePayload.current_status_date = item.invoice_date;
+          }
+
+          if (Object.keys(updatePayload).length > 0) {
+            await project.update(updatePayload, { transaction });
+          }
+
+          // Ensure INVOICED status history exists and matches authoritative invoice date
           const existingInvoicedHistory = await GovernmentProjectStatusHistory.findOne({
             where: {
               project_id: project.id,
@@ -129,32 +175,16 @@ export async function importHistoricalInvoiceJson(jsonData) {
               },
               { transaction }
             );
-          } else if (
-            item.invoice_date &&
-            (!existingInvoicedHistory.status_date || item.invoice_date < existingInvoicedHistory.status_date)
-          ) {
+          } else if (item.invoice_date && existingInvoicedHistory.status_date !== item.invoice_date) {
             await existingInvoicedHistory.update(
-              { status_date: item.invoice_date },
+              {
+                status_date: item.invoice_date,
+                remarks: item.invoice_number
+                  ? `Historical invoice import (Invoice #${item.invoice_number})`
+                  : existingInvoicedHistory.remarks,
+              },
               { transaction }
             );
-          }
-
-          // Update invoice details on existing project
-          const updatePayload = {};
-          if (item.invoice_number) {
-            updatePayload.invoice_number = item.invoice_number;
-          }
-          if (!project.invoice_date || (item.invoice_date && item.invoice_date < project.invoice_date)) {
-            updatePayload.invoice_date = item.invoice_date;
-          }
-          if (project.current_status === "INVOICED") {
-            if (!project.current_status_date || (item.invoice_date && item.invoice_date < project.current_status_date)) {
-              updatePayload.current_status_date = item.invoice_date;
-            }
-          }
-
-          if (Object.keys(updatePayload).length > 0) {
-            await project.update(updatePayload, { transaction });
           }
 
           existingProjectsLinked++;
