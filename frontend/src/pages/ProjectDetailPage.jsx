@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   User,
@@ -22,6 +22,8 @@ import {
   CheckCircle2,
   Circle,
   Layers,
+  GitMerge,
+  Edit3,
 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -30,9 +32,11 @@ import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader } from "../components/common/SkeletonLoader.jsx";
 import { formatDate, formatDateTime } from "../utils/dates.js";
+import MergeProjectModal from "../components/projects/MergeProjectModal.jsx";
 
 export function ProjectDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [historyData, setHistoryData] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -41,6 +45,7 @@ export function ProjectDetailPage() {
   const [masterStatuses, setMasterStatuses] = useState([]);
   const [showAllMilestones, setShowAllMilestones] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
 
   // Commission Payment Modal State
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -134,11 +139,22 @@ export function ProjectDetailPage() {
       <Navbar
         title={`Application ${project.application_id}`}
         actions={
-          <Link to="/projects">
-            <Button variant="secondary" icon={ArrowLeft}>
-              Back
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={GitMerge}
+              onClick={() => setMergeModalOpen(true)}
+              title="Correct mistyped ID or merge this invoice with another government project"
+            >
+              Correct / Merge ID
             </Button>
-          </Link>
+            <Link to="/projects">
+              <Button variant="secondary" icon={ArrowLeft}>
+                Back
+              </Button>
+            </Link>
+          </div>
         }
       />
 
@@ -1082,6 +1098,21 @@ export function ProjectDetailPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Correct / Merge Application ID Modal */}
+      <MergeProjectModal
+        isOpen={mergeModalOpen}
+        onClose={() => setMergeModalOpen(false)}
+        sourceProject={project}
+        onSuccess={(res) => {
+          if (res?.action === "MERGED" && res?.targetProjectId) {
+            navigate(`/projects/${res.targetProjectId}`);
+          } else {
+            // Refetch current project if renamed
+            window.location.reload();
+          }
+        }}
+      />
     </div>
   );
 }

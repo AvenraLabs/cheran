@@ -6,6 +6,7 @@ import Dealer from "../dealers/dealer.model.js";
 import GovernmentImport from "../imports/import.model.js";
 import AppError from "../../shared/appError.js";
 import { calculateDaysBetween } from "../../utils/dates.js";
+import { normalizeApplicationId } from "../../utils/normalization.js";
 
 export async function listProjects(filters = {}) {
   const {
@@ -19,6 +20,7 @@ export async function listProjects(filters = {}) {
     application_id,
     search,
     min_status_days,
+    orphan_only,
     page = 1,
     limit = 20,
     sort_by = "created_at",
@@ -41,6 +43,14 @@ export async function listProjects(filters = {}) {
   if (year) where.year = year;
   if (farmer_name) where.farmer_name = { [Op.iLike]: `%${farmer_name}%` };
   if (application_id) where.application_id = { [Op.iLike]: `%${application_id}%` };
+
+  // Orphan invoice filter (created from invoice.json without matched annexure details)
+  if (orphan_only === "true" || orphan_only === true) {
+    where[Op.and] = [
+      { [Op.or]: [{ farmer_name: null }, { farmer_name: "" }] },
+      { [Op.or]: [{ invoice_date: { [Op.ne]: null } }, { invoice_number: { [Op.ne]: null } }] },
+    ];
+  }
 
   if (min_status_days !== undefined && min_status_days !== null && min_status_days !== "") {
     const days = parseInt(min_status_days, 10);
@@ -263,4 +273,159 @@ export async function getStageDurationStats() {
   return {
     transitions: transitions || [],
   };
+}
+
+/**
+ * Live search projects for autocomplete (by application_id or farmer_name)
+ */
+export async function searchProjects(query, limit = 10) {
+  if (!query || !query.trim()) return [];
+
+  const cleanQ = query.trim();
+  const projects = await GovernmentProject.findAll({
+    where: {
+      [Op.or]: [
+        { application_id: { [Op.iLike]: `%${cleanQ}%` } },
+        { farmer_name: { [Op.iLike]: `%${cleanQ}%` } },
+      ],
+    },
+    attributes: [
+      "id",
+      "application_id",
+      "farmer_name",
+      "district",
+      "block",
+      "village",
+      "current_status",
+      "current_status_date",
+      "quotation_subsidy_amount",
+      "invoice_number",
+      "invoice_date",
+    ],
+    limit,
+    order: [["created_at", "DESC"]],
+  });
+
+  return projects;
+}
+
+/**
+ * Rename or Merge an orphan / mistyped Government Project
+ */
+export async function renameOrMergeProject(projectId, targetApplicationId) {
+  if (!targetApplicationId || !targetApplicationId.trim()) {
+    throw new AppError("Target Application ID is required", 400);
+  }
+
+  const cleanTargetId = normalizeApplicationId(targetApplicationId);
+  const sourceProject = await GovernmentProject.findByPk(projectId);
+  if (!sourceProject) {
+    throw new AppError("Source project not found", 404);
+  }
+
+  const cleanSourceId = normalizeApplicationId(sourceProject.application_id);
+  if (cleanSourceId === cleanTargetId) {
+    throw new AppError("Target Application ID is identical to current Application ID", 400);
+  }
+
+  // Check if a target project already exists with cleanTargetId
+  const targetProject = await GovernmentProject.findOne({
+    where: {
+      application_id: cleanTargetId,
+    },
+  });
+
+  const transaction = await db.transaction();
+  try {
+    if (!targetProject) {
+      // MODE A: RENAME (No target project exists, just update application_id)
+      await sourceProject.update({ application_id: cleanTargetId }, { transaction });
+      await transaction.commit();
+
+      return {
+        action: "RENAMED",
+        projectId: sourceProject.id,
+        applicationId: cleanTargetId,
+        message: `Application ID successfully updated to ${cleanTargetId}`,
+      };
+    } else {
+      // MODE B: MERGE sourceProject INTO targetProject
+      // 1. Transfer invoice data to target project
+      const updatePayload = {};
+      if (sourceProject.invoice_number && !targetProject.invoice_number) {
+        updatePayload.invoice_number = sourceProject.invoice_number;
+      }
+      if (sourceProject.invoice_date) {
+        updatePayload.invoice_date = sourceProject.invoice_date;
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        await targetProject.update(updatePayload, { transaction });
+      }
+
+      // 2. Transfer or ensure INVOICED milestone history exists on target project
+      if (sourceProject.invoice_date) {
+        const existingInvoicedHist = await GovernmentProjectStatusHistory.findOne({
+          where: {
+            project_id: targetProject.id,
+            status: "INVOICED",
+          },
+          transaction,
+        });
+
+        if (!existingInvoicedHist) {
+          await GovernmentProjectStatusHistory.create(
+            {
+              project_id: targetProject.id,
+              status: "INVOICED",
+              status_date: sourceProject.invoice_date,
+              remarks: sourceProject.invoice_number
+                ? `Transferred from merged invoice (Invoice #${sourceProject.invoice_number})`
+                : "Transferred from merged invoice record",
+              observed_at: new Date(),
+            },
+            { transaction }
+          );
+        } else if (!existingInvoicedHist.status_date || existingInvoicedHist.status_date !== sourceProject.invoice_date) {
+          await existingInvoicedHist.update(
+            {
+              status_date: sourceProject.invoice_date,
+              remarks: sourceProject.invoice_number
+                ? `Transferred from merged invoice (Invoice #${sourceProject.invoice_number})`
+                : existingInvoicedHist.remarks,
+            },
+            { transaction }
+          );
+        }
+      }
+
+      // 3. Remove source project history
+      await GovernmentProjectStatusHistory.destroy({
+        where: { project_id: sourceProject.id },
+        transaction,
+      });
+
+      // 4. Delete source duplicate project
+      await sourceProject.destroy({ transaction });
+
+      await transaction.commit();
+
+      // Recalculate target project dealer commission
+      try {
+        const { calculateProjectDealerCommission } = await import("../dealers/dealer-commission.service.js");
+        await calculateProjectDealerCommission(targetProject.id);
+      } catch (_) {}
+
+      return {
+        action: "MERGED",
+        targetProjectId: targetProject.id,
+        mergedIntoApplicationId: targetProject.application_id,
+        farmerName: targetProject.farmer_name,
+        message: `Successfully merged invoice into ${targetProject.application_id} (${targetProject.farmer_name || "Government Scheme"})`,
+      };
+    }
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
 }

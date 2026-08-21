@@ -8,6 +8,7 @@ const router = Router();
 // Stats endpoints before parameterized paths
 router.get("/stats/status-summary", projectController.getStatusSummaryStats);
 router.get("/stats/stage-durations", projectController.getStageDurationStats);
+router.get("/search", projectController.searchProjects);
 
 router.route("/").get(validate(listProjectsSchema), projectController.listProjects);
 
@@ -16,6 +17,10 @@ router.route("/:id").get(validate(getProjectSchema), projectController.getProjec
 router
   .route("/:id/status-history")
   .get(validate(getProjectSchema), projectController.getProjectStatusHistory);
+
+// Correct / Rename or Merge Mistyped Project
+router.post("/:id/merge", validate(getProjectSchema), projectController.renameOrMergeProject);
+router.post("/:id/rename-or-merge", validate(getProjectSchema), projectController.renameOrMergeProject);
 
 // Project Invoices & Dispatched Materials
 router.get("/:id/invoices", validate(getProjectSchema), async (req, res, next) => {

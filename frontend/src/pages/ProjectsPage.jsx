@@ -13,6 +13,10 @@ import {
   MapPin,
   User,
   Phone,
+  GitMerge,
+  Edit3,
+  FileQuestion,
+  Layers,
 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -23,6 +27,7 @@ import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 import { formatDate } from "../utils/dates.js";
+import MergeProjectModal from "../components/projects/MergeProjectModal.jsx";
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState([]);
@@ -37,12 +42,17 @@ export function ProjectsPage() {
   const [selectedDealer, setSelectedDealer] = useState("");
   const [district, setDistrict] = useState("");
   const [minStatusDays, setMinStatusDays] = useState("");
+  const [orphanOnly, setOrphanOnly] = useState(false);
 
   // History modal state
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [historyData, setHistoryData] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Merge / Correct ID modal state
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeSourceProject, setMergeSourceProject] = useState(null);
 
   const debounceTimerRef = useRef(null);
 
@@ -56,6 +66,7 @@ export function ProjectsPage() {
         ...(selectedStatus ? { status: selectedStatus } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
         ...(district ? { district: district.trim() } : {}),
+        ...(orphanOnly ? { orphan_only: true } : {}),
         ...(minStatusDays !== "" && !isNaN(parseInt(minStatusDays, 10))
           ? { min_status_days: parseInt(minStatusDays, 10) }
           : {}),
@@ -103,10 +114,10 @@ export function ProjectsPage() {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [search, selectedStatus, selectedDealer, district, minStatusDays]);
+  }, [search, selectedStatus, selectedDealer, district, minStatusDays, orphanOnly]);
 
   const hasActiveFilters = Boolean(
-    search || selectedStatus || selectedDealer || district || minStatusDays !== ""
+    search || selectedStatus || selectedDealer || district || minStatusDays !== "" || orphanOnly
   );
 
   const handleResetFilters = () => {
@@ -115,6 +126,7 @@ export function ProjectsPage() {
     setSelectedDealer("");
     setDistrict("");
     setMinStatusDays("");
+    setOrphanOnly(false);
   };
 
   // Calculate days elapsed from current status date to today
@@ -149,22 +161,19 @@ export function ProjectsPage() {
 
   const dealerOptions = [
     { value: "", label: "All Dealers" },
-    { value: "UNASSIGNED", label: "⚠️ Unassigned / No Dealer" },
-    ...dealers.map((d) => ({
-      value: d.id,
-      label: d.name,
-      badge: d.commission_percentage ? `${d.commission_percentage}%` : null,
-    })),
+    { value: "UNASSIGNED", label: "Unassigned Projects" },
+    ...dealers.map((d) => ({ value: d.id, label: d.name })),
   ];
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8]">
+    <div className="flex-1 flex flex-col min-h-screen bg-[#F4F2EB]">
       <Navbar
-        title="Government Projects"
+        title="Government Projects Registry"
         actions={
           <Button
             variant="secondary"
             icon={RefreshCw}
+            loading={loading}
             onClick={() => fetchProjects(pagination.page, pagination.limit)}
           >
             Refresh
@@ -172,7 +181,34 @@ export function ProjectsPage() {
         }
       />
 
-      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-4 flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
+        {/* Quick View Toggle Tabs */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setOrphanOnly(false)}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all cursor-pointer ${
+              !orphanOnly
+                ? "bg-[#14213D] text-white shadow-2xs"
+                : "bg-white border border-[#E4E1D8] text-[#52607D] hover:text-[#14213D]"
+            }`}
+          >
+            <Layers size={14} />
+            <span>All Government Projects</span>
+          </button>
+
+          <button
+            onClick={() => setOrphanOnly(true)}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all cursor-pointer ${
+              orphanOnly
+                ? "bg-amber-800 text-white shadow-2xs"
+                : "bg-white border border-[#E4E1D8] text-[#52607D] hover:text-amber-800"
+            }`}
+          >
+            <FileQuestion size={14} className={orphanOnly ? "text-white" : "text-amber-600"} />
+            <span>Orphan Invoices Only (Needs Merge)</span>
+          </button>
+        </div>
+
         {/* Dynamic Live Filter Bar */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
@@ -341,10 +377,25 @@ export function ProjectsPage() {
                       return (
                         <tr key={proj.id} className="hover:bg-[#FAFAF8] transition-colors">
                           <td className="py-3 px-4 font-mono font-medium text-[#14213D]">
-                            {proj.application_id}
+                            <div className="flex items-center gap-2">
+                              <span>{proj.application_id}</span>
+                              {!proj.farmer_name && (
+                                <span
+                                  className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 cursor-pointer"
+                                  title="Orphan invoice record - Click 'Merge' to link with government project"
+                                  onClick={() => {
+                                    setMergeSourceProject(proj);
+                                    setMergeModalOpen(true);
+                                  }}
+                                >
+                                  <FileQuestion size={10} />
+                                  <span>Orphan</span>
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4">
-                            <div className="font-semibold text-[#14213D]">{proj.farmer_name || "—"}</div>
+                            <div className="font-semibold text-[#14213D]">{proj.farmer_name || "— (Invoice only)"}</div>
                             {proj.mobile && <div className="text-[11px] text-[#52607D]">{proj.mobile}</div>}
                           </td>
                           <td className="py-3 px-4">
@@ -383,6 +434,18 @@ export function ProjectsPage() {
                           </td>
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-1.5">
+                              <Button
+                                variant="secondary"
+                                size="xs"
+                                icon={GitMerge}
+                                onClick={() => {
+                                  setMergeSourceProject(proj);
+                                  setMergeModalOpen(true);
+                                }}
+                                title="Correct mistyped ID or Merge with existing Government Project"
+                              >
+                                Edit ID
+                              </Button>
                               <Button
                                 variant="outline"
                                 size="xs"
@@ -528,6 +591,19 @@ export function ProjectsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Correct / Merge Application ID Modal */}
+      <MergeProjectModal
+        isOpen={mergeModalOpen}
+        onClose={() => {
+          setMergeModalOpen(false);
+          setMergeSourceProject(null);
+        }}
+        sourceProject={mergeSourceProject}
+        onSuccess={() => {
+          fetchProjects(pagination.page, pagination.limit);
+        }}
+      />
     </div>
   );
 }
