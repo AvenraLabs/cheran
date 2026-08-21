@@ -32,19 +32,27 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
   const dealerMap = new Map();
   allDealers.forEach((d) => dealerMap.set(d.normalized_name, d));
 
-  // Extract all non-empty application IDs normalized to uppercase
-  const appIds = rows.map((r) => normalizeApplicationId(r.application_id)).filter(Boolean);
-  const existingProjects = await GovernmentProject.findAll({
-    where: db.where(db.fn("UPPER", db.col("application_id")), {
-      [Op.in]: appIds,
-    }),
-    attributes: ["id", "application_id", "current_status", "current_status_date", "dealer_id"],
-  });
+  // Extract all unique non-empty application IDs normalized to uppercase
+  const uniqueAppIds = Array.from(
+    new Set(rows.map((r) => normalizeApplicationId(r.application_id)).filter(Boolean))
+  );
   const projectMap = new Map();
-  existingProjects.forEach((p) => {
-    projectMap.set(p.application_id, p);
-    projectMap.set(p.application_id.toUpperCase(), p);
-  });
+
+  // Query existing projects in fast chunks of 1000 to prevent large IN() query latency
+  const LOOKUP_CHUNK_SIZE = 1000;
+  for (let i = 0; i < uniqueAppIds.length; i += LOOKUP_CHUNK_SIZE) {
+    const chunk = uniqueAppIds.slice(i, i + LOOKUP_CHUNK_SIZE);
+    const existingProjects = await GovernmentProject.findAll({
+      where: db.where(db.fn("UPPER", db.col("application_id")), {
+        [Op.in]: chunk,
+      }),
+      attributes: ["id", "application_id", "current_status", "current_status_date", "dealer_id"],
+    });
+    existingProjects.forEach((p) => {
+      projectMap.set(p.application_id, p);
+      projectMap.set(p.application_id.toUpperCase(), p);
+    });
+  }
 
   // 4. Staging calculation
   const stagedRows = [];
@@ -181,7 +189,12 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
       import_id: importRecord.id,
     }));
 
-    await GovernmentImportRow.bulkCreate(rowsWithImportId, { transaction });
+    // Bulk insert staged rows in chunks of 500 to avoid query size limits and statement timeouts
+    const BATCH_INSERT_SIZE = 500;
+    for (let i = 0; i < rowsWithImportId.length; i += BATCH_INSERT_SIZE) {
+      const batch = rowsWithImportId.slice(i, i + BATCH_INSERT_SIZE);
+      await GovernmentImportRow.bulkCreate(batch, { transaction });
+    }
 
     await transaction.commit();
   } catch (err) {
