@@ -26,20 +26,5 @@
   <body class="bg-[#FAFAF8] text-[#14213D] antialiased selection:bg-[#D3E6E0] selection:text-[#14213D]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      // Clean up and unregister any legacy service workers & caches
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function (registrations) {
-          for (var registration of registrations) {
-            registration.unregister();
-          }
-        });
-      }
-      if ('caches' in window) {
-        caches.keys().then(function (names) {
-          for (var name of names) caches.delete(name);
-        });
-      }
-    </script>
   </body>
 </html>

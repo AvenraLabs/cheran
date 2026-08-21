@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, Check, AlertTriangle, Settings } from "lucide-react";
+import { Plus, Edit2, Trash2, Check, AlertTriangle, Settings, Percent, Calendar, ShieldCheck, RefreshCw } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
@@ -21,9 +21,14 @@ export function SettingsPage() {
     effective_to: "",
     gst_percentage: "5.0",
     fittings_percentage: "5.0",
+    description: "",
   });
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Delete Confirmation Modal State
+  const [deleteTargetSlab, setDeleteTargetSlab] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchSlabs = async () => {
     try {
@@ -51,6 +56,7 @@ export function SettingsPage() {
       effective_to: "",
       gst_percentage: "5.0",
       fittings_percentage: "5.0",
+      description: "",
     });
     setFormError("");
     setIsModalOpen(true);
@@ -63,6 +69,7 @@ export function SettingsPage() {
       effective_to: slab.effective_to || "",
       gst_percentage: String(slab.gst_percentage),
       fittings_percentage: String(slab.fittings_percentage),
+      description: slab.description || "",
     });
     setFormError("");
     setIsModalOpen(true);
@@ -83,16 +90,16 @@ export function SettingsPage() {
       effective_to: formData.effective_to || null,
       gst_percentage: parseFloat(formData.gst_percentage) || 0,
       fittings_percentage: parseFloat(formData.fittings_percentage) || 5.0,
-      description: null,
+      description: formData.description ? formData.description.trim() : null,
     };
 
     try {
       if (editingSlab) {
         await api.put(`/settings/tax-slabs/${editingSlab.id}`, payload);
-        setSuccessMsg("Settings updated successfully.");
+        setSuccessMsg("Tax slab updated successfully.");
       } else {
         await api.post("/settings/tax-slabs", payload);
-        setSuccessMsg("New date rate added successfully.");
+        setSuccessMsg("New tax slab added successfully.");
       }
       setIsModalOpen(false);
       fetchSlabs();
@@ -103,10 +110,6 @@ export function SettingsPage() {
       setFormSaving(false);
     }
   };
-
-  // Delete Confirmation Modal State
-  const [deleteTargetSlab, setDeleteTargetSlab] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
   const handleDeleteClick = (slab) => {
     setDeleteTargetSlab(slab);
@@ -128,99 +131,184 @@ export function SettingsPage() {
     }
   };
 
+  const activeSlab = slabs.find((s) => !s.effective_to) || slabs[slabs.length - 1];
+
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#F4F2EB] min-h-screen">
+    <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Govt Scheme GST & Fittings Settings"
+        subtitle="Configure historical and active tax slabs applied during Government project calculations"
         actions={
-          <Button variant="primary" size="sm" onClick={handleOpenAdd} icon={Plus}>
-            Add Date Rate
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RefreshCw}
+              onClick={fetchSlabs}
+            >
+              Refresh
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleOpenAdd} icon={Plus}>
+              Add Date Rate
+            </Button>
+          </div>
         }
       />
 
-      <main className="p-4 sm:p-6 lg:p-8 space-y-5 flex-1 overflow-y-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {successMsg && (
-          <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-[8px] text-xs font-bold text-emerald-900 flex items-center gap-2">
-            <Check size={14} className="text-emerald-600" />
+          <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-[10px] text-xs font-bold text-emerald-900 flex items-center gap-2 shadow-xs">
+            <Check size={16} className="text-emerald-600 shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
 
         {error && (
-          <div className="p-3 bg-rose-50 border border-rose-300 rounded-[8px] text-xs font-bold text-rose-900 flex items-center gap-2">
-            <AlertTriangle size={14} className="text-rose-600" />
+          <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-[10px] text-xs font-bold text-rose-900 flex items-center gap-2 shadow-xs">
+            <AlertTriangle size={16} className="text-rose-600 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
+        {/* Top Info / Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
+            <div className="flex items-center justify-between text-xs text-[#52607D]">
+              <span className="font-semibold uppercase tracking-wider">Current Active GST</span>
+              <Percent size={16} className="text-[#2F6F5E]" />
+            </div>
+            <div className="text-2xl font-extrabold font-mono text-[#14213D] mt-2">
+              {activeSlab ? `${activeSlab.gst_percentage}%` : "5.00%"}
+            </div>
+            <div className="text-[11px] text-[#2F6F5E] font-medium mt-0.5">
+              {activeSlab ? `Effective from ${formatDate(activeSlab.effective_from)}` : "Standard Active Rate"}
+            </div>
+          </div>
+
+          <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
+            <div className="flex items-center justify-between text-xs text-[#52607D]">
+              <span className="font-semibold uppercase tracking-wider">Standard Fittings Cost</span>
+              <ShieldCheck size={16} className="text-[#2F6F5E]" />
+            </div>
+            <div className="text-2xl font-extrabold font-mono text-[#14213D] mt-2">
+              {activeSlab ? `${activeSlab.fittings_percentage}%` : "5.00%"}
+            </div>
+            <div className="text-[11px] text-[#52607D] mt-0.5">
+              Reimbursed to assigned dealer
+            </div>
+          </div>
+
+          <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
+            <div className="flex items-center justify-between text-xs text-[#52607D]">
+              <span className="font-semibold uppercase tracking-wider">Configured Tax Slabs</span>
+              <Calendar size={16} className="text-[#52607D]" />
+            </div>
+            <div className="text-2xl font-extrabold font-mono text-[#14213D] mt-2">
+              {slabs.length}
+            </div>
+            <div className="text-[11px] text-[#52607D] mt-0.5">
+              Evaluated dynamically by Project Invoice Date
+            </div>
+          </div>
+        </div>
+
+        {/* Tax Slabs Table */}
+        <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
+          <div className="p-4 border-b border-[#E4E1D8] flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-[#14213D]">
-                GST & Fittings Rates
+              <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
+                <Settings size={16} className="text-[#2F6F5E]" />
+                GST & Fittings Date Slabs
               </h3>
+              <p className="text-xs text-[#52607D] mt-0.5">
+                Each Government Project dynamically resolves its GST rate based on its exact Invoice Date.
+              </p>
             </div>
           </div>
 
           {loading ? (
-            <SkeletonLoader count={2} />
+            <div className="p-6">
+              <SkeletonLoader rows={4} />
+            </div>
           ) : slabs.length === 0 ? (
             <EmptyState
               title="No Rates Configured"
               description="Click 'Add Date Rate' to add a GST & Fittings date range."
+              action={
+                <Button size="sm" icon={Plus} onClick={handleOpenAdd}>
+                  Add Date Rate
+                </Button>
+              }
             />
           ) : (
-            <div className="border border-[#EDEAE1] rounded-[8px] overflow-hidden">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px]">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
                   <tr>
-                    <th className="py-2.5 px-4">From Date</th>
-                    <th className="py-2.5 px-4">To Date</th>
-                    <th className="py-2.5 px-4 text-center">GST %</th>
-                    <th className="py-2.5 px-4 text-center">Fittings %</th>
-                    <th className="py-2.5 px-4 text-center w-24">Actions</th>
+                    <th className="py-3 px-4">From Date</th>
+                    <th className="py-3 px-4">To Date</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">GST %</th>
+                    <th className="py-3 px-4 text-center">Fittings %</th>
+                    <th className="py-3 px-4">Description / Notes</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EDEAE1]">
                   {slabs.map((s) => (
-                    <tr key={s.id} className="hover:bg-[#F9F8F5]">
-                      <td className="py-2.5 px-4 font-mono font-bold text-[#14213D]">
+                    <tr key={s.id} className="hover:bg-[#FAFAF8]">
+                      <td className="py-3 px-4 font-mono font-bold text-[#14213D]">
                         {formatDate(s.effective_from)}
                       </td>
-                      <td className="py-2.5 px-4 font-mono">
+                      <td className="py-3 px-4 font-mono">
                         {s.effective_to ? (
-                          <span className="font-bold text-[#14213D]">{formatDate(s.effective_to)}</span>
+                          <span className="font-semibold text-[#14213D]">{formatDate(s.effective_to)}</span>
                         ) : (
-                          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 text-[10px]">
+                          <span className="text-[#52607D] italic">Ongoing</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {!s.effective_to ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/30">
                             Current Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8]">
+                            Historical Slab
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-4 text-center font-mono font-bold text-[#14213D]">
+                      <td className="py-3 px-4 text-center font-mono font-extrabold text-[#14213D] text-sm">
                         {s.gst_percentage}%
                       </td>
-                      <td className="py-2.5 px-4 text-center font-mono font-bold text-[#14213D]">
+                      <td className="py-3 px-4 text-center font-mono font-bold text-[#14213D]">
                         {s.fittings_percentage}%
                       </td>
-                      <td className="py-2.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
+                      <td className="py-3 px-4 text-[#52607D]">
+                        {s.description || "—"}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={Edit2}
                             onClick={() => handleOpenEdit(s)}
-                            className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded cursor-pointer"
-                            title="Edit"
+                            className="px-2 py-1"
+                            title="Edit Slab"
                           >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            type="button"
+                            Edit
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            icon={Trash2}
                             onClick={() => handleDeleteClick(s)}
-                            className="p-1 text-[#52607D] hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer transition-colors"
-                            title="Delete"
+                            className="px-2 py-1"
+                            title="Delete Slab"
                           >
-                            <Trash2 size={13} />
-                          </button>
+                            Delete
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -232,83 +320,105 @@ export function SettingsPage() {
         </div>
       </main>
 
-      {/* Add / Edit Simple Modal */}
+      {/* Add / Edit Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingSlab ? "Edit Date Rate" : "Add Date Rate"}
-        maxWidth="max-w-sm"
+        title={editingSlab ? "Edit Tax Slab" : "Add Tax Slab"}
+        maxWidth="max-w-md"
       >
-        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-          <div>
-            <label className="block font-bold text-[#14213D] mb-1">
-              From Date <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={formData.effective_from}
-              onChange={(e) => setFormData({ ...formData, effective_from: e.target.value })}
-              className="w-full px-3 py-1.5 font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block font-bold text-[#14213D] mb-1">
-              To Date (Leave empty for active)
-            </label>
-            <input
-              type="date"
-              value={formData.effective_to}
-              onChange={(e) => setFormData({ ...formData, effective_to: e.target.value })}
-              className="w-full px-3 py-1.5 font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold text-[#14213D] mb-1">
-                GST % <span className="text-rose-500">*</span>
+              <label className="block font-semibold text-[#14213D] mb-1">
+                Effective From Date <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={formData.effective_from}
+                onChange={(e) => setFormData({ ...formData, effective_from: e.target.value })}
+                className="w-full px-3 py-2 font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-[#14213D] mb-1">
+                Effective To Date
+              </label>
+              <input
+                type="date"
+                value={formData.effective_to}
+                onChange={(e) => setFormData({ ...formData, effective_to: e.target.value })}
+                placeholder="Leave blank for ongoing"
+                className="w-full px-3 py-2 font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
+              />
+              <span className="text-[10px] text-[#52607D]">Leave empty if current active</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-[#14213D] mb-1">
+                GST Percentage (%) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
                 step="any"
+                min="0"
+                max="100"
                 placeholder="e.g. 5 or 12"
                 value={formData.gst_percentage}
                 onChange={(e) => setFormData({ ...formData, gst_percentage: e.target.value })}
-                className="w-full px-3 py-1.5 font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
+                className="w-full px-3 py-2 font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                 required
               />
             </div>
 
             <div>
-              <label className="block font-bold text-[#14213D] mb-1">
-                Fittings % <span className="text-rose-500">*</span>
+              <label className="block font-semibold text-[#14213D] mb-1">
+                Fittings Percentage (%) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
                 step="any"
+                min="0"
+                max="100"
                 placeholder="5.0"
                 value={formData.fittings_percentage}
                 onChange={(e) => setFormData({ ...formData, fittings_percentage: e.target.value })}
-                className="w-full px-3 py-1.5 font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
+                className="w-full px-3 py-2 font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                 required
               />
             </div>
           </div>
 
+          <div>
+            <label className="block font-semibold text-[#14213D] mb-1">
+              Description / Scheme Reference (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Post-Sep 2025 Revised 5% GST Scheme"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
+            />
+          </div>
+
           {formError && (
-            <div className="p-2 bg-rose-50 border border-rose-200 rounded text-rose-800 text-[11px]">
-              {formError}
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-[8px] text-rose-800 text-xs flex items-center gap-2">
+              <AlertTriangle size={15} className="text-rose-600 shrink-0" />
+              <span>{formError}</span>
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-[#EDEAE1]">
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
             <Button variant="secondary" size="sm" type="button" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
             <Button variant="primary" size="sm" type="submit" loading={formSaving} icon={Check}>
-              Save
+              Save Tax Slab
             </Button>
           </div>
         </form>
