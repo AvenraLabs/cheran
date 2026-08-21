@@ -287,102 +287,100 @@ export async function getGovernmentFundsReport({ year, district } = {}) {
 }
 
 // ==========================================
-// 3. Executive Financial Overview & Company Cash Position
+// 3. Executive Financial Overview & Company Cash Position (High-Performance SQL Aggregations)
 // ==========================================
 export async function getFinancialOverviewReport({ startDate, endDate } = {}) {
-  const [procurementData, govtFundsData] = await Promise.all([
-    getProcurementReport({ startDate, endDate }),
-    getGovernmentFundsReport(),
-  ]);
+  // 1. Direct Commercial Sales Inflows
+  const [salesResult] = await db.query(
+    `SELECT 
+       COALESCE(SUM(total_amount), 0) AS direct_sales_invoiced,
+       COALESCE(SUM(paid_amount), 0) AS direct_sales_received
+     FROM invoices
+     WHERE status != 'CANCELLED'`,
+    { type: QueryTypes.SELECT }
+  );
+  const directSalesInvoiced = parseFloat(salesResult?.direct_sales_invoiced || 0);
+  const directSalesReceived = parseFloat(salesResult?.direct_sales_received || 0);
 
-  // Direct Commercial Sales Inflow
-  const salesInvoices = await Invoice.findAll({
-    attributes: [
-      "id",
-      "total_amount",
-      "paid_amount",
-      "payment_status",
-      "invoice_type",
-    ],
-  });
+  // 2. Government Fund Milestone Inflows
+  const [govtResult] = await db.query(
+    `SELECT 
+       COALESCE(SUM(COALESCE(invoice_amount, quotation_subsidy_amount, 0)), 0) AS total_invoiced,
+       COALESCE(SUM(COALESCE(first_fund_amount, 0)), 0) AS total_first_fund,
+       COALESCE(SUM(COALESCE(second_fund_amount, 0)), 0) AS total_second_fund,
+       COALESCE(SUM(COALESCE(total_fund_released, 0)), 0) AS total_released
+     FROM government_projects`,
+    { type: QueryTypes.SELECT }
+  );
+  const govtTotalInvoiced = parseFloat(govtResult?.total_invoiced || 0);
+  const govtFirstFund = parseFloat(govtResult?.total_first_fund || 0);
+  const govtSecondFund = parseFloat(govtResult?.total_second_fund || 0);
+  const govtTotalReleased = parseFloat(govtResult?.total_released || 0);
+  const govtPendingReceivable = Math.max(0, govtTotalInvoiced - govtTotalReleased);
 
-  let directSalesInvoiced = 0;
-  let directSalesReceived = 0;
-  for (const inv of salesInvoices) {
-    directSalesInvoiced += parseFloat(inv.total_amount) || 0;
-    directSalesReceived += parseFloat(inv.paid_amount) || 0;
-  }
+  // 3. Raw Materials Procurement Spend Outflow
+  const [procResult] = await db.query(
+    `SELECT COALESCE(SUM(total_amount), 0) AS total_procurement FROM stock_receipts`,
+    { type: QueryTypes.SELECT }
+  );
+  const totalProcurementSpend = parseFloat(procResult?.total_procurement || 0);
 
-  // Operating Expenses Outflow
-  const expenseWhere = {};
+  // 4. Operating Expenses Outflow
+  let expenseQuery = `SELECT COALESCE(SUM(amount), 0) AS total_expenses FROM expenses`;
+  const expenseReplacements = {};
   if (startDate && endDate) {
-    expenseWhere.expense_date = { [Op.between]: [startDate, endDate] };
+    expenseQuery += ` WHERE expense_date BETWEEN :startDate AND :endDate`;
+    expenseReplacements.startDate = startDate;
+    expenseReplacements.endDate = endDate;
   }
-  const expenses = await Expense.findAll({ where: expenseWhere });
-  const totalExpenses = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+  const [expResult] = await db.query(expenseQuery, {
+    replacements: expenseReplacements,
+    type: QueryTypes.SELECT,
+  });
+  const totalExpenses = parseFloat(expResult?.total_expenses || 0);
 
-  // Staff Salary Outflow
-  const salaryRecords = await EmployeeSalaryRecord.findAll();
-  let totalSalariesPaid = 0;
-  for (const s of salaryRecords) {
-    if (s.status === "PAID") {
-      totalSalariesPaid += parseFloat(s.net_salary) || 0;
-    }
-  }
+  // 5. Staff Salaries Outflow
+  const [salaryResult] = await db.query(
+    `SELECT COALESCE(SUM(net_salary), 0) AS total_salaries FROM employee_salary_records WHERE status = 'PAID'`,
+    { type: QueryTypes.SELECT }
+  );
+  const totalSalariesPaid = parseFloat(salaryResult?.total_salaries || 0);
 
-  // Dealer Commissions & Fittings Outflow from Live Proceedings Batches
-  let totalCommissionsPaid = 0;
-  let totalCommissionsPending = 0;
-  let totalFittingsPaid = 0;
-  let totalFittingsPending = 0;
+  // 6. Dealer Commissions & Fittings Outflows
+  const [proceedingResult] = await db.query(
+    `SELECT 
+       COALESCE(SUM(CASE WHEN is_paid_to_dealer = true THEN commission_amount ELSE 0 END), 0) AS total_commissions_paid,
+       COALESCE(SUM(CASE WHEN is_paid_to_dealer = false THEN commission_amount ELSE 0 END), 0) AS total_commissions_pending,
+       COALESCE(SUM(CASE WHEN is_paid_to_dealer = true THEN fittings_amount ELSE 0 END), 0) AS total_fittings_paid,
+       COALESCE(SUM(CASE WHEN is_paid_to_dealer = false THEN fittings_amount ELSE 0 END), 0) AS total_fittings_pending
+     FROM proceeding_batch_projects`,
+    { type: QueryTypes.SELECT }
+  );
+  const totalCommissionsPaid = parseFloat(proceedingResult?.total_commissions_paid || 0);
+  const totalCommissionsPending = parseFloat(proceedingResult?.total_commissions_pending || 0);
+  const totalFittingsPaid = parseFloat(proceedingResult?.total_fittings_paid || 0);
+  const totalFittingsPending = parseFloat(proceedingResult?.total_fittings_pending || 0);
 
-  const proceedingProjects = await ProceedingBatchProject.findAll();
-  for (const p of proceedingProjects) {
-    const commAmt = parseFloat(p.commission_amount) || 0;
-    const fitAmt = parseFloat(p.fittings_amount) || 0;
-
-    if (p.is_paid_to_dealer) {
-      totalCommissionsPaid += commAmt;
-      totalFittingsPaid += fitAmt;
-    } else {
-      totalCommissionsPending += commAmt;
-      totalFittingsPending += fitAmt;
-    }
-  }
-
-  // Also include any standalone DealerCommission entries if present
-  const standaloneCommissions = await DealerCommission.findAll();
-  for (const c of standaloneCommissions) {
-    const amt = parseFloat(c.commission_amount) || 0;
-    const fitAmt = parseFloat(c.fittings_amount) || 0;
-
-    if (c.status === "PAID") totalCommissionsPaid += amt;
-    else totalCommissionsPending += amt;
-
-    if (c.fittings_status === "PAID") totalFittingsPaid += fitAmt;
-    else totalFittingsPending += fitAmt;
-  }
-
-  // Total Inflows & Outflows
-  const totalInflows = govtFundsData.totalReleasedAmount + directSalesReceived;
+  // 7. Net Cash Inflows & Outflows
+  const totalInflows = govtTotalReleased + directSalesReceived;
   const totalDealerOutflowsPaid = totalCommissionsPaid + totalFittingsPaid;
   const totalOutflows =
-    procurementData.totalProcurementSpend + totalExpenses + totalSalariesPaid + totalDealerOutflowsPaid;
+    totalProcurementSpend + totalExpenses + totalSalariesPaid + totalDealerOutflowsPaid;
   const netCashPosition = totalInflows - totalOutflows;
 
   return {
     inflows: {
-      govt_first_fund_55_pct: govtFundsData.totalFirstFundReceived,
-      govt_second_fund_45_pct: govtFundsData.totalSecondFundReceived,
-      total_govt_fund_received: govtFundsData.totalReleasedAmount,
-      govt_total_invoiced: govtFundsData.totalInvoicedAmount,
-      govt_pending_receivable: govtFundsData.totalPendingReceivable,
+      govt_first_fund_55_pct: parseFloat(govtFirstFund.toFixed(2)),
+      govt_second_fund_45_pct: parseFloat(govtSecondFund.toFixed(2)),
+      total_govt_fund_received: parseFloat(govtTotalReleased.toFixed(2)),
+      govt_total_invoiced: parseFloat(govtTotalInvoiced.toFixed(2)),
+      govt_pending_receivable: parseFloat(govtPendingReceivable.toFixed(2)),
       direct_sales_invoiced: parseFloat(directSalesInvoiced.toFixed(2)),
       direct_sales_received: parseFloat(directSalesReceived.toFixed(2)),
       grand_total_cash_inflow: parseFloat(totalInflows.toFixed(2)),
     },
     outflows: {
-      raw_materials_procurement: procurementData.totalProcurementSpend,
+      raw_materials_procurement: parseFloat(totalProcurementSpend.toFixed(2)),
       operating_expenses: parseFloat(totalExpenses.toFixed(2)),
       staff_salaries_paid: parseFloat(totalSalariesPaid.toFixed(2)),
       dealer_commissions_paid: parseFloat(totalCommissionsPaid.toFixed(2)),

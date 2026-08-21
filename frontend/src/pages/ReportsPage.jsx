@@ -45,55 +45,58 @@ export function ReportsPage() {
   const [dealerStartDate, setDealerStartDate] = useState("");
   const [dealerEndDate, setDealerEndDate] = useState("");
 
-  const fetchReports = async () => {
+  // Fetch Active Tab Data On-Demand
+  const fetchActiveTabReport = async (tab = activeTab, force = false) => {
     try {
       setLoading(true);
-      const procParams = {};
-      if (procStartDate) procParams.startDate = procStartDate;
-      if (procEndDate) procParams.endDate = procEndDate;
 
-      const dealerParams = {};
-      if (dealerStartDate) dealerParams.start_date = dealerStartDate;
-      if (dealerEndDate) dealerParams.end_date = dealerEndDate;
-
-      const [finRes, procRes, govtRes, dealersRes, expensesRes, employeesRes] =
-        await Promise.allSettled([
-          api.get("/reports/financial-overview", { params: procParams }),
-          api.get("/reports/procurement", { params: procParams }),
-          api.get("/reports/govt-funds"),
-          api.get("/reports/dealers", { params: dealerParams }),
+      if (tab === "overview") {
+        const procParams = {};
+        if (procStartDate) procParams.startDate = procStartDate;
+        if (procEndDate) procParams.endDate = procEndDate;
+        const res = await api.get("/reports/financial-overview", { params: procParams });
+        setFinancialOverview(res?.data || res || null);
+      } else if (tab === "procurement") {
+        const procParams = {};
+        if (procStartDate) procParams.startDate = procStartDate;
+        if (procEndDate) procParams.endDate = procEndDate;
+        const res = await api.get("/reports/procurement", { params: procParams });
+        setProcurementReport(res?.data || res || null);
+      } else if (tab === "govt_funds") {
+        const res = await api.get("/reports/govt-funds");
+        setGovtFundsReport(res?.data || res || null);
+      } else if (tab === "dealers") {
+        const dealerParams = {};
+        if (dealerStartDate) dealerParams.start_date = dealerStartDate;
+        if (dealerEndDate) dealerParams.end_date = dealerEndDate;
+        const res = await api.get("/reports/dealers", { params: dealerParams });
+        setDealerReport(res?.data?.dealers || res?.dealers || []);
+      } else if (tab === "expenses_payroll") {
+        const [expRes, empRes] = await Promise.allSettled([
           api.get("/reports/expenses"),
           api.get("/reports/employees"),
         ]);
-
-      if (finRes.status === "fulfilled") {
-        setFinancialOverview(finRes.value?.data || finRes.value || null);
-      }
-      if (procRes.status === "fulfilled") {
-        setProcurementReport(procRes.value?.data || procRes.value || null);
-      }
-      if (govtRes.status === "fulfilled") {
-        setGovtFundsReport(govtRes.value?.data || govtRes.value || null);
-      }
-      if (dealersRes.status === "fulfilled") {
-        setDealerReport(dealersRes.value?.data?.dealers || dealersRes.value?.dealers || []);
-      }
-      if (expensesRes.status === "fulfilled") {
-        setExpenseReport(expensesRes.value?.data || expensesRes.value || { totalExpenses: 0, byCategory: [] });
-      }
-      if (employeesRes.status === "fulfilled") {
-        setEmployeeReport(employeesRes.value?.data?.employees || employeesRes.value?.employees || []);
+        if (expRes.status === "fulfilled") {
+          setExpenseReport(expRes.value?.data || expRes.value || { totalExpenses: 0, byCategory: [] });
+        }
+        if (empRes.status === "fulfilled") {
+          setEmployeeReport(empRes.value?.data?.employees || empRes.value?.employees || []);
+        }
       }
     } catch (err) {
-      console.error("Failed to load analytics reports:", err);
+      console.error(`Failed to load ${tab} report:`, err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchReports();
-  }, [procStartDate, procEndDate, dealerStartDate, dealerEndDate]);
+    fetchActiveTabReport(activeTab);
+  }, [activeTab, procStartDate, procEndDate, dealerStartDate, dealerEndDate]);
+
+  const handleRefresh = () => {
+    fetchActiveTabReport(activeTab, true);
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -101,7 +104,7 @@ export function ReportsPage() {
         title="Financial Intelligence & Business Reports"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="secondary" icon={RefreshCw} onClick={fetchReports}>
+            <Button variant="secondary" icon={RefreshCw} onClick={handleRefresh}>
               Refresh Data
             </Button>
           </div>

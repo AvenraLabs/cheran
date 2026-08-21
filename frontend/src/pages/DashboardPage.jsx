@@ -54,28 +54,21 @@ export function DashboardPage() {
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
       };
 
-      const [summaryRes, statusRes, dealerRes, districtRes, durationRes, allDealersRes, finRes] =
-        await Promise.all([
-          api.get("/dashboard/government/summary", { params }),
-          api.get("/dashboard/government/status-distribution", { params }),
-          api.get("/dashboard/government/dealer-distribution", { params }),
-          api.get("/dashboard/government/district-distribution", { params }),
-          api.get("/dashboard/government/stage-durations"),
-          api.get("/dealers/options"),
-          api.get("/reports/financial-overview").catch(() => ({ data: { data: null } })),
-        ]);
+      const [summaryRes, allDealersRes] = await Promise.all([
+        api.get("/dashboard/government/summary", { params }),
+        api.get("/dealers/options").catch(() => ({ dealers: [] })),
+      ]);
 
-      setSummaryData(summaryRes.data);
-      setStatusDistData(statusRes.data?.distribution || []);
-      setDealerDistData(dealerRes.data?.distribution || []);
-      setDistrictDistData(districtRes.data?.distribution || []);
-      setStageDurationsData(durationRes.data?.stageDurations || []);
-      setDealersList(allDealersRes.data?.dealers || allDealersRes.dealers || []);
-      setFinancialOverview(finRes.data?.data || null);
+      const summary = summaryRes?.data || summaryRes || {};
+      setSummaryData(summary);
+      setStatusDistData(summary.byStatus || []);
+      setDealerDistData(summary.byDealer || []);
+      setDistrictDistData(summary.byDistrict || []);
+      setDealersList(allDealersRes?.data?.dealers || allDealersRes?.dealers || []);
 
       // Extract unique districts if not already populated
-      if (districtRes.data?.distribution?.length > 0 && districtsList.length === 0) {
-        setDistrictsList(districtRes.data.distribution.map((d) => d.district).filter(Boolean));
+      if (summary.byDistrict?.length > 0 && districtsList.length === 0) {
+        setDistrictsList(summary.byDistrict.map((d) => d.district).filter(Boolean));
       }
     } catch (err) {
       console.error("Dashboard load failed:", err);
