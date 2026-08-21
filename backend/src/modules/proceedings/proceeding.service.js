@@ -5,24 +5,33 @@ import {
   ProceedingBatchProject,
   FundPercentageMaster,
   GovernmentProject,
+  GovernmentProjectStatusHistory,
   Dealer,
+  DealerSettlement,
   SchemeTaxSlab,
 } from "../../models/initModels.js";
-import GovernmentProjectStatusHistory from "../projects/project-history.model.js";
 import { getEffectiveSchemeTaxSlab } from "../settings/settings.service.js";
 import { calculateDaysBetween } from "../../utils/dates.js";
 import AppError from "../../shared/appError.js";
+
+// First Fund Milestone Statuses
+const FIRST_FUND_STATUSES = [
+  "District First Fund Credited (UTR Updated)",
+  "First Fund Credited (UTR Updated)",
+  "District First Fund Proceeding Completed",
+  "Iamwarm Fund Credited (UTR Updated)",
+];
 
 /**
  * Ensure default fund percentage slabs exist (55%, 45%, 60%, 40%, 100%)
  */
 export async function seedDefaultFundPercentages() {
   const defaultSlabs = [
-    { percentage: 55, label: "55%", is_active: true },
-    { percentage: 45, label: "45%", is_active: true },
-    { percentage: 60, label: "60%", is_active: true },
-    { percentage: 40, label: "40%", is_active: true },
-    { percentage: 100, label: "100%", is_active: true },
+    { percentage: 55, label: "55% (First Fund Standard)", is_active: true },
+    { percentage: 45, label: "45% (Final Fund Standard)", is_active: true },
+    { percentage: 60, label: "60% (40%-SPARSH First Fund)", is_active: true },
+    { percentage: 40, label: "40% (40%-SPARSH Final Fund)", is_active: true },
+    { percentage: 100, label: "100% (Full Release)", is_active: true },
   ];
 
   for (const slab of defaultSlabs) {
@@ -83,19 +92,27 @@ export async function deleteFundPercentage(id) {
 
 /**
  * Preview and validate Application IDs from DB before creating batch
- * Auto-calculates sum of state_restricted_amount, invoice_amount, subsidy_amount, and fund share
+ * Strictly checks for:
+ * 1. Missing application IDs (unmatched)
+ * 2. Missing State Restricted Amounts
+ * 3. Missing Invoice Dates
  */
 export async function previewProceedingIds({ application_ids_text, fund_percentage_value = 55.0 }) {
   if (!application_ids_text || !application_ids_text.trim()) {
     return {
       matched_count: 0,
       unmatched_count: 0,
+      missing_state_restricted_count: 0,
+      missing_invoice_date_count: 0,
       total_state_restricted: 0,
-      total_invoice_amount: 0,
-      total_subsidy_amount: 0,
       total_fund_share: 0,
+      total_net_material_base: 0,
+      total_commission: 0,
+      total_fittings: 0,
       matched_projects: [],
       unmatched_ids: [],
+      missing_state_restricted_ids: [],
+      missing_invoice_date_ids: [],
     };
   }
 
@@ -129,35 +146,72 @@ export async function previewProceedingIds({ application_ids_text, fund_percenta
 
   const fundPct = parseFloat(fund_percentage_value) || 55.0;
   let totalStateRestricted = 0;
-  let totalInvoiceAmount = 0;
-  let totalSubsidyAmount = 0;
   let totalFundShare = 0;
+  let totalNetMaterialBase = 0;
+  let totalCommission = 0;
+  let totalFittings = 0;
+
   const matchedList = [];
   const unmatchedList = [];
+  const missingStateRestrictedIds = [];
+  const missingInvoiceDateIds = [];
 
   for (const rawId of uniqueAppIds) {
     const key = rawId.trim().toUpperCase();
     const proj = projectMap.get(key);
+
     if (proj) {
-      const invAmt = parseFloat(proj.invoice_amount || 0);
-      const subAmt = parseFloat(proj.quotation_subsidy_amount || proj.invoice_amount || 0);
-      const stateRestricted = parseFloat(proj.state_restricted_amount || proj.invoice_amount || 0);
+      const stateRestricted = parseFloat(proj.state_restricted_amount || 0);
+      const invoiceDate = proj.invoice_date || null;
+
+      if (!stateRestricted || stateRestricted <= 0) {
+        missingStateRestrictedIds.push(proj.application_id);
+      }
+
+      if (!invoiceDate) {
+        missingInvoiceDateIds.push(proj.application_id);
+      }
+
+      // Query dynamic GST from DB settings using project's invoice date
+      const taxSlab = await getEffectiveSchemeTaxSlab(invoiceDate);
+      const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);
+      const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
+
+      // Calculations (sequential back-out)
       const fundShare = Math.floor(stateRestricted * (fundPct / 100));
+      const taxableShare = fundShare / (1 + gstPct / 100);
+      const netMaterialBase = Math.floor(taxableShare / (1 + fittingsPct / 100));
+      const fittingsAmount = Math.floor(netMaterialBase * (fittingsPct / 100));
+
+      const dealerRate =
+        proj.dealer?.commission_percentage !== undefined && proj.dealer?.commission_percentage !== null
+          ? parseFloat(proj.dealer.commission_percentage)
+          : 20.0;
+
+      const commissionAmount = Math.floor(netMaterialBase * (dealerRate / 100));
 
       totalStateRestricted += stateRestricted;
-      totalInvoiceAmount += invAmt;
-      totalSubsidyAmount += subAmt;
       totalFundShare += fundShare;
+      totalNetMaterialBase += netMaterialBase;
+      totalCommission += commissionAmount;
+      totalFittings += fittingsAmount;
 
       matchedList.push({
         id: proj.id,
         application_id: proj.application_id,
         farmer_name: proj.farmer_name,
         dealer_name: proj.dealer?.name || "Unassigned",
-        invoice_amount: invAmt,
-        subsidy_amount: subAmt,
+        dealer_rate_percentage: dealerRate,
+        invoice_date: invoiceDate,
         state_restricted_amount: stateRestricted,
         fund_share_amount: fundShare,
+        gst_percentage: gstPct,
+        fittings_percentage: fittingsPct,
+        net_material_base: netMaterialBase,
+        commission_amount: commissionAmount,
+        fittings_amount: fittingsAmount,
+        has_state_restricted: stateRestricted > 0,
+        has_invoice_date: Boolean(invoiceDate),
       });
     } else {
       unmatchedList.push(rawId);
@@ -167,18 +221,27 @@ export async function previewProceedingIds({ application_ids_text, fund_percenta
   return {
     matched_count: matchedList.length,
     unmatched_count: unmatchedList.length,
+    missing_state_restricted_count: missingStateRestrictedIds.length,
+    missing_invoice_date_count: missingInvoiceDateIds.length,
     total_state_restricted: Math.floor(totalStateRestricted),
-    total_invoice_amount: Math.floor(totalInvoiceAmount),
-    total_subsidy_amount: Math.floor(totalSubsidyAmount),
     total_fund_share: Math.floor(totalFundShare),
+    total_net_material_base: Math.floor(totalNetMaterialBase),
+    total_commission: Math.floor(totalCommission),
+    total_fittings: Math.floor(totalFittings),
     matched_projects: matchedList,
     unmatched_ids: unmatchedList,
+    missing_state_restricted_ids: missingStateRestrictedIds,
+    missing_invoice_date_ids: missingInvoiceDateIds,
   };
 }
 
 /**
  * Create a new Proceeding Batch with linked project application IDs
- * Calculates Dealer Commission, Fittings & 45-day delay Penalty for each project
+ * Enforces strict financial guardrails:
+ * - Rejects batch if ANY application ID is unmatched
+ * - Rejects batch if ANY project has missing state_restricted_amount
+ * - Rejects batch if ANY project has missing invoice_date
+ * - Calculates Milestone 1 vs Milestone 2 45-day cycle penalties
  */
 export async function createProceedingBatch({
   proceeding_no,
@@ -231,7 +294,7 @@ export async function createProceedingBatch({
 
   const upperAppIds = uniqueAppIds.map((id) => id.toUpperCase());
 
-  // Query matching government projects with their assigned dealer (case-insensitive)
+  // Query matching government projects with their assigned dealer
   const matchedProjects = await GovernmentProject.findAll({
     where: db.where(db.fn("UPPER", db.col("GovernmentProject.application_id")), {
       [Op.in]: upperAppIds,
@@ -254,14 +317,58 @@ export async function createProceedingBatch({
     }
   }
 
-  // Pre-load status histories to calculate 45-day delay penalties
-  const histories =
-    matchedProjectIds.length > 0
-      ? await GovernmentProjectStatusHistory.findAll({
-          where: { project_id: { [Op.in]: matchedProjectIds } },
-          order: [["status_date", "ASC"]],
-        })
-      : [];
+  // ----------------------------------------------------
+  // STRICT GUARDRAIL 1: ZERO PHANTOM / UNMATCHED PROJECTS
+  // ----------------------------------------------------
+  const unmatchedIds = uniqueAppIds.filter((id) => !projectMap.has(id.trim().toUpperCase()));
+  if (unmatchedIds.length > 0) {
+    throw new AppError(
+      `Cannot create proceeding batch: The following ${unmatchedIds.length} Application ID(s) do not exist in the database:\n${unmatchedIds.join(
+        ", "
+      )}\nPlease verify and fix these Application IDs before submitting.`,
+      400
+    );
+  }
+
+  // ----------------------------------------------------
+  // STRICT GUARDRAIL 2 & 3: MISSING STATE RESTRICTED / INVOICE DATE
+  // ----------------------------------------------------
+  const missingStateRestricted = [];
+  const missingInvoiceDates = [];
+
+  for (const proj of matchedProjects) {
+    const sRestricted = parseFloat(proj.state_restricted_amount || 0);
+    if (isNaN(sRestricted) || sRestricted <= 0) {
+      missingStateRestricted.push(proj.application_id);
+    }
+    if (!proj.invoice_date) {
+      missingInvoiceDates.push(proj.application_id);
+    }
+  }
+
+  if (missingStateRestricted.length > 0) {
+    throw new AppError(
+      `Cannot create proceeding batch: The following ${missingStateRestricted.length} project(s) are missing State Restricted Amount:\n${missingStateRestricted.join(
+        ", "
+      )}\nState Restricted Amount is mandatory for money calculations. Please enter it first.`,
+      400
+    );
+  }
+
+  if (missingInvoiceDates.length > 0) {
+    throw new AppError(
+      `Cannot create proceeding batch: The following ${missingInvoiceDates.length} project(s) are missing Invoice Date:\n${missingInvoiceDates.join(
+        ", "
+      )}\nInvoice Date is mandatory to determine the applicable GST slab. Please set the Invoice Date first.`,
+      400
+    );
+  }
+
+  // Pre-load chronological status histories for SLA penalty analysis
+  const histories = await GovernmentProjectStatusHistory.findAll({
+    where: { project_id: { [Op.in]: matchedProjectIds } },
+    order: [["status_date", "ASC"]],
+  });
 
   const historyMap = new Map();
   for (const h of histories) {
@@ -271,11 +378,7 @@ export async function createProceedingBatch({
     historyMap.get(h.project_id).push(h);
   }
 
-  // Fetch active scheme tax slab for GST and fittings deductions
-  const activeTaxSlab = await getEffectiveSchemeTaxSlab(proceeding_date);
-  const gstPct = parseFloat(activeTaxSlab?.gst_percentage ?? 12.0);
-  const fittingsPct = parseFloat(activeTaxSlab?.fittings_percentage ?? 5.0);
-
+  const isFirstFundMilestone = finalFundPct >= 50.0;
   const batchProjectRows = [];
   let totalCalcCommission = 0;
   let totalCalcFittings = 0;
@@ -285,104 +388,104 @@ export async function createProceedingBatch({
     const key = rawId.trim().toUpperCase();
     const proj = projectMap.get(key);
 
-    if (proj) {
-      const invoiceAmt = parseFloat(proj.invoice_amount || 0);
-      const subsidyAmt = parseFloat(proj.quotation_subsidy_amount || proj.invoice_amount || 0);
-      const stateRestricted = parseFloat(proj.state_restricted_amount || proj.invoice_amount || 0);
-      computedTotalStateRestricted += stateRestricted;
+    const invoiceAmt = parseFloat(proj.invoice_amount || 0);
+    const subsidyAmt = parseFloat(proj.quotation_subsidy_amount || 0);
+    const stateRestricted = parseFloat(proj.state_restricted_amount);
+    computedTotalStateRestricted += stateRestricted;
 
-      // 1. Fund Share for this release (e.g. 55% or 45% of State Restricted)
-      const fundShare = Math.floor(stateRestricted * (finalFundPct / 100));
+    // Resolve GST rate dynamically from DB using project's invoice_date
+    const activeTaxSlab = await getEffectiveSchemeTaxSlab(proj.invoice_date);
+    const gstPct = parseFloat(activeTaxSlab?.gst_percentage ?? 12.0);
+    const fittingsPct = parseFloat(activeTaxSlab?.fittings_percentage ?? 5.0);
 
-      // 2. Net Material Cost after removing GST and Fittings from the released fund share
-      // Formula: Fund Share / (1 + GST%) / (1 + Fittings%)
-      const netMaterialBase = Math.floor(fundShare / (1 + gstPct / 100) / (1 + fittingsPct / 100));
+    // Sequential Back-Calculation
+    const fundShare = Math.floor(stateRestricted * (finalFundPct / 100));
+    const taxableShare = fundShare / (1 + gstPct / 100);
+    const netMaterialBase = Math.floor(taxableShare / (1 + fittingsPct / 100));
+    const fittingsAmount = Math.floor(netMaterialBase * (fittingsPct / 100));
 
-      // 3. Dealer Commission %
-      const dealerRate =
-        proj.dealer?.commission_percentage !== undefined && proj.dealer?.commission_percentage !== null
-          ? parseFloat(proj.dealer.commission_percentage)
-          : (proj.dealer?.base_commission_percentage !== undefined && proj.dealer?.base_commission_percentage !== null
-              ? parseFloat(proj.dealer.base_commission_percentage)
-              : 20.0);
+    // Dealer Base Rate
+    const dealerBaseRate =
+      proj.dealer?.commission_percentage !== undefined && proj.dealer?.commission_percentage !== null
+        ? parseFloat(proj.dealer.commission_percentage)
+        : 20.0;
 
-      // 4. Dealer Commission Amount
-      const commissionAmount = Math.floor(netMaterialBase * (dealerRate / 100));
+    // ----------------------------------------------------
+    // MILESTONE-AWARE 45-DAY CYCLE SLA DELAY PENALTY
+    // ----------------------------------------------------
+    const projHistories = historyMap.get(proj.id) || [];
+    let delayDays = 0;
+    let delayCycles = 0;
+    let penaltyPoints = 0;
 
-      // 5. Fittings Cost for this fund share
-      // Formula: State Restricted * (Fund% / 100) * (Fittings% / 100)
-      const fittingsAmount = Math.floor(stateRestricted * (finalFundPct / 100) * (fittingsPct / 100));
-
-      // 6. SLA Delay Penalty Calculation (45 days from INVOICED to WORK COMPLETION APPROVED)
-      const projHistories = historyMap.get(proj.id) || [];
+    if (isFirstFundMilestone) {
+      // Milestone 1: INVOICED date -> WORK COMPLETION APPROVED date
       const invoicedHistory = projHistories.find((h) => h.status?.toUpperCase() === "INVOICED");
-      const invoiceDate = invoicedHistory?.status_date || proj.invoice_date || null;
+      const invoiceDate = invoicedHistory?.status_date || proj.invoice_date;
+
       const workCompletionHistory = projHistories.find(
         (h) => h.status?.toUpperCase() === "WORK COMPLETION APPROVED" || h.status?.toUpperCase() === "WORK COMPLETED"
       );
       const workCompletionDate = workCompletionHistory?.status_date || null;
 
-      let delayDays = 0;
-      let penaltyAmount = 0;
-
       if (invoiceDate && workCompletionDate) {
         delayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
         if (delayDays > 45) {
-          const delayCycles = Math.floor(delayDays / 45);
-          penaltyAmount = Math.floor(delayCycles * (commissionAmount * 0.01)); // 1% of commission per 45 days
+          delayCycles = Math.floor(delayDays / 45);
+          penaltyPoints = delayCycles * 1.0; // 1 percentage point per 45-day cycle
         }
       }
-
-      totalCalcCommission += commissionAmount;
-      totalCalcFittings += fittingsAmount;
-
-      batchProjectRows.push({
-        project_id: proj.id,
-        application_id: proj.application_id,
-        dealer_id: proj.dealer_id || null,
-        farmer_name: proj.farmer_name || null,
-        district: proj.district || null,
-        fund_type: proj.fund_type || "Regular",
-        invoice_amount: invoiceAmt,
-        subsidy_amount: subsidyAmt,
-        state_restricted_amount: stateRestricted,
-        fund_share_amount: fundShare,
-        gst_percentage: gstPct,
-        fittings_percentage: fittingsPct,
-        net_material_base: netMaterialBase,
-        dealer_rate_percentage: dealerRate,
-        commission_amount: commissionAmount,
-        fittings_amount: fittingsAmount,
-        delay_days: delayDays,
-        penalty_amount: penaltyAmount,
-        adjusted_penalty_amount: penaltyAmount,
-        is_paid_to_dealer: false,
-      });
     } else {
-      // Unmatched application ID
-      batchProjectRows.push({
-        project_id: null,
-        application_id: rawId,
-        dealer_id: null,
-        farmer_name: "Unmatched Project ID",
-        district: null,
-        fund_type: "Regular",
-        invoice_amount: 0,
-        subsidy_amount: 0,
-        state_restricted_amount: 0,
-        fund_share_amount: 0,
-        gst_percentage: gstPct,
-        fittings_percentage: fittingsPct,
-        net_material_base: 0,
-        dealer_rate_percentage: 0,
-        commission_amount: 0,
-        fittings_amount: 0,
-        delay_days: 0,
-        penalty_amount: 0,
-        adjusted_penalty_amount: 0,
-        is_paid_to_dealer: false,
-      });
+      // Milestone 2: FIRST FUND CREDITED (UTR UPDATED) date -> JOINT VERIFICATION COMPLETED date
+      const firstFundHistory = projHistories.find((h) =>
+        FIRST_FUND_STATUSES.some((st) => st.toLowerCase() === h.status?.toLowerCase())
+      );
+      const firstFundDate = firstFundHistory?.status_date || proj.first_fund_utr_date || null;
+
+      const jvHistory = projHistories.find(
+        (h) => h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED"
+      );
+      const jvCompletedDate = jvHistory?.status_date || null;
+
+      if (firstFundDate && jvCompletedDate) {
+        delayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
+        if (delayDays > 45) {
+          delayCycles = Math.floor(delayDays / 45);
+          penaltyPoints = delayCycles * 1.0; // 1 percentage point per 45-day cycle
+        }
+      }
     }
+
+    const effectiveDealerRate = Math.max(0, dealerBaseRate - penaltyPoints);
+    const commissionAmount = Math.floor(netMaterialBase * (effectiveDealerRate / 100));
+    const penaltyAmount = Math.floor(netMaterialBase * (penaltyPoints / 100));
+
+    totalCalcCommission += commissionAmount;
+    totalCalcFittings += fittingsAmount;
+
+    batchProjectRows.push({
+      project_id: proj.id,
+      application_id: proj.application_id,
+      dealer_id: proj.dealer_id || null,
+      farmer_name: proj.farmer_name || null,
+      district: proj.district || null,
+      fund_type: proj.fund_type || "Regular",
+      invoice_amount: invoiceAmt,
+      subsidy_amount: subsidyAmt,
+      state_restricted_amount: stateRestricted,
+      fund_share_amount: fundShare,
+      gst_percentage: gstPct,
+      fittings_percentage: fittingsPct,
+      net_material_base: netMaterialBase,
+      dealer_rate_percentage: dealerBaseRate,
+      penalty_percentage: penaltyPoints,
+      commission_amount: commissionAmount,
+      fittings_amount: fittingsAmount,
+      delay_days: delayDays,
+      penalty_amount: penaltyAmount,
+      adjusted_penalty_amount: penaltyAmount,
+      is_paid_to_dealer: false,
+    });
   }
 
   const finalProceedingAmount =
@@ -435,7 +538,6 @@ export async function listProceedingBatches({
 }) {
   const where = {};
 
-  // Date range filter on proceeding_date
   if (start_date && end_date) {
     where.proceeding_date = { [Op.between]: [start_date, end_date] };
   } else if (start_date) {
@@ -444,19 +546,16 @@ export async function listProceedingBatches({
     where.proceeding_date = { [Op.lte]: end_date };
   }
 
-  // Payment Received in Bank status filter
   if (payment_status === "RECEIVED") {
     where.payment_received_date = { [Op.ne]: null };
   } else if (payment_status === "PENDING") {
     where.payment_received_date = null;
   }
 
-  // Dealer payout status filter
   if (payout_status) {
     where.dealer_payout_status = payout_status;
   }
 
-  // Search filter
   if (search && search.trim()) {
     where[Op.or] = [
       { proceeding_no: { [Op.iLike]: `%${search.trim()}%` } },
@@ -498,7 +597,6 @@ export async function listProceedingBatches({
     distinct: true,
   });
 
-  // Calculate high-level summary totals across all matching batches
   const allMatching = await ProceedingBatch.findAll({
     where,
     attributes: [
@@ -609,7 +707,7 @@ export async function getProceedingBatchById(id) {
         total_fittings_amount: 0,
         total_penalty_amount: 0,
         total_net_payable: 0,
-        is_paid: true, // will be flipped to false if any project is unpaid
+        is_paid: true,
         paid_date: item.dealer_paid_date || null,
         paid_ref: item.dealer_paid_ref || null,
         project_ids: [],
@@ -623,14 +721,14 @@ export async function getProceedingBatchById(id) {
 
     d.projects_count += 1;
     d.total_invoice_amount += Math.floor(parseFloat(item.invoice_amount || 0));
-    d.total_subsidy_amount += Math.floor(parseFloat(item.subsidy_amount || item.invoice_amount || 0));
+    d.total_subsidy_amount += Math.floor(parseFloat(item.subsidy_amount || 0));
     d.total_state_restricted += Math.floor(parseFloat(item.state_restricted_amount || 0));
     d.total_fund_share += Math.floor(parseFloat(item.fund_share_amount || 0));
     d.total_net_material_base += Math.floor(parseFloat(item.net_material_base || 0));
     d.total_commission_amount += comm;
     d.total_fittings_amount += fit;
     d.total_penalty_amount += pen;
-    d.total_net_payable += Math.max(0, comm + fit - pen);
+    d.total_net_payable += Math.max(0, comm + fit);
     d.project_ids.push(item.id);
 
     if (!item.is_paid_to_dealer) {
@@ -696,10 +794,7 @@ export async function recalculateProceedingBatch(id) {
     historyMap.get(h.project_id).push(h);
   }
 
-  const activeTaxSlab = await getEffectiveSchemeTaxSlab(batch.proceeding_date);
-  const gstPct = parseFloat(activeTaxSlab?.gst_percentage ?? 12.0);
-  const fittingsPct = parseFloat(activeTaxSlab?.fittings_percentage ?? 5.0);
-
+  const isFirstFundMilestone = batch.fund_percentage_value >= 50.0;
   let totalCalcCommission = 0;
   let totalCalcFittings = 0;
 
@@ -707,40 +802,69 @@ export async function recalculateProceedingBatch(id) {
     for (const item of batch.projects) {
       const key = item.application_id.trim().toUpperCase();
       const proj = projectMap.get(key);
-      if (proj) {
+      if (proj && proj.state_restricted_amount && proj.invoice_date) {
+        const stateRestricted = parseFloat(proj.state_restricted_amount);
         const invoiceAmt = parseFloat(proj.invoice_amount || 0);
-        const subsidyAmt = parseFloat(proj.quotation_subsidy_amount || proj.invoice_amount || 0);
-        const stateRestricted = parseFloat(proj.state_restricted_amount || proj.invoice_amount || 0);
+        const subsidyAmt = parseFloat(proj.quotation_subsidy_amount || 0);
+
+        const activeTaxSlab = await getEffectiveSchemeTaxSlab(proj.invoice_date);
+        const gstPct = parseFloat(activeTaxSlab?.gst_percentage ?? 12.0);
+        const fittingsPct = parseFloat(activeTaxSlab?.fittings_percentage ?? 5.0);
+
         const fundShare = Math.floor(stateRestricted * (batch.fund_percentage_value / 100));
-        const netMaterialBase = Math.floor(fundShare / (1 + gstPct / 100) / (1 + fittingsPct / 100));
-        const dealerRate =
+        const taxableShare = fundShare / (1 + gstPct / 100);
+        const netMaterialBase = Math.floor(taxableShare / (1 + fittingsPct / 100));
+        const fittingsAmount = Math.floor(netMaterialBase * (fittingsPct / 100));
+
+        const dealerBaseRate =
           proj.dealer?.commission_percentage !== undefined && proj.dealer?.commission_percentage !== null
             ? parseFloat(proj.dealer.commission_percentage)
-            : (proj.dealer?.base_commission_percentage !== undefined && proj.dealer?.base_commission_percentage !== null
-                ? parseFloat(proj.dealer.base_commission_percentage)
-                : 20.0);
-
-        const commissionAmount = Math.floor(netMaterialBase * (dealerRate / 100));
-        const fittingsAmount = Math.floor(stateRestricted * (batch.fund_percentage_value / 100) * (fittingsPct / 100));
+            : 20.0;
 
         const projHistories = historyMap.get(proj.id) || [];
-        const invoicedHistory = projHistories.find((h) => h.status?.toUpperCase() === "INVOICED");
-        const invoiceDate = invoicedHistory?.status_date || proj.invoice_date || null;
-        const workCompletionHistory = projHistories.find(
-          (h) => h.status?.toUpperCase() === "WORK COMPLETION APPROVED" || h.status?.toUpperCase() === "WORK COMPLETED"
-        );
-        const workCompletionDate = workCompletionHistory?.status_date || null;
-
         let delayDays = 0;
-        let penaltyAmount = 0;
+        let delayCycles = 0;
+        let penaltyPoints = 0;
 
-        if (invoiceDate && workCompletionDate) {
-          delayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
-          if (delayDays > 45) {
-            const delayCycles = Math.floor(delayDays / 45);
-            penaltyAmount = Math.floor(delayCycles * (commissionAmount * 0.01));
+        if (isFirstFundMilestone) {
+          const invoicedHistory = projHistories.find((h) => h.status?.toUpperCase() === "INVOICED");
+          const invoiceDate = invoicedHistory?.status_date || proj.invoice_date;
+
+          const workCompletionHistory = projHistories.find(
+            (h) => h.status?.toUpperCase() === "WORK COMPLETION APPROVED" || h.status?.toUpperCase() === "WORK COMPLETED"
+          );
+          const workCompletionDate = workCompletionHistory?.status_date || null;
+
+          if (invoiceDate && workCompletionDate) {
+            delayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
+            if (delayDays > 45) {
+              delayCycles = Math.floor(delayDays / 45);
+              penaltyPoints = delayCycles * 1.0;
+            }
+          }
+        } else {
+          const firstFundHistory = projHistories.find((h) =>
+            FIRST_FUND_STATUSES.some((st) => st.toLowerCase() === h.status?.toLowerCase())
+          );
+          const firstFundDate = firstFundHistory?.status_date || proj.first_fund_utr_date || null;
+
+          const jvHistory = projHistories.find(
+            (h) => h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED"
+          );
+          const jvCompletedDate = jvHistory?.status_date || null;
+
+          if (firstFundDate && jvCompletedDate) {
+            delayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
+            if (delayDays > 45) {
+              delayCycles = Math.floor(delayDays / 45);
+              penaltyPoints = delayCycles * 1.0;
+            }
           }
         }
+
+        const effectiveDealerRate = Math.max(0, dealerBaseRate - penaltyPoints);
+        const commissionAmount = Math.floor(netMaterialBase * (effectiveDealerRate / 100));
+        const penaltyAmount = Math.floor(netMaterialBase * (penaltyPoints / 100));
 
         totalCalcCommission += commissionAmount;
         totalCalcFittings += fittingsAmount;
@@ -760,7 +884,8 @@ export async function recalculateProceedingBatch(id) {
             gst_percentage: gstPct,
             fittings_percentage: fittingsPct,
             net_material_base: netMaterialBase,
-            dealer_rate_percentage: dealerRate,
+            dealer_rate_percentage: dealerBaseRate,
+            penalty_percentage: penaltyPoints,
             commission_amount: commissionAmount,
             fittings_amount: fittingsAmount,
             delay_days: delayDays,
@@ -800,9 +925,9 @@ export async function updateBankPaymentReceipt(id, { payment_received_date, paym
 
 /**
  * Mark all project commission lines for a specific dealer in a batch as PAID
- * Allows recording custom adjusted penalty deduction
+ * Creates permanent, immutable DealerSettlement financial records
  */
-export async function markDealerPayout(batch_id, { dealer_id, paid_date, paid_ref, adjusted_penalty_amount }) {
+export async function markDealerPayout(batch_id, { dealer_id, paid_date, paid_ref, notes }) {
   const batch = await ProceedingBatch.findByPk(batch_id);
   if (!batch) throw new AppError("Proceeding batch not found", 404);
 
@@ -813,32 +938,79 @@ export async function markDealerPayout(batch_id, { dealer_id, paid_date, paid_re
     whereClause.dealer_id = dealer_id;
   }
 
-  const updateData = {
-    is_paid_to_dealer: true,
-    dealer_paid_date: paid_date || new Date().toISOString().split("T")[0],
-    dealer_paid_ref: paid_ref ? paid_ref.trim() : "Direct Bank Transfer",
-  };
+  const finalPaidDate = paid_date || new Date().toISOString().split("T")[0];
+  const finalPaidRef = paid_ref ? paid_ref.trim() : "Direct Bank Transfer / NEFT";
 
-  if (adjusted_penalty_amount !== undefined && adjusted_penalty_amount !== null && !isNaN(parseFloat(adjusted_penalty_amount))) {
-    updateData.adjusted_penalty_amount = parseFloat(adjusted_penalty_amount);
-  }
+  await db.transaction(async (t) => {
+    // Fetch all project records for this dealer in this batch
+    const projectsInBatch = await ProceedingBatchProject.findAll({
+      where: whereClause,
+      transaction: t,
+    });
 
-  await ProceedingBatchProject.update(updateData, { where: whereClause });
+    if (projectsInBatch.length === 0) {
+      throw new AppError("No projects found for this dealer in the proceeding batch", 404);
+    }
 
-  // Recalculate batch payout status
-  const allProjects = await ProceedingBatchProject.findAll({
-    where: { proceeding_batch_id: batch_id },
+    // 1. Update status on ProceedingBatchProject
+    await ProceedingBatchProject.update(
+      {
+        is_paid_to_dealer: true,
+        dealer_paid_date: finalPaidDate,
+        dealer_paid_ref: finalPaidRef,
+      },
+      { where: whereClause, transaction: t }
+    );
+
+    // 2. Create immutable DealerSettlement audit accounting entries
+    for (const item of projectsInBatch) {
+      const commAmt = parseFloat(item.commission_amount || 0);
+      const fitAmt = parseFloat(item.fittings_amount || 0);
+      const totalPaid = parseFloat((commAmt + fitAmt).toFixed(2));
+
+      await DealerSettlement.create(
+        {
+          dealer_id: item.dealer_id,
+          project_id: item.project_id,
+          proceeding_batch_id: batch_id,
+          proceeding_batch_project_id: item.id,
+          application_id: item.application_id,
+          fund_percentage: batch.fund_percentage_value,
+          state_restricted_amount: item.state_restricted_amount,
+          fund_release_amount: item.fund_share_amount,
+          gst_percentage: item.gst_percentage,
+          fittings_percentage: item.fittings_percentage,
+          dealer_base_rate: item.dealer_rate_percentage,
+          penalty_percentage: item.penalty_percentage || 0,
+          effective_rate: Math.max(0, (item.dealer_rate_percentage || 0) - (item.penalty_percentage || 0)),
+          net_material_base: item.net_material_base,
+          commission_amount: commAmt,
+          fittings_amount: fitAmt,
+          total_paid: totalPaid,
+          payment_date: finalPaidDate,
+          utr_reference: finalPaidRef,
+          notes: notes ? notes.trim() : `Settled from Proceeding Batch #${batch.proceeding_no}`,
+        },
+        { transaction: t }
+      );
+    }
+
+    // 3. Update overall batch payout status
+    const allProjects = await ProceedingBatchProject.findAll({
+      where: { proceeding_batch_id: batch_id },
+      transaction: t,
+    });
+
+    const paidCount = allProjects.filter((p) => p.is_paid_to_dealer).length;
+    if (paidCount === allProjects.length && allProjects.length > 0) {
+      batch.dealer_payout_status = "PAID";
+    } else if (paidCount > 0) {
+      batch.dealer_payout_status = "PARTIAL";
+    } else {
+      batch.dealer_payout_status = "UNPAID";
+    }
+    await batch.save({ transaction: t });
   });
-
-  const paidCount = allProjects.filter((p) => p.is_paid_to_dealer).length;
-  if (paidCount === allProjects.length && allProjects.length > 0) {
-    batch.dealer_payout_status = "PAID";
-  } else if (paidCount > 0) {
-    batch.dealer_payout_status = "PARTIAL";
-  } else {
-    batch.dealer_payout_status = "UNPAID";
-  }
-  await batch.save();
 
   return getProceedingBatchById(batch_id);
 }

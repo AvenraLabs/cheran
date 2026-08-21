@@ -96,7 +96,7 @@ export function ReportsPage() {
   }, [procStartDate, procEndDate, dealerStartDate, dealerEndDate]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#F4F2EB] min-h-screen">
+    <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Financial Intelligence & Business Reports"
         actions={
@@ -108,7 +108,7 @@ export function ReportsPage() {
         }
       />
 
-      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2 border-b border-[#E4E1D8] pb-3 overflow-x-auto">
           <button
@@ -120,17 +120,6 @@ export function ReportsPage() {
             }`}
           >
             <TrendingUp size={14} /> Executive P&L Overview
-          </button>
-
-          <button
-            onClick={() => setActiveTab("govt_funds")}
-            className={`flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-[8px] transition-all cursor-pointer ${
-              activeTab === "govt_funds"
-                ? "bg-[#2F6F5E] text-white shadow-xs"
-                : "bg-white text-[#52607D] border border-[#E4E1D8] hover:bg-gray-100"
-            }`}
-          >
-            <LandPlot size={14} /> Govt 55% / 45% Milestones
           </button>
 
           <button
@@ -179,11 +168,11 @@ export function ReportsPage() {
             {activeTab === "overview" && financialOverview && (
               <div className="space-y-6">
                 {/* Net Cash Position Hero Card */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs">
+                <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 sm:p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-4">
                     <div>
-                      <h3 className="text-base font-bold text-[#14213D] flex items-center gap-2">
-                        <TrendingUp size={20} className="text-[#2F6F5E]" />
+                      <h3 className="text-sm sm:text-base font-bold text-[#14213D] flex items-center gap-2">
+                        <TrendingUp size={18} className="text-[#2F6F5E]" />
                         <span>Company Net Operating Cash Position</span>
                       </h3>
                       <p className="text-xs text-[#52607D] mt-0.5">
@@ -191,11 +180,11 @@ export function ReportsPage() {
                       </p>
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-xs font-semibold text-[#52607D]">Net Cash Balance</div>
+                    <div className="sm:text-right">
+                      <div className="text-[11px] font-semibold text-[#52607D] uppercase tracking-wider">Net Cash Balance</div>
                       <div
-                        className={`text-2xl font-extrabold font-mono mt-0.5 ${
-                          financialOverview.is_positive ? "text-[#2F6F5E]" : "text-rose-600"
+                        className={`text-xl sm:text-2xl font-extrabold font-mono mt-0.5 ${
+                          financialOverview.is_positive ? "text-[#2F6F5E]" : "text-[#B0403A]"
                         }`}
                       >
                         ₹{financialOverview.net_operating_cash_position.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -203,39 +192,39 @@ export function ReportsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 text-center">
-                    <div className="bg-emerald-50 p-4 rounded-[10px] border border-emerald-200">
-                      <div className="text-xs font-semibold text-emerald-900">Total Cash Inflow</div>
-                      <div className="text-xl font-extrabold font-mono text-emerald-950 mt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-4 text-center">
+                    <div className="bg-[#EAF3F0] p-3.5 rounded-[8px] border border-[#D3E6E0]">
+                      <div className="text-[11px] font-semibold text-[#2F6F5E] uppercase tracking-wide">Total Cash Inflow</div>
+                      <div className="text-lg sm:text-xl font-extrabold font-mono text-[#2F6F5E] mt-1">
                         ₹{financialOverview.inflows.grand_total_cash_inflow.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[11px] text-emerald-800 mt-0.5">Govt Funds + Direct Sales</div>
+                      <div className="text-[11px] text-[#52607D] mt-0.5">Govt Funds + Direct Sales</div>
                     </div>
 
-                    <div className="bg-rose-50 p-4 rounded-[10px] border border-rose-200">
-                      <div className="text-xs font-semibold text-rose-900">Total Cash Outflow</div>
-                      <div className="text-xl font-extrabold font-mono text-rose-950 mt-1">
+                    <div className="bg-[#FDF2F1] p-3.5 rounded-[8px] border border-[#F8D7D5]">
+                      <div className="text-[11px] font-semibold text-[#B0403A] uppercase tracking-wide">Total Cash Outflow</div>
+                      <div className="text-lg sm:text-xl font-extrabold font-mono text-[#B0403A] mt-1">
                         ₹{financialOverview.outflows.grand_total_cash_outflow.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[11px] text-rose-800 mt-0.5">Materials + Opex + Salaries</div>
+                      <div className="text-[11px] text-[#52607D] mt-0.5">Materials + Opex + Salaries</div>
                     </div>
 
-                    <div className="bg-blue-50 p-4 rounded-[10px] border border-blue-200">
-                      <div className="text-xs font-semibold text-blue-900">Govt Fund Inflow</div>
-                      <div className="text-xl font-extrabold font-mono text-blue-950 mt-1">
+                    <div className="bg-[#F0F5FA] p-3.5 rounded-[8px] border border-[#D0E2F0]">
+                      <div className="text-[11px] font-semibold text-[#1D5E8C] uppercase tracking-wide">Govt Fund Inflow</div>
+                      <div className="text-lg sm:text-xl font-extrabold font-mono text-[#1D5E8C] mt-1">
                         ₹{financialOverview.inflows.total_govt_fund_received.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[11px] text-blue-800 mt-0.5">
+                      <div className="text-[11px] text-[#52607D] mt-0.5">
                         55% (₹{financialOverview.inflows.govt_first_fund_55_pct.toLocaleString("en-IN")}) + 45% (₹{financialOverview.inflows.govt_second_fund_45_pct.toLocaleString("en-IN")})
                       </div>
                     </div>
 
-                    <div className="bg-amber-50 p-4 rounded-[10px] border border-amber-200">
-                      <div className="text-xs font-semibold text-amber-900">Pending Govt Receivables</div>
-                      <div className="text-xl font-extrabold font-mono text-amber-950 mt-1">
+                    <div className="bg-[#FDF8EE] p-3.5 rounded-[8px] border border-[#F2E5C4]">
+                      <div className="text-[11px] font-semibold text-[#8C6B1C] uppercase tracking-wide">Pending Govt Receivables</div>
+                      <div className="text-lg sm:text-xl font-extrabold font-mono text-[#8C6B1C] mt-1">
                         ₹{financialOverview.inflows.govt_pending_receivable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[11px] text-amber-800 mt-0.5">From ₹{financialOverview.inflows.govt_total_invoiced.toLocaleString("en-IN")} Invoiced</div>
+                      <div className="text-[11px] text-[#52607D] mt-0.5">From ₹{financialOverview.inflows.govt_total_invoiced.toLocaleString("en-IN")} Invoiced</div>
                     </div>
                   </div>
                 </div>
@@ -243,12 +232,12 @@ export function ReportsPage() {
                 {/* Side by Side Detailed Inflows vs Outflows Tables */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Inflow Streams */}
-                  <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                    <h4 className="text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center justify-between">
+                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center justify-between">
                       <span className="flex items-center gap-2">
-                        <TrendingUp size={16} className="text-emerald-600" /> Cash Inflows (Revenue)
+                        <TrendingUp size={16} className="text-[#2F6F5E]" /> Cash Inflows (Revenue)
                       </span>
-                      <span className="font-mono font-bold text-emerald-800">
+                      <span className="font-mono font-bold text-[#2F6F5E]">
                         ₹{financialOverview.inflows.grand_total_cash_inflow.toLocaleString("en-IN")}
                       </span>
                     </h4>
@@ -259,7 +248,7 @@ export function ReportsPage() {
                           <div className="font-bold text-[#14213D]">Government 1st Fund (55% Milestone)</div>
                           <div className="text-[#52607D] text-[11px]">Received on 1st Fund UTR Credited</div>
                         </div>
-                        <div className="font-mono font-bold text-emerald-700 text-sm">
+                        <div className="font-mono font-bold text-[#2F6F5E] text-sm">
                           ₹{financialOverview.inflows.govt_first_fund_55_pct.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -269,7 +258,7 @@ export function ReportsPage() {
                           <div className="font-bold text-[#14213D]">Government Final Fund (45% Milestone)</div>
                           <div className="text-[#52607D] text-[11px]">Received on Final Fund UTR Credited</div>
                         </div>
-                        <div className="font-mono font-bold text-emerald-700 text-sm">
+                        <div className="font-mono font-bold text-[#2F6F5E] text-sm">
                           ₹{financialOverview.inflows.govt_second_fund_45_pct.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -281,7 +270,7 @@ export function ReportsPage() {
                             ₹{financialOverview.inflows.direct_sales_invoiced.toLocaleString("en-IN")} Billed
                           </div>
                         </div>
-                        <div className="font-mono font-bold text-emerald-700 text-sm">
+                        <div className="font-mono font-bold text-[#2F6F5E] text-sm">
                           ₹{financialOverview.inflows.direct_sales_received.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -289,12 +278,12 @@ export function ReportsPage() {
                   </div>
 
                   {/* Outflow Streams */}
-                  <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                    <h4 className="text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center justify-between">
+                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center justify-between">
                       <span className="flex items-center gap-2">
-                        <TrendingDown size={16} className="text-rose-600" /> Cash Outflows (Costs & Spends)
+                        <TrendingDown size={16} className="text-[#B0403A]" /> Cash Outflows (Costs & Spends)
                       </span>
-                      <span className="font-mono font-bold text-rose-800">
+                      <span className="font-mono font-bold text-[#B0403A]">
                         ₹{financialOverview.outflows.grand_total_cash_outflow.toLocaleString("en-IN")}
                       </span>
                     </h4>
@@ -305,7 +294,7 @@ export function ReportsPage() {
                           <div className="font-bold text-[#14213D]">Raw Material Procurement Purchases</div>
                           <div className="text-[#52607D] text-[11px]">Stock Receipts & Supplier Invoices</div>
                         </div>
-                        <div className="font-mono font-bold text-rose-700 text-sm">
+                        <div className="font-mono font-bold text-[#B0403A] text-sm">
                           ₹{financialOverview.outflows.raw_materials_procurement.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -315,7 +304,7 @@ export function ReportsPage() {
                           <div className="font-bold text-[#14213D]">Operating Expenses (Opex)</div>
                           <div className="text-[#52607D] text-[11px]">Utilities, Rent, Transport & Maintenance</div>
                         </div>
-                        <div className="font-mono font-bold text-rose-700 text-sm">
+                        <div className="font-mono font-bold text-[#B0403A] text-sm">
                           ₹{financialOverview.outflows.operating_expenses.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -325,7 +314,7 @@ export function ReportsPage() {
                           <div className="font-bold text-[#14213D]">Employee Salaries & Wages</div>
                           <div className="text-[#52607D] text-[11px]">Staff Payroll Paid</div>
                         </div>
-                        <div className="font-mono font-bold text-rose-700 text-sm">
+                        <div className="font-mono font-bold text-[#B0403A] text-sm">
                           ₹{financialOverview.outflows.staff_salaries_paid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -337,7 +326,7 @@ export function ReportsPage() {
                             ₹{(financialOverview.outflows.dealer_commissions_pending || 0).toLocaleString("en-IN")} Pending
                           </div>
                         </div>
-                        <div className="font-mono font-bold text-rose-700 text-sm">
+                        <div className="font-mono font-bold text-[#B0403A] text-sm">
                           ₹{(financialOverview.outflows.dealer_commissions_paid || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -349,7 +338,7 @@ export function ReportsPage() {
                             ₹{(financialOverview.outflows.fittings_cost_pending || 0).toLocaleString("en-IN")} Pending
                           </div>
                         </div>
-                        <div className="font-mono font-bold text-rose-700 text-sm">
+                        <div className="font-mono font-bold text-[#B0403A] text-sm">
                           ₹{(financialOverview.outflows.fittings_cost_paid || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -359,120 +348,7 @@ export function ReportsPage() {
               </div>
             )}
 
-            {/* ========================================== */}
-            {/* TAB 2: GOVERNMENT 55% / 45% MILESTONES */}
-            {/* ========================================== */}
-            {activeTab === "govt_funds" && govtFundsReport && (
-              <div className="space-y-6">
-                {/* Metrics */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="bg-white p-4 rounded-[12px] border border-[#E4E1D8] shadow-xs text-center">
-                    <div className="text-xs font-semibold text-[#52607D]">Total Invoiced (100%)</div>
-                    <div className="text-xl font-extrabold font-mono text-[#14213D] mt-1">
-                      ₹{govtFundsReport.totalInvoicedAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-[11px] text-[#8C97AB] mt-0.5">{govtFundsReport.totalProjectsCount} Total Projects</div>
-                  </div>
 
-                  <div className="bg-blue-50 p-4 rounded-[12px] border border-blue-200 text-center">
-                    <div className="text-xs font-semibold text-blue-900">1st Fund (55% Milestone)</div>
-                    <div className="text-xl font-extrabold font-mono text-blue-950 mt-1">
-                      ₹{govtFundsReport.totalFirstFundReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-[11px] text-blue-800 mt-0.5">{govtFundsReport.firstFundProjectsCount} Projects Credited</div>
-                  </div>
-
-                  <div className="bg-indigo-50 p-4 rounded-[12px] border border-indigo-200 text-center">
-                    <div className="text-xs font-semibold text-indigo-900">Final Fund (45% Milestone)</div>
-                    <div className="text-xl font-extrabold font-mono text-indigo-950 mt-1">
-                      ₹{govtFundsReport.totalSecondFundReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-[11px] text-indigo-800 mt-0.5">{govtFundsReport.finalFundProjectsCount} Projects Completed</div>
-                  </div>
-
-                  <div className="bg-emerald-50 p-4 rounded-[12px] border border-emerald-200 text-center">
-                    <div className="text-xs font-semibold text-emerald-900">Total Funds Inflow</div>
-                    <div className="text-xl font-extrabold font-mono text-emerald-950 mt-1">
-                      ₹{govtFundsReport.totalReleasedAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-[11px] text-emerald-800 mt-0.5 font-bold">
-                      {govtFundsReport.recoveryPercentage}% Recovery Rate
-                    </div>
-                  </div>
-                </div>
-
-                {/* Government Projects Fund Tracking Table */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
-                    <div>
-                      <h4 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
-                        <LandPlot size={18} className="text-[#2F6F5E]" />
-                        <span>Government Projects Milestone Inflows (55% & 45%)</span>
-                      </h4>
-                      <p className="text-xs text-[#52607D] mt-0.5">
-                        Automatic 55% milestone credited on 1st Fund UTR and 45% on Final Fund UTR
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
-                        <tr>
-                          <th className="py-3 px-4">Application ID</th>
-                          <th className="py-3 px-4">Farmer & Location</th>
-                          <th className="py-3 px-4">Current Status</th>
-                          <th className="py-3 px-4 text-right">Invoiced (100%)</th>
-                          <th className="py-3 px-4 text-right bg-blue-50/40">1st Fund (55%)</th>
-                          <th className="py-3 px-4 text-right bg-indigo-50/40">Final Fund (45%)</th>
-                          <th className="py-3 px-4 text-right bg-emerald-50/40">Total Inflow</th>
-                          <th className="py-3 px-4 text-right">Pending Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#EDEAE1]">
-                        {govtFundsReport.projects.map((p) => (
-                          <tr key={p.id} className="hover:bg-[#F9F8F5]">
-                            <td className="py-3 px-4 font-mono font-bold text-[#14213D]">
-                              {p.application_id}
-                            </td>
-                            <td className="py-3 px-4 text-[#52607D]">
-                              <div className="font-semibold text-[#14213D]">{p.farmer_name}</div>
-                              <div className="text-[11px]">{[p.village, p.district].filter(Boolean).join(", ")}</div>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="text-[11px] font-semibold text-[#14213D] bg-gray-100 px-2 py-0.5 rounded">
-                                {p.current_status}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
-                              ₹{p.invoiced_amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-blue-900 bg-blue-50/20">
-                              ₹{p.first_fund_received.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              {p.first_fund_utr && (
-                                <div className="text-[9px] text-blue-700 font-normal">UTR: {p.first_fund_utr}</div>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-indigo-900 bg-indigo-50/20">
-                              ₹{p.second_fund_received.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              {p.final_fund_utr && (
-                                <div className="text-[9px] text-indigo-700 font-normal">UTR: {p.final_fund_utr}</div>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-emerald-800 bg-emerald-50/20">
-                              ₹{p.total_released.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono text-amber-900 font-semibold">
-                              ₹{p.pending_receivable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* ========================================== */}
             {/* TAB 3: RAW MATERIAL PURCHASES & PROCUREMENT */}
@@ -480,10 +356,10 @@ export function ReportsPage() {
             {activeTab === "procurement" && procurementReport && (
               <div className="space-y-6">
                 {/* Header & Date Filters */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
+                <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-4">
                     <div>
-                      <h4 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
+                      <h4 className="text-xs sm:text-sm font-bold text-[#14213D] flex items-center gap-2">
                         <Truck size={18} className="text-[#2F6F5E]" />
                         <span>Raw Material Purchases & Procurement Cost Outflow</span>
                       </h4>
@@ -509,26 +385,26 @@ export function ReportsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                    <div className="bg-rose-50 p-4 rounded-[10px] border border-rose-200">
-                      <div className="text-xs font-semibold text-rose-900">Total Procurement Cost</div>
-                      <div className="text-2xl font-extrabold font-mono text-rose-950 mt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-center">
+                    <div className="bg-[#FDF2F1] p-3.5 rounded-[8px] border border-[#F8D7D5]">
+                      <div className="text-[11px] font-semibold text-[#B0403A] uppercase tracking-wide">Total Procurement Cost</div>
+                      <div className="text-xl font-extrabold font-mono text-[#B0403A] mt-1">
                         ₹{procurementReport.totalProcurementSpend.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
-                      <div className="text-[11px] text-rose-800 mt-0.5">Direct Raw Materials Outflow</div>
+                      <div className="text-[11px] text-[#52607D] mt-0.5">Direct Raw Materials Outflow</div>
                     </div>
 
-                    <div className="bg-[#FAFAF8] p-4 rounded-[10px] border border-[#E4E1D8]">
-                      <div className="text-xs font-semibold text-[#52607D]">Total Purchase Bills</div>
-                      <div className="text-2xl font-extrabold font-mono text-[#14213D] mt-1">
+                    <div className="bg-[#FAFAF8] p-3.5 rounded-[8px] border border-[#E4E1D8]">
+                      <div className="text-[11px] font-semibold text-[#52607D] uppercase tracking-wide">Total Purchase Bills</div>
+                      <div className="text-xl font-extrabold font-mono text-[#14213D] mt-1">
                         {procurementReport.receiptsCount}
                       </div>
                       <div className="text-[11px] text-[#8C97AB] mt-0.5">Stock Receipts Recorded</div>
                     </div>
 
-                    <div className="bg-[#FAFAF8] p-4 rounded-[10px] border border-[#E4E1D8]">
-                      <div className="text-xs font-semibold text-[#52607D]">Suppliers Engaged</div>
-                      <div className="text-2xl font-extrabold font-mono text-[#14213D] mt-1">
+                    <div className="bg-[#FAFAF8] p-3.5 rounded-[8px] border border-[#E4E1D8]">
+                      <div className="text-[11px] font-semibold text-[#52607D] uppercase tracking-wide">Suppliers Engaged</div>
+                      <div className="text-xl font-extrabold font-mono text-[#14213D] mt-1">
                         {procurementReport.bySupplier.length}
                       </div>
                       <div className="text-[11px] text-[#8C97AB] mt-0.5">Active Vendors</div>
@@ -537,8 +413,8 @@ export function ReportsPage() {
                 </div>
 
                 {/* Purchase Receipts Ledger */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                  <h4 className="text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3">
+                <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
+                  <h4 className="text-xs sm:text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3">
                     Purchase Receipts & Invoices Ledger
                   </h4>
 
@@ -548,7 +424,7 @@ export function ReportsPage() {
                       description="Record raw material purchases under Inventory & Materials -> Purchase Receipts."
                     />
                   ) : (
-                    <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden">
+                    <div className="border border-[#EDEAE1] rounded-[8px] overflow-hidden">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
                           <tr>
@@ -574,7 +450,7 @@ export function ReportsPage() {
                               <td className="py-3 px-4 text-[#52607D]">
                                 {r.items.map((it) => `${it.name} (${it.quantity} ${it.unit})`).join(", ") || "Raw Materials"}
                               </td>
-                              <td className="py-3 px-4 text-right font-mono font-bold text-rose-800 text-sm">
+                              <td className="py-3 px-4 text-right font-mono font-bold text-[#B0403A] text-sm">
                                 ₹{r.total_amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                               </td>
                             </tr>
@@ -591,10 +467,10 @@ export function ReportsPage() {
             {/* TAB 4: DEALER PERFORMANCE & COMMISSIONS */}
             {/* ========================================== */}
             {activeTab === "dealers" && (
-              <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-5">
+              <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-4">
                   <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#14213D] flex items-center gap-2">
                       <Users size={18} className="text-[#2F6F5E]" />
                       <span>Dealer Performance, Commission & Fittings Settlement</span>
                     </h4>
@@ -633,7 +509,7 @@ export function ReportsPage() {
                   </div>
                 </div>
 
-                <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden overflow-x-auto">
+                <div className="border border-[#EDEAE1] rounded-[8px] overflow-hidden overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse min-w-[900px]">
                     <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
                       <tr>
@@ -659,10 +535,10 @@ export function ReportsPage() {
                           <td className="py-3 px-4 text-right font-mono font-semibold text-[#14213D]">
                             ₹{d.total_subsidy_amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
+                          <td className="py-3 px-4 text-right font-mono font-bold text-[#2F6F5E]">
                             ₹{d.commission_paid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-amber-800">
+                          <td className="py-3 px-4 text-right font-mono font-bold text-[#8C6B1C]">
                             ₹{d.commission_pending.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-purple-700">
@@ -695,12 +571,12 @@ export function ReportsPage() {
             {activeTab === "expenses_payroll" && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Operating Expenses Breakdown */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                  <h4 className="text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center justify-between">
+                <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
+                  <h4 className="text-xs sm:text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <Receipt size={16} className="text-[#2F6F5E]" /> Operating Expenses (Opex)
                     </span>
-                    <span className="font-mono font-bold text-rose-800">
+                    <span className="font-mono font-bold text-[#B0403A]">
                       ₹{expenseReport.totalExpenses.toLocaleString("en-IN")}
                     </span>
                   </h4>
@@ -718,8 +594,8 @@ export function ReportsPage() {
                 </div>
 
                 {/* Staff Salaries */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                  <h4 className="text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center gap-2">
+                <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
+                  <h4 className="text-xs sm:text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3 flex items-center gap-2">
                     <DollarSign size={16} className="text-[#2F6F5E]" /> Staff & Employee Payroll Summary
                   </h4>
 
@@ -745,8 +621,8 @@ export function ReportsPage() {
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                   emp.salary_status === "PAID"
-                                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                    : "bg-amber-50 text-amber-800 border border-amber-200"
+                                    ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#D3E6E0]"
+                                    : "bg-[#FDF8EE] text-[#8C6B1C] border border-[#F2E5C4]"
                                 }`}
                               >
                                 {emp.salary_status}

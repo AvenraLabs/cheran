@@ -14,6 +14,7 @@ import ExpenseCategory from "../expenses/expense-category.model.js";
 import Employee from "../employees/employee.model.js";
 import EmployeeSalaryRecord from "../employees/employee-salary-record.model.js";
 import Invoice from "../invoices/invoice.model.js";
+import ProceedingBatchProject from "../proceedings/proceeding-batch-project.model.js";
 
 // First Fund Milestone Statuses
 const FIRST_FUND_STATUSES = [
@@ -329,14 +330,29 @@ export async function getFinancialOverviewReport({ startDate, endDate } = {}) {
     }
   }
 
-  // Dealer Commissions & Fittings Outflow
-  const commissions = await DealerCommission.findAll();
+  // Dealer Commissions & Fittings Outflow from Live Proceedings Batches
   let totalCommissionsPaid = 0;
   let totalCommissionsPending = 0;
   let totalFittingsPaid = 0;
   let totalFittingsPending = 0;
 
-  for (const c of commissions) {
+  const proceedingProjects = await ProceedingBatchProject.findAll();
+  for (const p of proceedingProjects) {
+    const commAmt = parseFloat(p.commission_amount) || 0;
+    const fitAmt = parseFloat(p.fittings_amount) || 0;
+
+    if (p.is_paid_to_dealer) {
+      totalCommissionsPaid += commAmt;
+      totalFittingsPaid += fitAmt;
+    } else {
+      totalCommissionsPending += commAmt;
+      totalFittingsPending += fitAmt;
+    }
+  }
+
+  // Also include any standalone DealerCommission entries if present
+  const standaloneCommissions = await DealerCommission.findAll();
+  for (const c of standaloneCommissions) {
     const amt = parseFloat(c.commission_amount) || 0;
     const fitAmt = parseFloat(c.fittings_amount) || 0;
 
@@ -413,6 +429,22 @@ export async function getDealerReport({ start_date, end_date, year, dealer_id } 
         attributes: ["id", "quotation_subsidy_amount", "total_fund_released", "current_status", "created_at"],
       },
       {
+        model: ProceedingBatchProject,
+        as: "proceeding_projects",
+        required: false,
+        attributes: [
+          "id",
+          "commission_amount",
+          "fittings_amount",
+          "penalty_amount",
+          "adjusted_penalty_amount",
+          "is_paid_to_dealer",
+          "dealer_paid_date",
+          "dealer_paid_ref",
+          "created_at",
+        ],
+      },
+      {
         model: DealerCommission,
         as: "commissions",
         required: false,
@@ -422,10 +454,6 @@ export async function getDealerReport({ start_date, end_date, year, dealer_id } 
           "fittings_amount",
           "status",
           "fittings_status",
-          "part1_status",
-          "part2_status",
-          "part1_amount",
-          "part2_amount",
           "created_at",
         ],
       },
@@ -448,7 +476,25 @@ export async function getDealerReport({ start_date, end_date, year, dealer_id } 
     let commissionPaid = 0;
     let fittingsPending = 0;
     let fittingsPaid = 0;
+    let penaltyTotal = 0;
 
+    // Aggregate from Live Proceedings Batches
+    for (const p of d.proceeding_projects || []) {
+      const commAmt = parseFloat(p.commission_amount) || 0;
+      const fitAmt = parseFloat(p.fittings_amount) || 0;
+      const penAmt = parseFloat(p.adjusted_penalty_amount || p.penalty_amount) || 0;
+      penaltyTotal += penAmt;
+
+      if (p.is_paid_to_dealer) {
+        commissionPaid += commAmt;
+        fittingsPaid += fitAmt;
+      } else {
+        commissionPending += commAmt;
+        fittingsPending += fitAmt;
+      }
+    }
+
+    // Also combine legacy DealerCommission records if any exist
     for (const c of d.commissions || []) {
       const commAmt = parseFloat(c.commission_amount) || 0;
       const fitAmt = parseFloat(c.fittings_amount) || 0;
@@ -474,6 +520,7 @@ export async function getDealerReport({ start_date, end_date, year, dealer_id } 
       commission_pending: parseFloat(commissionPending.toFixed(2)),
       fittings_paid: parseFloat(fittingsPaid.toFixed(2)),
       fittings_pending: parseFloat(fittingsPending.toFixed(2)),
+      total_penalties: parseFloat(penaltyTotal.toFixed(2)),
       total_payout_paid: totalPayoutPaid,
       total_payout_pending: totalPayoutPending,
       total_payout_amount: parseFloat((totalPayoutPaid + totalPayoutPending).toFixed(2)),

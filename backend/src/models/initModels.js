@@ -20,8 +20,9 @@ import ProductionEntry from "../modules/inventory/production-entry.model.js";
 import ProductionMaterial from "../modules/inventory/production-material.model.js";
 import ProductionOutput from "../modules/inventory/production-output.model.js";
 
-// Commissions
+// Commissions & Settlements
 import DealerCommission from "../modules/dealers/dealer-commission.model.js";
+import DealerSettlement from "../modules/dealers/dealer-settlement.model.js";
 
 // Expenses
 import ExpenseCategory from "../modules/expenses/expense-category.model.js";
@@ -425,6 +426,27 @@ ProceedingBatchProject.belongsTo(Dealer, {
   as: "dealer",
 });
 
+// Dealer <-> DealerSettlement
+Dealer.hasMany(DealerSettlement, {
+  foreignKey: "dealer_id",
+  as: "settlements",
+  onDelete: "RESTRICT",
+});
+DealerSettlement.belongsTo(Dealer, {
+  foreignKey: "dealer_id",
+  as: "dealer",
+});
+
+ProceedingBatch.hasMany(DealerSettlement, {
+  foreignKey: "proceeding_batch_id",
+  as: "settlements",
+  onDelete: "CASCADE",
+});
+DealerSettlement.belongsTo(ProceedingBatch, {
+  foreignKey: "proceeding_batch_id",
+  as: "proceeding_batch",
+});
+
 export {
   Dealer,
   GovernmentStatus,
@@ -443,6 +465,7 @@ export {
   ProductionMaterial,
   ProductionOutput,
   DealerCommission,
+  DealerSettlement,
   ExpenseCategory,
   Expense,
   Employee,
@@ -457,3 +480,4 @@ export {
   ProceedingBatch,
   ProceedingBatchProject,
 };
+

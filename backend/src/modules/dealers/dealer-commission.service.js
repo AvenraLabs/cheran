@@ -46,80 +46,37 @@ export async function calculateProjectDealerCommission(projectId) {
   const dealer = project.dealer;
   const invoices = project.invoices || [];
 
-  // Determine Project Date for Scheme GST Tax Slab lookup
-  const projectDate =
-    project.invoice_date ||
-    project.current_status_date ||
-    (project.created_at ? new Date(project.created_at).toISOString().split("T")[0] : null);
-
+  // Determine Project Date for Scheme GST Tax Slab lookup strictly from invoice_date
+  const projectDate = project.invoice_date || null;
   const effectiveSlab = await getEffectiveSchemeTaxSlab(projectDate);
-  const applicableGstPct = effectiveSlab.gst_percentage;
-  const applicableFittingsPct = effectiveSlab.fittings_percentage;
+  const applicableGstPct = parseFloat(effectiveSlab.gst_percentage || 12.0);
+  const applicableFittingsPct = parseFloat(effectiveSlab.fittings_percentage || 5.0);
 
-  // Financial values directly from Government Project (prioritize State Restricted Amount as actual payable amount)
+  // Financial values directly from Government Project (Strictly State Restricted Amount)
   const rawStateRestricted = parseFloat(project.state_restricted_amount) || 0;
   const rawInvoiceAmount = parseFloat(project.invoice_amount) || 0;
   const rawQuotationSubsidy = parseFloat(project.quotation_subsidy_amount) || 0;
   const rawFarmerContribution = parseFloat(project.farmer_contribution) || 0;
 
-  // Base government subsidy used for commission calculation (Strictly State Restricted Amount)
-  const grossGovAmount = rawStateRestricted > 0
-    ? rawStateRestricted
-    : rawInvoiceAmount > 0
-    ? rawInvoiceAmount
-    : rawQuotationSubsidy;
-
-  // Government Deduction / Penalty (Invoice Amount - State Restricted Amount)
-  const govDeduction = Math.max(0, Math.floor(rawInvoiceAmount - rawStateRestricted));
-
-  // Determine Fund Type and Split Percentages:
-  // 40%-SPARSH and SPARSH get 60% / 40% split.
-  // Regular and First Fund SNA SPARSH (and others) get 55% / 45% split.
-  const fundType = (project.fund_type || "Regular").trim();
-  const normalizedFundType = fundType.toUpperCase();
-  const is6040 = normalizedFundType === "40%-SPARSH" || normalizedFundType === "SPARSH";
-  const fund1SplitPct = is6040 ? 60 : 55;
-  const fund2SplitPct = is6040 ? 40 : 45;
-
-  // Base Net Amount and Fittings Cost:
-  // Derived after reducing GST and Fittings sequentially, truncated to whole rupees (no decimal paise)
+  // Base Net Amount and Fittings Cost (Sequential Back-Out):
   let baseAmount = 0;
   let fittingsAmount = 0;
-  let subsidyBreakdown = null;
 
-  if (grossGovAmount > 0) {
-    subsidyBreakdown = calculateCommissionAndFittingsBreakdown(
-      grossGovAmount,
-      applicableGstPct,
-      applicableFittingsPct
-    );
-    baseAmount = Math.floor(subsidyBreakdown.base_amount);
-    fittingsAmount = Math.floor(subsidyBreakdown.fittings_amount);
-  } else {
-    const netInvoicedAmount = invoices.reduce((sum, inv) => {
-      return sum + (parseFloat(inv.net_item_amount) || 0);
-    }, 0);
-    if (netInvoicedAmount > 0) {
-      baseAmount = Math.floor(netInvoicedAmount);
-      fittingsAmount = Math.floor(invoices.reduce((sum, inv) => {
-        return sum + (parseFloat(inv.fittings_amount) || 0);
-      }, 0));
-    }
+  if (rawStateRestricted > 0) {
+    const taxable = rawStateRestricted / (1 + applicableGstPct / 100);
+    baseAmount = Math.floor(taxable / (1 + applicableFittingsPct / 100));
+    fittingsAmount = Math.floor(baseAmount * (applicableFittingsPct / 100));
   }
 
   // If no dealer is assigned to this project, do not calculate or hardcode any commission!
   if (!dealer) {
     return {
       dealer: null,
-      fund_type: fundType,
-      fund1_split_pct: fund1SplitPct,
-      fund2_split_pct: fund2SplitPct,
       financials: {
         quotation_subsidy_amount: Math.floor(rawQuotationSubsidy),
         farmer_contribution: Math.floor(rawFarmerContribution),
         invoice_amount: Math.floor(rawInvoiceAmount),
         state_restricted_amount: Math.floor(rawStateRestricted),
-        gov_deduction: govDeduction,
       },
       base_amount: baseAmount,
       fittings_amount: fittingsAmount,
@@ -131,8 +88,6 @@ export async function calculateProjectDealerCommission(projectId) {
       part1: null,
       part2: null,
       fittings: null,
-      breakdown: null,
-      commission_record_id: null,
     };
   }
 
@@ -140,12 +95,7 @@ export async function calculateProjectDealerCommission(projectId) {
   const basePercentage =
     dealer.commission_percentage !== null && dealer.commission_percentage !== undefined
       ? parseFloat(dealer.commission_percentage)
-      : 0.0;
-
-  // Original Total Commission before penalties (truncated paise)
-  const originalTotalCommission = Math.floor((baseAmount * basePercentage) / 100.0);
-  // Fixed penalty amount per 45-day cycle: 1% of ORIGINAL TOTAL COMMISSION
-  const fixedPenaltyPerCycle = Math.floor((originalTotalCommission * 1.0) / 100.0);
+      : 20.0;
 
   // Fetch status history in chronological order
   const histories = await GovernmentProjectStatusHistory.findAll({
@@ -167,29 +117,20 @@ export async function calculateProjectDealerCommission(projectId) {
 
   let phase1DelayDays = 0;
   let phase1Cycles = 0;
-  let phase1TotalPenalty = 0;
+  let phase1PenaltyPoints = 0;
 
-  // ONLY calculate Phase 1 penalty if BOTH Invoiced date AND Work Completion Approved date are present in history
   if (invoiceDate && workCompletionDate) {
     phase1DelayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
     if (phase1DelayDays > 45) {
       phase1Cycles = Math.floor(phase1DelayDays / 45);
-      phase1TotalPenalty = Math.floor(phase1Cycles * fixedPenaltyPerCycle);
+      phase1PenaltyPoints = phase1Cycles * 1.0; // 1% points per 45-day cycle
     }
   }
 
-  // Check Milestone Eligibility
-  // Milestone 1 (First Fund Release)
+  // 2. Phase 2: First Fund Credited (UTR Updated) -> Joint Verification Completed
   const firstFundHistory = histories.find((h) =>
     FIRST_FUND_STATUSES.some((st) => st.toLowerCase() === h.status?.toLowerCase())
   );
-  const isFirstFundReached =
-    Boolean(firstFundHistory) ||
-    Boolean(project.first_fund_utr_no) ||
-    parseFloat(project.first_fund_amount || 0) > 0 ||
-    FIRST_FUND_STATUSES.some((st) => st.toLowerCase() === project.current_status?.toLowerCase());
-
-  // 2. Phase 2: First Fund Credited (UTR Updated) -> Joint Verification Completed
   const firstFundDate = firstFundHistory?.status_date || project.first_fund_utr_date || null;
 
   const jvHistory = histories.find(
@@ -199,14 +140,13 @@ export async function calculateProjectDealerCommission(projectId) {
 
   let phase2DelayDays = 0;
   let phase2Cycles = 0;
-  let phase2TotalPenalty = 0;
+  let phase2PenaltyPoints = 0;
 
-  // ONLY calculate Phase 2 penalty if BOTH First Fund Credited date AND Joint Verification Completed date are present in history
   if (firstFundDate && jvCompletedDate) {
     phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
     if (phase2DelayDays > 45) {
       phase2Cycles = Math.floor(phase2DelayDays / 45);
-      phase2TotalPenalty = Math.floor(phase2Cycles * fixedPenaltyPerCycle);
+      phase2PenaltyPoints = phase2Cycles * 1.0; // 1% points per 45-day cycle
     }
   }
 
@@ -220,17 +160,31 @@ export async function calculateProjectDealerCommission(projectId) {
     parseFloat(project.final_fund_amount || 0) > 0 ||
     FINAL_FUND_STATUSES.some((st) => st.toLowerCase() === project.current_status?.toLowerCase());
 
-  // Dynamic milestone splits based on Fund Type (60%/40% for SPARSH, 55%/45% for Regular)
-  const fund1BaseAmount = Math.floor((originalTotalCommission * fund1SplitPct) / 100.0);
-  const fund2BaseAmount = Math.floor(originalTotalCommission - fund1BaseAmount);
+  const fundType = (project.fund_type || "Regular").trim();
+  const normalizedFundType = fundType.toUpperCase();
+  const is6040 = normalizedFundType === "40%-SPARSH" || normalizedFundType === "SPARSH";
+  const fund1SplitPct = is6040 ? 60 : 55;
+  const fund2SplitPct = is6040 ? 40 : 45;
 
-  // Deduct Phase 1 penalty from First Fund and Phase 2 penalty from Final Fund
-  const part1Amount = Math.max(0, Math.floor(fund1BaseAmount - phase1TotalPenalty));
-  const part2Amount = Math.max(0, Math.floor(fund2BaseAmount - phase2TotalPenalty));
-  const totalCommissionAmount = Math.floor(part1Amount + part2Amount);
-  const totalPenaltyAmount = Math.floor(phase1TotalPenalty + phase2TotalPenalty);
-  const totalCycles = phase1Cycles + phase2Cycles;
-  const penaltyPercentage = Math.min(100.0, parseFloat((totalCycles * 1.0).toFixed(2)));
+  // Base split of net material for each milestone
+  const fund1NetMaterial = Math.floor((baseAmount * fund1SplitPct) / 100.0);
+  const fund2NetMaterial = Math.floor(baseAmount - fund1NetMaterial);
+
+  // Effective rates for each milestone (Dealer Base Rate - Milestone SLA Penalty Points)
+  const effectivePart1Rate = Math.max(0, basePercentage - phase1PenaltyPoints);
+  const effectivePart2Rate = Math.max(0, basePercentage - phase2PenaltyPoints);
+
+  const part1Amount = Math.floor((fund1NetMaterial * effectivePart1Rate) / 100.0);
+  const part2Amount = Math.floor((fund2NetMaterial * effectivePart2Rate) / 100.0);
+
+  const originalPart1Commission = Math.floor((fund1NetMaterial * basePercentage) / 100.0);
+  const originalPart2Commission = Math.floor((fund2NetMaterial * basePercentage) / 100.0);
+  const originalTotalCommission = originalPart1Commission + originalPart2Commission;
+
+  const phase1TotalPenalty = originalPart1Commission - part1Amount;
+  const phase2TotalPenalty = originalPart2Commission - part2Amount;
+  const totalPenaltyAmount = phase1TotalPenalty + phase2TotalPenalty;
+  const totalCommissionAmount = part1Amount + part2Amount;
 
   // Effective percentage representation for display
   const effectivePercentage =
@@ -240,19 +194,19 @@ export async function calculateProjectDealerCommission(projectId) {
 
   const breakdownJson = {
     originalTotalCommission,
-    fixedPenaltyPerCycle,
     invoiceDate,
     workCompletionDate,
     phase1DelayDays,
     phase1Cycles,
+    phase1PenaltyPoints,
     phase1TotalPenalty,
     firstFundDate,
     jvCompletedDate,
     phase2DelayDays,
     phase2Cycles,
+    phase2PenaltyPoints,
     phase2TotalPenalty,
     totalPenaltyAmount,
-    penaltyPercentage,
     fittingsAmount,
     isFirstFundReached,
     isFinalFundReached,
@@ -261,7 +215,6 @@ export async function calculateProjectDealerCommission(projectId) {
     fundType,
     fund1SplitPct,
     fund2SplitPct,
-    govDeduction,
   };
 
   return {

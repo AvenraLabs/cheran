@@ -145,9 +145,9 @@ export function CommissionBatchDetailPage() {
 
   if (loading && !batch) {
     return (
-      <div className="min-h-screen bg-[#F4F1EA]">
-        <Navbar />
-        <main className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex-1 flex flex-col min-h-0">
+        <Navbar title="Commission Proceedings" subtitle="Proceeding Batch Details & Dealer Disbursements" />
+        <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
           <SkeletonLoader rows={10} />
         </main>
       </div>
@@ -156,9 +156,9 @@ export function CommissionBatchDetailPage() {
 
   if (error || !batch) {
     return (
-      <div className="min-h-screen bg-[#F4F1EA]">
-        <Navbar />
-        <main className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="flex-1 flex flex-col min-h-0">
+        <Navbar title="Commission Proceedings" subtitle="Proceeding Batch Details & Dealer Disbursements" />
+        <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
           <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-8 text-center space-y-3">
             <AlertCircle size={28} className="text-rose-500 mx-auto" />
             <h2 className="text-base font-bold text-[#14213D]">Unable to Load Proceeding Batch</h2>
@@ -173,33 +173,11 @@ export function CommissionBatchDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F1EA]">
-      <Navbar />
-
-      <main className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        {/* Top Breadcrumb & Actions Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs text-[#52607D]">
-              <Link to="/commissions" className="hover:text-[#2F6F5E] transition-colors">
-                Commission Proceedings
-              </Link>
-              <span>/</span>
-              <span className="font-semibold text-[#14213D]">
-                Batch of {formatDate(batch.proceeding_date)}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-[#14213D] flex items-center gap-2">
-                <Calendar size={20} className="text-[#2F6F5E]" />
-                <span>Proceeding Batch – {formatDate(batch.proceeding_date)}</span>
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/30 font-bold font-mono text-xs">
-                {batch.fund_percentage_value}% Fund Release
-              </span>
-            </div>
-          </div>
-
+    <div className="flex-1 flex flex-col min-h-0">
+      <Navbar
+        title="Commission Proceedings"
+        subtitle={`Proceeding Batch – ${formatDate(batch.proceeding_date)} (${batch.fund_percentage_value}% Fund Release)`}
+        actions={
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
@@ -207,7 +185,7 @@ export function CommissionBatchDetailPage() {
               icon={ArrowLeft}
               onClick={() => navigate("/commissions")}
             >
-              Back to List
+              Back to Batches
             </Button>
             <Button
               variant="outline"
@@ -218,6 +196,32 @@ export function CommissionBatchDetailPage() {
             >
               Refresh
             </Button>
+          </div>
+        }
+      />
+
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
+        {/* Top Breadcrumb & Status Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs text-[#52607D]">
+              <Link to="/commissions" className="hover:text-[#2F6F5E] transition-colors">
+                Commission Proceedings
+              </Link>
+              <span>/</span>
+              <span className="font-semibold text-[#14213D]">
+                Batch #{batch.proceeding_no || formatDate(batch.proceeding_date)}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-[#14213D] flex items-center gap-2">
+                <Calendar size={20} className="text-[#2F6F5E]" />
+                <span>Proceeding Batch #{batch.proceeding_no}</span>
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/30 font-bold font-mono text-xs">
+                {batch.fund_percentage_value}% Fund Release
+              </span>
+            </div>
           </div>
         </div>
 

@@ -773,27 +773,64 @@ export function CommissionProceedingsPage() {
 
             {/* Live Calculation Preview Banner */}
             {idPreview && (
-              <div className="mt-2 p-2.5 bg-[#EAF3F0] border border-[#2F6F5E]/30 rounded-[8px] text-xs space-y-1">
-                <div className="flex items-center justify-between font-bold text-[#2F6F5E]">
-                  <span className="flex items-center gap-1">
-                    <CheckCircle2 size={13} className="text-emerald-700" />
-                    <span>{idPreview.matched_count} Projects Matched in DB</span>
-                  </span>
-                  <span className="font-mono text-emerald-800 text-sm">
+              <div className="mt-2 p-3 bg-white border border-[#E4E1D8] rounded-[8px] text-xs space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#EDEAE1]">
+                  <div className="flex items-center gap-2">
+                    {idPreview.unmatched_count === 0 && idPreview.missing_state_restricted_count === 0 && idPreview.missing_invoice_date_count === 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold font-mono">
+                        <CheckCircle2 size={13} className="text-emerald-700" />
+                        {idPreview.matched_count} Valid Projects Ready
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono">
+                        <AlertCircle size={13} className="text-amber-700" />
+                        {idPreview.matched_count} Found ({idPreview.unmatched_count + idPreview.missing_state_restricted_count + idPreview.missing_invoice_date_count} issues)
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-mono text-emerald-800 font-bold text-xs">
                     State Restricted Sum: {formatRupees(idPreview.total_state_restricted)}
-                  </span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-[#52607D] pt-1 border-t border-[#2F6F5E]/20 font-mono">
-                  <span>
-                    Fund Share ({formData.fund_percentage_value}%): <strong className="text-[#14213D]">{formatRupees(idPreview.total_fund_share)}</strong>
-                  </span>
-                  <span>
-                    Total Invoice: <strong className="text-[#14213D]">{formatRupees(idPreview.total_invoice_amount)}</strong>
-                  </span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-[#52607D]">
+                  <div>
+                    <span className="text-[9px] uppercase block text-[#8C97AB]">Fund Share ({formData.fund_percentage_value}%)</span>
+                    <span className="font-bold text-[#14213D]">{formatRupees(idPreview.total_fund_share)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase block text-[#8C97AB]">Net Material Base</span>
+                    <span className="font-bold text-[#14213D]">{formatRupees(idPreview.total_net_material_base)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase block text-[#8C97AB]">Dealer Commission</span>
+                    <span className="font-bold text-[#2F6F5E]">{formatRupees(idPreview.total_commission)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase block text-[#8C97AB]">Fittings (5%)</span>
+                    <span className="font-bold text-blue-700">{formatRupees(idPreview.total_fittings)}</span>
+                  </div>
                 </div>
+
+                {/* Validation Warnings (Strict Guardrails) */}
                 {idPreview.unmatched_count > 0 && (
-                  <div className="text-[10px] text-amber-700 font-medium">
-                    ⚠️ {idPreview.unmatched_count} ID(s) not found in registry (will be recorded with ₹0 base).
+                  <div className="p-2 bg-rose-50 border border-rose-200 rounded-[6px] text-[11px] text-rose-800">
+                    <strong>❌ {idPreview.unmatched_count} Unmatched Application ID(s):</strong> {idPreview.unmatched_ids.join(", ")}
+                    <div className="text-[10px] text-rose-600 mt-0.5">Please fix or remove these IDs before submitting.</div>
+                  </div>
+                )}
+
+                {idPreview.missing_state_restricted_count > 0 && (
+                  <div className="p-2 bg-amber-50 border border-amber-200 rounded-[6px] text-[11px] text-amber-800">
+                    <strong>⚠️ {idPreview.missing_state_restricted_count} Missing State Restricted Amount:</strong> {idPreview.missing_state_restricted_ids.join(", ")}
+                    <div className="text-[10px] text-amber-700 mt-0.5">State Restricted Amount is required for money calculations.</div>
+                  </div>
+                )}
+
+                {idPreview.missing_invoice_date_count > 0 && (
+                  <div className="p-2 bg-amber-50 border border-amber-200 rounded-[6px] text-[11px] text-amber-800">
+                    <strong>⚠️ {idPreview.missing_invoice_date_count} Missing Invoice Date:</strong> {idPreview.missing_invoice_date_ids.join(", ")}
+                    <div className="text-[10px] text-amber-700 mt-0.5">Invoice date is required to look up the applicable GST rate.</div>
                   </div>
                 )}
               </div>
@@ -844,7 +881,19 @@ export function CommissionProceedingsPage() {
             <Button variant="secondary" type="button" onClick={() => setCreateModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={submitting} icon={Plus}>
+            <Button
+              type="submit"
+              loading={submitting}
+              icon={Plus}
+              disabled={
+                Boolean(
+                  idPreview &&
+                  (idPreview.unmatched_count > 0 ||
+                    idPreview.missing_state_restricted_count > 0 ||
+                    idPreview.missing_invoice_date_count > 0)
+                )
+              }
+            >
               Calculate & Create Batch
             </Button>
           </div>
