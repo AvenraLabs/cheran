@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import db from "../../config/db.js";
 import "../../models/initModels.js";
 import GovernmentProject from "../projects/project.model.js";
@@ -95,18 +96,52 @@ export async function importHistoricalInvoiceJson(jsonData) {
   let newProjectsCreated = 0;
   let existingProjectsLinked = 0;
 
-  // Process in transactional batches of 500
-  const batchSize = 500;
+  // Process in fast transactional batches of 250
+  const batchSize = 250;
   for (let i = 0; i < uniqueProjects.length; i += batchSize) {
     const batch = uniqueProjects.slice(i, i + batchSize);
     const transaction = await db.transaction();
 
     try {
+      const batchAppIds = batch.map((b) => b.application_id);
+
+      // Preload all existing projects in 1 single query for this batch
+      const existingProjects = await GovernmentProject.findAll({
+        where: {
+          application_id: {
+            [Op.in]: batchAppIds,
+          },
+        },
+        transaction,
+      });
+
+      const existingProjectMap = new Map();
+      existingProjects.forEach((p) => {
+        existingProjectMap.set(normalizeApplicationId(p.application_id), p);
+      });
+
+      // Preload all existing INVOICED status history records in 1 single query
+      const existingProjectIds = existingProjects.map((p) => p.id);
+      const existingHistories =
+        existingProjectIds.length > 0
+          ? await GovernmentProjectStatusHistory.findAll({
+              where: {
+                project_id: {
+                  [Op.in]: existingProjectIds,
+                },
+                status: "INVOICED",
+              },
+              transaction,
+            })
+          : [];
+
+      const historyMap = new Map();
+      existingHistories.forEach((h) => {
+        historyMap.set(h.project_id, h);
+      });
+
       for (const item of batch) {
-        let project = await GovernmentProject.findOne({
-          where: db.where(db.fn("UPPER", db.col("application_id")), item.application_id),
-          transaction,
-        });
+        let project = existingProjectMap.get(item.application_id);
 
         if (!project) {
           // Create new Government Project with status INVOICED
@@ -154,16 +189,10 @@ export async function importHistoricalInvoiceJson(jsonData) {
           }
 
           // Ensure INVOICED status history exists and matches authoritative invoice date
-          const existingInvoicedHistory = await GovernmentProjectStatusHistory.findOne({
-            where: {
-              project_id: project.id,
-              status: "INVOICED",
-            },
-            transaction,
-          });
+          const existingInvoicedHistory = historyMap.get(project.id);
 
           if (!existingInvoicedHistory) {
-            await GovernmentProjectStatusHistory.create(
+            const newH = await GovernmentProjectStatusHistory.create(
               {
                 project_id: project.id,
                 status: "INVOICED",
@@ -175,6 +204,7 @@ export async function importHistoricalInvoiceJson(jsonData) {
               },
               { transaction }
             );
+            historyMap.set(project.id, newH);
           } else if (item.invoice_date && existingInvoicedHistory.status_date !== item.invoice_date) {
             await existingInvoicedHistory.update(
               {
