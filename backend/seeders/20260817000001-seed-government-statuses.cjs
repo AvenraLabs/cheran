@@ -21,9 +21,9 @@ const ORDERED_GOVERNMENT_STATUSES = [
   "DD Upload Skipped",
   "Payment done via Payment Gateway",
   "Farmer Acceptance Letter Uploaded",
-  "INVOICED", // Custom dispatch milestone placed before Issue Work Order
   "Issue Work Order (Auto Quotation)",
   "Issued Work Order",
+  "INVOICED",
   "Quotation Prepared by Block (Auto Quotation)",
   "Auto Quotation Prepared",
   "Work Completed",

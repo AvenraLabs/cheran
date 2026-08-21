@@ -39,9 +39,11 @@ export function ReportsPage() {
   const [employeeReport, setEmployeeReport] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters for Procurement
+  // Filters for Procurement & Dealers
   const [procStartDate, setProcStartDate] = useState("");
   const [procEndDate, setProcEndDate] = useState("");
+  const [dealerStartDate, setDealerStartDate] = useState("");
+  const [dealerEndDate, setDealerEndDate] = useState("");
 
   const fetchReports = async () => {
     try {
@@ -50,12 +52,16 @@ export function ReportsPage() {
       if (procStartDate) procParams.startDate = procStartDate;
       if (procEndDate) procParams.endDate = procEndDate;
 
+      const dealerParams = {};
+      if (dealerStartDate) dealerParams.start_date = dealerStartDate;
+      if (dealerEndDate) dealerParams.end_date = dealerEndDate;
+
       const [finRes, procRes, govtRes, dealersRes, expensesRes, employeesRes] =
         await Promise.allSettled([
           api.get("/reports/financial-overview", { params: procParams }),
           api.get("/reports/procurement", { params: procParams }),
           api.get("/reports/govt-funds"),
-          api.get("/reports/dealers"),
+          api.get("/reports/dealers", { params: dealerParams }),
           api.get("/reports/expenses"),
           api.get("/reports/employees"),
         ]);
@@ -87,7 +93,7 @@ export function ReportsPage() {
 
   useEffect(() => {
     fetchReports();
-  }, [procStartDate, procEndDate]);
+  }, [procStartDate, procEndDate, dealerStartDate, dealerEndDate]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#F4F2EB] min-h-screen">
@@ -328,11 +334,23 @@ export function ReportsPage() {
                         <div>
                           <div className="font-bold text-[#14213D]">Dealer Commission Payouts</div>
                           <div className="text-[#52607D] text-[11px]">
-                            ₹{financialOverview.outflows.dealer_commissions_pending.toLocaleString("en-IN")} Pending
+                            ₹{(financialOverview.outflows.dealer_commissions_pending || 0).toLocaleString("en-IN")} Pending
                           </div>
                         </div>
                         <div className="font-mono font-bold text-rose-700 text-sm">
-                          ₹{financialOverview.outflows.dealer_commissions_paid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹{(financialOverview.outflows.dealer_commissions_paid || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
+                        <div>
+                          <div className="font-bold text-[#14213D]">Dealer Fittings Cost Payouts</div>
+                          <div className="text-[#52607D] text-[11px]">
+                            ₹{(financialOverview.outflows.fittings_cost_pending || 0).toLocaleString("en-IN")} Pending
+                          </div>
+                        </div>
+                        <div className="font-mono font-bold text-rose-700 text-sm">
+                          ₹{(financialOverview.outflows.fittings_cost_paid || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </div>
                       </div>
                     </div>
@@ -573,25 +591,61 @@ export function ReportsPage() {
             {/* TAB 4: DEALER PERFORMANCE & COMMISSIONS */}
             {/* ========================================== */}
             {activeTab === "dealers" && (
-              <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
-                  <h4 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
-                    <Users size={18} className="text-[#2F6F5E]" />
-                    <span>Dealer Performance & Commission Settlement</span>
-                  </h4>
+              <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-4">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
+                      <Users size={18} className="text-[#2F6F5E]" />
+                      <span>Dealer Performance, Commission & Fittings Settlement</span>
+                    </h4>
+                    <p className="text-xs text-[#52607D]">
+                      Track commission accruals, fittings reimbursements, and settlement payouts per dealer.
+                    </p>
+                  </div>
+
+                  {/* Date Filters */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={dealerStartDate}
+                      onChange={(e) => setDealerStartDate(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-[#14213D] focus:outline-none focus:ring-1 focus:ring-[#2F6F5E]"
+                    />
+                    <span className="text-xs text-[#52607D]">to</span>
+                    <input
+                      type="date"
+                      value={dealerEndDate}
+                      onChange={(e) => setDealerEndDate(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-[#14213D] focus:outline-none focus:ring-1 focus:ring-[#2F6F5E]"
+                    />
+                    {(dealerStartDate || dealerEndDate) && (
+                      <Button
+                        size="xs"
+                        variant="secondary"
+                        onClick={() => {
+                          setDealerStartDate("");
+                          setDealerEndDate("");
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse min-w-[900px]">
                     <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
                       <tr>
                         <th className="py-3 px-4">Dealer Name</th>
-                        <th className="py-3 px-4 text-center">Commission Rate (%)</th>
-                        <th className="py-3 px-4 text-center">Govt Projects</th>
-                        <th className="py-3 px-4 text-right">Total Subsidy Value</th>
-                        <th className="py-3 px-4 text-right">Fund Inflow Released</th>
-                        <th className="py-3 px-4 text-right">Commission Paid</th>
-                        <th className="py-3 px-4 text-right">Commission Pending</th>
+                        <th className="py-3 px-4 text-center">Comm. Rate</th>
+                        <th className="py-3 px-4 text-center">Projects</th>
+                        <th className="py-3 px-4 text-right">Subsidy Value</th>
+                        <th className="py-3 px-4 text-right">Comm. Paid</th>
+                        <th className="py-3 px-4 text-right">Comm. Pending</th>
+                        <th className="py-3 px-4 text-right">Fittings Paid</th>
+                        <th className="py-3 px-4 text-right">Fittings Pending</th>
+                        <th className="py-3 px-4 text-right bg-[#EAF3F0]/50 font-bold text-[#2F6F5E]">Total Paid</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1]">
@@ -605,17 +659,30 @@ export function ReportsPage() {
                           <td className="py-3 px-4 text-right font-mono font-semibold text-[#14213D]">
                             ₹{d.total_subsidy_amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-emerald-800">
-                            ₹{d.total_fund_released.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
                             ₹{d.commission_paid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-amber-800">
                             ₹{d.commission_pending.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-purple-700">
+                            ₹{(d.fittings_paid || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-purple-900/60">
+                            ₹{(d.fittings_pending || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-[#2F6F5E] bg-[#EAF3F0]/30">
+                            ₹{(d.total_payout_paid || (d.commission_paid + (d.fittings_paid || 0))).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
                         </tr>
                       ))}
+                      {dealerReport.length === 0 && (
+                        <tr>
+                          <td colSpan={9} className="py-6 text-center text-xs text-[#52607D]">
+                            No dealer commission records found for the selected period.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

@@ -7,7 +7,7 @@ import DealerCommission from "./dealer-commission.model.js";
 import Invoice from "../invoices/invoice.model.js";
 import AppError from "../../shared/appError.js";
 import { calculateDaysBetween } from "../../utils/dates.js";
-import { calculateCommissionBase } from "../../utils/finance.js";
+import { calculateCommissionAndFittingsBreakdown } from "../../utils/finance.js";
 import { getEffectiveSchemeTaxSlab } from "../settings/settings.service.js";
 
 const FIRST_FUND_STATUSES = [
@@ -23,7 +23,7 @@ const FINAL_FUND_STATUSES = [
 ];
 
 /**
- * Calculate full dealer commission breakdown, 45-day aging penalties, and 2-part milestone eligibility
+ * Calculate full dealer commission breakdown, fittings cost, 45-day aging penalties, and 2-part milestone eligibility
  */
 export async function calculateProjectDealerCommission(projectId) {
   const project = await GovernmentProject.findByPk(projectId, {
@@ -56,27 +56,37 @@ export async function calculateProjectDealerCommission(projectId) {
   const applicableGstPct = effectiveSlab.gst_percentage;
   const applicableFittingsPct = effectiveSlab.fittings_percentage;
 
-  // Base Net Amount:
-  // Dynamically uses effective GST rate (e.g. 12% for pre-22-Sep-2025, 5% for post-22-Sep-2025)
+  // Base Net Amount and Fittings Cost:
+  // Derived from Quotation Subsidy after reducing GST and Fittings sequentially
   let baseAmount = 0;
+  let fittingsAmount = 0;
+  let subsidyBreakdown = null;
+
   if (project.quotation_subsidy_amount && parseFloat(project.quotation_subsidy_amount) > 0) {
-    baseAmount = calculateCommissionBase(
+    subsidyBreakdown = calculateCommissionAndFittingsBreakdown(
       project.quotation_subsidy_amount,
       applicableGstPct,
       applicableFittingsPct
     );
+    baseAmount = subsidyBreakdown.base_amount;
+    fittingsAmount = subsidyBreakdown.fittings_amount;
   } else {
     const netInvoicedAmount = invoices.reduce((sum, inv) => {
       return sum + (parseFloat(inv.net_item_amount) || 0);
     }, 0);
     if (netInvoicedAmount > 0) {
       baseAmount = netInvoicedAmount;
+      fittingsAmount = invoices.reduce((sum, inv) => {
+        return sum + (parseFloat(inv.fittings_amount) || 0);
+      }, 0);
     } else if (project.invoice_amount && parseFloat(project.invoice_amount) > 0) {
-      baseAmount = calculateCommissionBase(
+      subsidyBreakdown = calculateCommissionAndFittingsBreakdown(
         project.invoice_amount,
         applicableGstPct,
         applicableFittingsPct
       );
+      baseAmount = subsidyBreakdown.base_amount;
+      fittingsAmount = subsidyBreakdown.fittings_amount;
     }
   }
 
@@ -85,6 +95,7 @@ export async function calculateProjectDealerCommission(projectId) {
     return {
       dealer: null,
       base_amount: baseAmount,
+      fittings_amount: fittingsAmount,
       base_percentage: null,
       penalty_percentage: 0,
       effective_percentage: null,
@@ -92,6 +103,7 @@ export async function calculateProjectDealerCommission(projectId) {
       status: "NO_DEALER",
       part1: null,
       part2: null,
+      fittings: null,
       breakdown: null,
       commission_record_id: null,
     };
@@ -117,56 +129,27 @@ export async function calculateProjectDealerCommission(projectId) {
     ],
   });
 
-  const todayStr = new Date().toISOString().split("T")[0];
-  const invoiceDateStr = project.invoice_date || project.current_status_date || todayStr;
+  // 1. Phase 1: INVOICED date -> Work Completion Approved date
+  const invoicedHistory = histories.find((h) => h.status?.toUpperCase() === "INVOICED");
+  const invoiceDate = invoicedHistory?.status_date || project.invoice_date || null;
 
-  // Find INVOICED status date
-  const invoicedHistory = histories.find((h) => h.status === "INVOICED");
-  const baselineInvoiceDate = invoicedHistory?.status_date || invoiceDateStr;
+  const workCompletionHistory = histories.find(
+    (h) => h.status?.toUpperCase() === "WORK COMPLETION APPROVED" || h.status?.toUpperCase() === "WORK COMPLETED"
+  );
+  const workCompletionDate = workCompletionHistory?.status_date || null;
 
-  // Collect all possible post-invoice dates from history and project milestone fields to find the earliest/lowest progression date
-  const candidateDates = [];
+  let phase1DelayDays = 0;
+  let phase1Cycles = 0;
+  let phase1TotalPenalty = 0;
 
-  for (const h of histories) {
-    if (h.status !== "INVOICED" && h.status_date) {
-      candidateDates.push(h.status_date);
+  // ONLY calculate Phase 1 penalty if BOTH Invoiced date AND Work Completion Approved date are present in history
+  if (invoiceDate && workCompletionDate) {
+    phase1DelayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
+    if (phase1DelayDays > 45) {
+      phase1Cycles = Math.floor(phase1DelayDays / 45);
+      phase1TotalPenalty = parseFloat((phase1Cycles * fixedPenaltyPerCycle).toFixed(2));
     }
   }
-
-  // Include project milestone date fields if populated
-  if (project.work_order_date) candidateDates.push(project.work_order_date);
-  if (project.supply_date) candidateDates.push(project.supply_date);
-  if (project.current_status !== "INVOICED" && project.current_status_date) {
-    candidateDates.push(project.current_status_date);
-  }
-
-  // Filter for dates occurring on or after baseline invoice date and sort ascending to find lowest date
-  const validNextDates = candidateDates
-    .filter((d) => d && typeof d === "string" && d.trim() !== "" && d >= baselineInvoiceDate)
-    .sort();
-
-  // Phase 1 Stagnation Days Calculation (From INVOICED date to lowest/earliest next status date)
-  let phase1DelayDays = 0;
-  let phase1EndDate = todayStr;
-
-  if (validNextDates.length > 0) {
-    // Pick the lowest / earliest next status date possible
-    phase1EndDate = validNextDates[0];
-    phase1DelayDays = Math.max(0, calculateDaysBetween(baselineInvoiceDate, phase1EndDate));
-  } else {
-    // Project is still stagnated at INVOICED
-    phase1EndDate = todayStr;
-    phase1DelayDays = Math.max(0, calculateDaysBetween(baselineInvoiceDate, todayStr));
-  }
-
-  // Phase 1 penalty: fixedPenaltyPerCycle (1% of original total) per 45-day block
-  const phase1Cycles = Math.floor(phase1DelayDays / 45);
-  const phase1TotalPenalty = parseFloat((phase1Cycles * fixedPenaltyPerCycle).toFixed(2));
-
-  // Commission after Phase 1 penalty split 55% / 45%
-  const totalAfterPhase1 = Math.max(0, parseFloat((originalTotalCommission - phase1TotalPenalty).toFixed(2)));
-  const fund1BaseAmount = parseFloat(((totalAfterPhase1 * 55.0) / 100.0).toFixed(2));
-  const fund2BaseAmount = parseFloat((totalAfterPhase1 - fund1BaseAmount).toFixed(2));
 
   // Check Milestone Eligibility
   // Milestone 1 (First Fund Release)
@@ -179,6 +162,27 @@ export async function calculateProjectDealerCommission(projectId) {
     parseFloat(project.first_fund_amount || 0) > 0 ||
     FIRST_FUND_STATUSES.some((st) => st.toLowerCase() === project.current_status?.toLowerCase());
 
+  // 2. Phase 2: First Fund Credited (UTR Updated) -> Joint Verification Completed
+  const firstFundDate = firstFundHistory?.status_date || project.first_fund_utr_date || null;
+
+  const jvHistory = histories.find(
+    (h) => h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED"
+  );
+  const jvCompletedDate = jvHistory?.status_date || null;
+
+  let phase2DelayDays = 0;
+  let phase2Cycles = 0;
+  let phase2TotalPenalty = 0;
+
+  // ONLY calculate Phase 2 penalty if BOTH First Fund Credited date AND Joint Verification Completed date are present in history
+  if (firstFundDate && jvCompletedDate) {
+    phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
+    if (phase2DelayDays > 45) {
+      phase2Cycles = Math.floor(phase2DelayDays / 45);
+      phase2TotalPenalty = parseFloat((phase2Cycles * fixedPenaltyPerCycle).toFixed(2));
+    }
+  }
+
   // Milestone 2 (Final Fund Release)
   const finalFundHistory = histories.find((h) =>
     FINAL_FUND_STATUSES.some((st) => st.toLowerCase() === h.status?.toLowerCase())
@@ -189,27 +193,12 @@ export async function calculateProjectDealerCommission(projectId) {
     parseFloat(project.final_fund_amount || 0) > 0 ||
     FINAL_FUND_STATUSES.some((st) => st.toLowerCase() === project.current_status?.toLowerCase());
 
-  // Phase 2 Stagnation Days Calculation (From First Fund date to Final Fund or Today)
-  let phase2DelayDays = 0;
-  let phase2Cycles = 0;
-  let phase2TotalPenalty = 0;
+  // 55% First Fund Commission and 45% Final Fund Commission base splits
+  const fund1BaseAmount = parseFloat(((originalTotalCommission * 55.0) / 100.0).toFixed(2));
+  const fund2BaseAmount = parseFloat((originalTotalCommission - fund1BaseAmount).toFixed(2));
 
-  if (isFirstFundReached) {
-    const firstFundDate = firstFundHistory?.status_date || project.current_status_date || todayStr;
-    const finalFundDate = finalFundHistory?.status_date;
-
-    if (finalFundDate) {
-      phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, finalFundDate));
-    } else {
-      phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, todayStr));
-    }
-
-    phase2Cycles = Math.floor(phase2DelayDays / 45);
-    phase2TotalPenalty = parseFloat((phase2Cycles * fixedPenaltyPerCycle).toFixed(2));
-  }
-
-  // Part 1 (55%) and Part 2 (45%) strictly deducting Phase 2 penalty from remaining unpaid commission (Fund 2)
-  const part1Amount = fund1BaseAmount;
+  // Deduct Phase 1 penalty from First Fund (55%) and Phase 2 penalty from Final Fund (45%)
+  const part1Amount = Math.max(0, parseFloat((fund1BaseAmount - phase1TotalPenalty).toFixed(2)));
   const part2Amount = Math.max(0, parseFloat((fund2BaseAmount - phase2TotalPenalty).toFixed(2)));
   const totalCommissionAmount = parseFloat((part1Amount + part2Amount).toFixed(2));
   const totalPenaltyAmount = parseFloat((phase1TotalPenalty + phase2TotalPenalty).toFixed(2));
@@ -235,6 +224,10 @@ export async function calculateProjectDealerCommission(projectId) {
     ? "PAID"
     : "PENDING";
 
+  const fittingsStatus = commissionRecord?.fittings_status === "PAID"
+    ? "PAID"
+    : "PENDING";
+
   const overallStatus =
     part1Status === "PAID" && part2Status === "PAID"
       ? "PAID"
@@ -245,18 +238,20 @@ export async function calculateProjectDealerCommission(projectId) {
   const breakdownJson = {
     originalTotalCommission,
     fixedPenaltyPerCycle,
-    baselineInvoiceDate,
-    phase1EndDate,
+    invoiceDate,
+    workCompletionDate,
     phase1DelayDays,
     phase1Cycles,
     phase1TotalPenalty,
+    firstFundDate,
+    jvCompletedDate,
     phase2DelayDays,
     phase2Cycles,
     phase2TotalPenalty,
     totalPenaltyAmount,
     penaltyPercentage,
+    fittingsAmount,
     isFirstFundReached,
-    firstFundDate: firstFundHistory?.status_date || null,
     isFinalFundReached,
     finalFundDate: finalFundHistory?.status_date || null,
     invoicesCount: invoices.length,
@@ -280,6 +275,8 @@ export async function calculateProjectDealerCommission(projectId) {
         part2_percentage: 45.0,
         part2_amount: part2Amount,
         part2_status: part2Status,
+        fittings_amount: fittingsAmount,
+        fittings_status: fittingsStatus,
         breakdown_json: breakdownJson,
       });
     } else {
@@ -297,6 +294,7 @@ export async function calculateProjectDealerCommission(projectId) {
         part2_percentage: 45.0,
         part2_amount: part2Amount,
         part2_status: part2Status,
+        fittings_amount: fittingsAmount,
         breakdown_json: breakdownJson,
       });
     }
@@ -317,6 +315,7 @@ export async function calculateProjectDealerCommission(projectId) {
       project_date_used: projectDate,
     },
     base_amount: baseAmount,
+    fittings_amount: fittingsAmount,
     base_percentage: basePercentage,
     original_commission_amount: originalTotalCommission,
     fixed_penalty_per_cycle: fixedPenaltyPerCycle,
@@ -343,17 +342,25 @@ export async function calculateProjectDealerCommission(projectId) {
       paid_ref: commissionRecord?.part2_paid_ref || null,
       notes: commissionRecord?.part2_notes || null,
     },
+    fittings: {
+      percentage: applicableFittingsPct,
+      amount: fittingsAmount,
+      status: commissionRecord?.fittings_status || "PENDING",
+      paid_date: commissionRecord?.fittings_paid_date || null,
+      paid_ref: commissionRecord?.fittings_paid_ref || null,
+      notes: commissionRecord?.fittings_notes || null,
+    },
     breakdown: breakdownJson,
     commission_record_id: commissionRecord?.id || null,
   };
 }
 
 /**
- * Record payment for Part 1 (55%) or Part 2 (45%) milestone
+ * Record payment for Part 1 (55%), Part 2 (45%), or Fittings milestone
  */
 export async function recordCommissionMilestonePayment(projectId, { milestone, paid_date, paid_ref, notes }) {
-  if (!milestone || !["PART1", "PART2"].includes(milestone.toUpperCase())) {
-    throw new AppError("Invalid milestone. Must be PART1 or PART2.", 400);
+  if (!milestone || !["PART1", "PART2", "FITTINGS"].includes(milestone.toUpperCase())) {
+    throw new AppError("Invalid milestone. Must be PART1, PART2, or FITTINGS.", 400);
   }
 
   const cleanMilestone = milestone.toUpperCase();
@@ -384,9 +391,16 @@ export async function recordCommissionMilestonePayment(projectId, { milestone, p
       part2_paid_ref: paid_ref || "Direct Bank Transfer / NEFT",
       part2_notes: notes || null,
     });
+  } else if (cleanMilestone === "FITTINGS") {
+    await commissionRecord.update({
+      fittings_status: "PAID",
+      fittings_paid_date: paymentDate,
+      fittings_paid_ref: paid_ref || "Direct Bank Transfer / NEFT",
+      fittings_notes: notes || null,
+    });
   }
 
-  // If both parts paid, mark parent status as PAID
+  // If both commission parts paid, mark parent status as PAID
   if (
     (cleanMilestone === "PART1" && commissionRecord.part2_status === "PAID") ||
     (cleanMilestone === "PART2" && commissionRecord.part1_status === "PAID")
@@ -395,7 +409,7 @@ export async function recordCommissionMilestonePayment(projectId, { milestone, p
       status: "PAID",
       paid_date: paymentDate,
     });
-  } else {
+  } else if (cleanMilestone === "PART1" || cleanMilestone === "PART2") {
     await commissionRecord.update({
       status: "APPROVED",
     });

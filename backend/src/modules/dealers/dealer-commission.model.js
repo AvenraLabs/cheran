@@ -101,6 +101,28 @@ const DealerCommission = db.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    fittings_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
+    fittings_status: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: "PENDING",
+    },
+    fittings_paid_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    fittings_paid_ref: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    fittings_notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     breakdown_json: {
       type: DataTypes.JSONB,
       allowNull: true,

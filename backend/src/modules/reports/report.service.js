@@ -329,20 +329,29 @@ export async function getFinancialOverviewReport({ startDate, endDate } = {}) {
     }
   }
 
-  // Dealer Commissions Outflow
+  // Dealer Commissions & Fittings Outflow
   const commissions = await DealerCommission.findAll();
   let totalCommissionsPaid = 0;
   let totalCommissionsPending = 0;
+  let totalFittingsPaid = 0;
+  let totalFittingsPending = 0;
+
   for (const c of commissions) {
     const amt = parseFloat(c.commission_amount) || 0;
+    const fitAmt = parseFloat(c.fittings_amount) || 0;
+
     if (c.status === "PAID") totalCommissionsPaid += amt;
     else totalCommissionsPending += amt;
+
+    if (c.fittings_status === "PAID") totalFittingsPaid += fitAmt;
+    else totalFittingsPending += fitAmt;
   }
 
   // Total Inflows & Outflows
   const totalInflows = govtFundsData.totalReleasedAmount + directSalesReceived;
+  const totalDealerOutflowsPaid = totalCommissionsPaid + totalFittingsPaid;
   const totalOutflows =
-    procurementData.totalProcurementSpend + totalExpenses + totalSalariesPaid + totalCommissionsPaid;
+    procurementData.totalProcurementSpend + totalExpenses + totalSalariesPaid + totalDealerOutflowsPaid;
   const netCashPosition = totalInflows - totalOutflows;
 
   return {
@@ -362,6 +371,9 @@ export async function getFinancialOverviewReport({ startDate, endDate } = {}) {
       staff_salaries_paid: parseFloat(totalSalariesPaid.toFixed(2)),
       dealer_commissions_paid: parseFloat(totalCommissionsPaid.toFixed(2)),
       dealer_commissions_pending: parseFloat(totalCommissionsPending.toFixed(2)),
+      fittings_cost_paid: parseFloat(totalFittingsPaid.toFixed(2)),
+      fittings_cost_pending: parseFloat(totalFittingsPending.toFixed(2)),
+      total_dealer_payouts_paid: parseFloat(totalDealerOutflowsPaid.toFixed(2)),
       grand_total_cash_outflow: parseFloat(totalOutflows.toFixed(2)),
     },
     net_operating_cash_position: parseFloat(netCashPosition.toFixed(2)),
@@ -372,19 +384,50 @@ export async function getFinancialOverviewReport({ startDate, endDate } = {}) {
 // ==========================================
 // 4. Dealer Performance & Commission Report
 // ==========================================
-export async function getDealerReport() {
+export async function getDealerReport({ start_date, end_date, year, dealer_id } = {}) {
+  const whereDealer = {};
+  if (dealer_id) {
+    whereDealer.id = dealer_id;
+  }
+
+  const projectWhere = {};
+  if (start_date && end_date) {
+    projectWhere.created_at = {
+      [Op.between]: [new Date(`${start_date}T00:00:00.000Z`), new Date(`${end_date}T23:59:59.999Z`)],
+    };
+  } else if (year) {
+    projectWhere.created_at = {
+      [Op.between]: [new Date(`${year}-01-01T00:00:00.000Z`), new Date(`${year}-12-31T23:59:59.999Z`)],
+    };
+  }
+
   const dealers = await Dealer.findAll({
+    where: whereDealer,
     attributes: ["id", "name", "commission_percentage"],
     include: [
       {
         model: GovernmentProject,
         as: "projects",
-        attributes: ["id", "quotation_subsidy_amount", "total_fund_released", "current_status"],
+        where: Object.keys(projectWhere).length > 0 ? projectWhere : undefined,
+        required: false,
+        attributes: ["id", "quotation_subsidy_amount", "total_fund_released", "current_status", "created_at"],
       },
       {
         model: DealerCommission,
         as: "commissions",
-        attributes: ["commission_amount", "status"],
+        required: false,
+        attributes: [
+          "id",
+          "commission_amount",
+          "fittings_amount",
+          "status",
+          "fittings_status",
+          "part1_status",
+          "part2_status",
+          "part1_amount",
+          "part2_amount",
+          "created_at",
+        ],
       },
     ],
     order: [["name", "ASC"]],
@@ -403,11 +446,22 @@ export async function getDealerReport() {
 
     let commissionPending = 0;
     let commissionPaid = 0;
+    let fittingsPending = 0;
+    let fittingsPaid = 0;
+
     for (const c of d.commissions || []) {
-      const amt = parseFloat(c.commission_amount) || 0;
-      if (c.status === "PAID") commissionPaid += amt;
-      else commissionPending += amt;
+      const commAmt = parseFloat(c.commission_amount) || 0;
+      const fitAmt = parseFloat(c.fittings_amount) || 0;
+
+      if (c.status === "PAID") commissionPaid += commAmt;
+      else commissionPending += commAmt;
+
+      if (c.fittings_status === "PAID") fittingsPaid += fitAmt;
+      else fittingsPending += fitAmt;
     }
+
+    const totalPayoutPaid = parseFloat((commissionPaid + fittingsPaid).toFixed(2));
+    const totalPayoutPending = parseFloat((commissionPending + fittingsPending).toFixed(2));
 
     return {
       dealer_id: d.id,
@@ -416,8 +470,13 @@ export async function getDealerReport() {
       total_projects: totalProjects,
       total_subsidy_amount: parseFloat(totalSubsidy.toFixed(2)),
       total_fund_released: parseFloat(totalReleased.toFixed(2)),
-      commission_pending: parseFloat(commissionPending.toFixed(2)),
       commission_paid: parseFloat(commissionPaid.toFixed(2)),
+      commission_pending: parseFloat(commissionPending.toFixed(2)),
+      fittings_paid: parseFloat(fittingsPaid.toFixed(2)),
+      fittings_pending: parseFloat(fittingsPending.toFixed(2)),
+      total_payout_paid: totalPayoutPaid,
+      total_payout_pending: totalPayoutPending,
+      total_payout_amount: parseFloat((totalPayoutPaid + totalPayoutPending).toFixed(2)),
     };
   });
 }

@@ -26,7 +26,7 @@ export const getGovernmentFundsReport = asyncHandler(async (req, res) => {
 });
 
 export const getDealerReport = asyncHandler(async (req, res) => {
-  const result = await reportService.getDealerReport();
+  const result = await reportService.getDealerReport(req.query);
   res.status(200).json({
     status: "success",
     data: { dealers: result },

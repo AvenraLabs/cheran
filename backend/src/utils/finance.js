@@ -63,6 +63,49 @@ export function calculateCommissionBase(quotationSubsidyAmount, gstPercentage = 
 }
 
 /**
+ * Calculate full breakdown of Quotation Subsidy:
+ * - Amount Before GST = Subsidy / (1 + GST%)
+ * - Net Base = Amount Before GST / (1 + Fittings%)
+ * - Fittings Amount = Amount Before GST - Net Base
+ * - GST Amount = Subsidy - Amount Before GST
+ */
+export function calculateCommissionAndFittingsBreakdown(quotationSubsidyAmount, gstPercentage = 5.0, fittingsPercentage = 5.0) {
+  const amount = parseFloat(quotationSubsidyAmount) || 0;
+  if (amount <= 0) {
+    return {
+      subsidy_amount: 0.0,
+      amount_before_gst: 0.0,
+      base_amount: 0.0,
+      fittings_amount: 0.0,
+      gst_amount: 0.0,
+      gst_percentage: parseFloat(gstPercentage) || 5.0,
+      fittings_percentage: parseFloat(fittingsPercentage) || 5.0,
+    };
+  }
+
+  const effectiveGstPct = parseFloat(gstPercentage) || 5.0;
+  const effectiveFittingsPct = parseFloat(fittingsPercentage) || 5.0;
+
+  const gstFactor = 1 + effectiveGstPct / 100.0;
+  const fittingsFactor = 1 + effectiveFittingsPct / 100.0;
+
+  const amountBeforeGst = amount / gstFactor;
+  const netBase = Math.round((amountBeforeGst / fittingsFactor) * 100) / 100;
+  const fittingsAmount = Math.round((amountBeforeGst - netBase) * 100) / 100;
+  const gstAmount = Math.round((amount - amountBeforeGst) * 100) / 100;
+
+  return {
+    subsidy_amount: Math.round(amount * 100) / 100,
+    amount_before_gst: Math.round(amountBeforeGst * 100) / 100,
+    base_amount: netBase,
+    fittings_amount: fittingsAmount,
+    gst_amount: gstAmount,
+    gst_percentage: effectiveGstPct,
+    fittings_percentage: effectiveFittingsPct,
+  };
+}
+
+/**
  * Calculate Dealer Commission from Quotation Subsidy Amount and Dealer Commission %
  */
 export function calculateDealerCommission(quotationSubsidyAmount, commissionPercentage, gstPercentage = 5.0, fittingsPercentage = 5.0) {

@@ -554,8 +554,8 @@ export function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* 2-Part Milestone Payout Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              {/* 3-Part Milestone Payout Cards (Part 1, Part 2, and Fittings) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
                 {/* Milestone 1: Part 1 (55%) */}
                 <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-3 relative shadow-2xs">
                   <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2.5">
@@ -671,6 +671,64 @@ export function ProjectDetailPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Card 3: Fittings Cost Payout */}
+                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-3 relative shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-[#7C3AED] text-white text-[11px] font-bold flex items-center justify-center">
+                        3
+                      </span>
+                      <h3 className="text-xs font-bold text-[#14213D]">Fittings Cost ({commissionData?.fittings?.percentage || 5}%)</h3>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        commissionData?.fittings?.status === "PAID"
+                          ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
+                          : "bg-purple-50 text-purple-800 border border-purple-200"
+                      }`}
+                    >
+                      {commissionData?.fittings?.status === "PAID" ? "✓ PAID" : "UNPAID"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Fittings Amount</div>
+                      <div className="text-lg font-extrabold text-[#14213D] font-mono">
+                        ₹{parseFloat(commissionData?.fittings?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+
+                    {commissionData?.fittings?.status !== "PAID" && (
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        icon={CreditCard}
+                        onClick={() => {
+                          setActiveMilestone("FITTINGS");
+                          setPayRef("Direct Bank Transfer / NEFT");
+                          setPayNotes("");
+                          setPayModalOpen(true);
+                        }}
+                      >
+                        Pay
+                      </Button>
+                    )}
+                  </div>
+
+                  {commissionData?.fittings?.status === "PAID" && (
+                    <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
+                      <div className="flex justify-between font-medium">
+                        <span>Paid Date: <strong className="text-[#14213D]">{formatDate(commissionData.fittings.paid_date)}</strong></span>
+                        <span>Ref: <strong className="text-[#14213D]">{commissionData.fittings.paid_ref || "—"}</strong></span>
+                      </div>
+                      {commissionData.fittings.notes && (
+                        <div className="text-[10px] italic">Notes: {commissionData.fittings.notes}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Collapsible Deduction Explainer */}
@@ -714,9 +772,7 @@ export function ProjectDetailPage() {
             { field: "application_received_date", status: "Application Received" },
             { field: "quotation_date", status: "Quotation Prepared by MI Company" },
             { field: "work_order_date", status: "Issued Work Order" },
-            { field: "invoice_date", status: "INVOICED", remarks: "Government Scheme Invoiced" },
             { field: "earlier_jv_completed_date", status: "Earlier JV Completed" },
-            { field: "jv_recommended_date", status: "Joint Verification Completed" },
             { field: "first_fund_utr_date", status: "First Fund Credited (UTR Updated)" },
             { field: "treasury_fund_utr_date", status: "Iamwarm Fund Credited (UTR Updated)" },
             { field: "final_fund_utr_date", status: "Final Fund Credited (UTR Updated)" },
@@ -953,7 +1009,13 @@ export function ProjectDetailPage() {
       <Modal
         isOpen={payModalOpen}
         onClose={() => setPayModalOpen(false)}
-        title={`Record Dealer Commission Payout (${activeMilestone === "PART1" ? "First Fund Commission (55%)" : "Second Fund Commission (45%)"})`}
+        title={`Record Dealer Payout (${
+          activeMilestone === "PART1"
+            ? "First Fund Commission (55%)"
+            : activeMilestone === "PART2"
+            ? "Second Fund Commission (45%)"
+            : "Fittings Cost Payout"
+        })`}
       >
         <form onSubmit={handleRecordPayout} className="space-y-4">
           <div className="p-3 bg-[#EAF3F0] rounded-[8px] text-xs text-[#2F6F5E] flex items-center justify-between">
@@ -963,7 +1025,9 @@ export function ProjectDetailPage() {
               {parseFloat(
                 activeMilestone === "PART1"
                   ? commissionData?.part1?.amount || 0
-                  : commissionData?.part2?.amount || 0
+                  : activeMilestone === "PART2"
+                  ? commissionData?.part2?.amount || 0
+                  : commissionData?.fittings?.amount || 0
               ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </strong>
           </div>
