@@ -213,6 +213,8 @@ export async function calculateProjectDealerCommission(projectId) {
   const part2Amount = Math.max(0, parseFloat((fund2BaseAmount - phase2TotalPenalty).toFixed(2)));
   const totalCommissionAmount = parseFloat((part1Amount + part2Amount).toFixed(2));
   const totalPenaltyAmount = parseFloat((phase1TotalPenalty + phase2TotalPenalty).toFixed(2));
+  const totalCycles = phase1Cycles + phase2Cycles;
+  const penaltyPercentage = Math.min(100.0, parseFloat((totalCycles * 1.0).toFixed(2)));
 
   // Effective percentage representation for display
   const effectivePercentage =
@@ -252,6 +254,7 @@ export async function calculateProjectDealerCommission(projectId) {
     phase2Cycles,
     phase2TotalPenalty,
     totalPenaltyAmount,
+    penaltyPercentage,
     isFirstFundReached,
     firstFundDate: firstFundHistory?.status_date || null,
     isFinalFundReached,
@@ -266,7 +269,7 @@ export async function calculateProjectDealerCommission(projectId) {
         dealer_id: dealer.id,
         project_id: project.id,
         commission_percentage: basePercentage,
-        penalty_percentage: totalPenaltyAmount,
+        penalty_percentage: penaltyPercentage,
         effective_percentage: effectivePercentage,
         base_amount: baseAmount,
         commission_amount: totalCommissionAmount,
@@ -283,7 +286,7 @@ export async function calculateProjectDealerCommission(projectId) {
       await commissionRecord.update({
         dealer_id: dealer.id,
         commission_percentage: basePercentage,
-        penalty_percentage: totalPenaltyAmount,
+        penalty_percentage: penaltyPercentage,
         effective_percentage: effectivePercentage,
         base_amount: baseAmount,
         commission_amount: totalCommissionAmount,
@@ -317,6 +320,7 @@ export async function calculateProjectDealerCommission(projectId) {
     base_percentage: basePercentage,
     original_commission_amount: originalTotalCommission,
     fixed_penalty_per_cycle: fixedPenaltyPerCycle,
+    penalty_percentage: penaltyPercentage,
     penalty_amount: totalPenaltyAmount,
     effective_percentage: effectivePercentage,
     total_commission_amount: totalCommissionAmount,
