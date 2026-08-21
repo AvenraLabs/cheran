@@ -55,6 +55,10 @@ const GovernmentProjectStatusHistory = db.define(
         fields: ["project_id"],
       },
       {
+        fields: ["project_id", "status_date"],
+        name: "idx_gov_proj_status_history_project_date",
+      },
+      {
         unique: true,
         fields: ["project_id", "status", "status_date", "source_import_id"],
         name: "idx_unique_project_status_history",

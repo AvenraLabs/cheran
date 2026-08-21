@@ -37,6 +37,15 @@ export async function listDealers({ search, is_active, page = 1, limit = 20 }) {
   };
 }
 
+export async function getDealerOptions() {
+  const dealers = await Dealer.findAll({
+    where: { is_active: true },
+    attributes: ["id", "name", "commission_percentage"],
+    order: [["name", "ASC"]],
+  });
+  return { dealers };
+}
+
 export async function getDealerById(id) {
   const dealer = await Dealer.findByPk(id, {
     include: [

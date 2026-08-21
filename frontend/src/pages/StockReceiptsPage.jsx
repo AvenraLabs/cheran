@@ -57,12 +57,12 @@ export function StockReceiptsPage() {
   const fetchDependencies = async () => {
     try {
       const [itemsRes, supsRes] = await Promise.all([
-        api.get("/items?limit=500&is_active=true"),
-        api.get("/suppliers?limit=500&is_active=true"),
+        api.get("/items/options"),
+        api.get("/suppliers/options"),
       ]);
       // Only RAW_MATERIAL can be purchased
-      setItemsList(itemsRes.data?.items || []);
-      setSuppliersList(supsRes.data?.suppliers || []);
+      setItemsList(itemsRes.data?.items || itemsRes.items || []);
+      setSuppliersList(supsRes.data?.suppliers || supsRes.suppliers || []);
     } catch (err) {
       console.error("Failed to load dependency masters:", err);
     }

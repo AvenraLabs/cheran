@@ -34,6 +34,9 @@ router
   .get(validate(listDealerSchema), dealerController.listDealers)
   .post(validate(createDealerSchema), dealerController.createDealer);
 
+// Lightweight options for dropdown selects
+router.get("/options", dealerController.getDealerOptions);
+
 // Merge duplicate dealers into a target dealer
 router.post("/merge", validate(mergeDealersSchema), dealerController.mergeDealers);
 

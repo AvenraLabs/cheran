@@ -90,10 +90,10 @@ export function ProjectsPage() {
       try {
         const [statRes, dealRes] = await Promise.all([
           api.get("/government/statuses"),
-          api.get("/dealers?limit=250"),
+          api.get("/dealers/options"),
         ]);
-        setStatuses(statRes.data?.statuses || []);
-        setDealers(dealRes.data?.dealers || []);
+        setStatuses(statRes.data?.statuses || statRes.statuses || []);
+        setDealers(dealRes.data?.dealers || dealRes.dealers || []);
       } catch (err) {
         console.error("Error loading filter options:", err);
       }
@@ -177,7 +177,7 @@ export function ProjectsPage() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-[#F4F2EB]">
+    <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Government Projects Registry"
         actions={
@@ -192,7 +192,7 @@ export function ProjectsPage() {
         }
       />
 
-      <main className="p-4 sm:p-6 lg:p-8 space-y-4 flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
         {/* Quick View Toggle Tabs */}
         <div className="flex items-center gap-2">
           <button

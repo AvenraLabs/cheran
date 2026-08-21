@@ -61,7 +61,7 @@ export function DashboardPage() {
           api.get("/dashboard/government/dealer-distribution", { params }),
           api.get("/dashboard/government/district-distribution", { params }),
           api.get("/dashboard/government/stage-durations"),
-          api.get("/dealers?limit=250"),
+          api.get("/dealers/options"),
           api.get("/reports/financial-overview").catch(() => ({ data: { data: null } })),
         ]);
 
@@ -70,7 +70,7 @@ export function DashboardPage() {
       setDealerDistData(dealerRes.data?.distribution || []);
       setDistrictDistData(districtRes.data?.distribution || []);
       setStageDurationsData(durationRes.data?.stageDurations || []);
-      setDealersList(allDealersRes.data?.dealers || []);
+      setDealersList(allDealersRes.data?.dealers || allDealersRes.dealers || []);
       setFinancialOverview(finRes.data?.data || null);
 
       // Extract unique districts if not already populated

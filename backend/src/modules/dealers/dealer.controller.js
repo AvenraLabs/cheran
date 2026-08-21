@@ -9,6 +9,14 @@ export const listDealers = asyncHandler(async (req, res) => {
   });
 });
 
+export const getDealerOptions = asyncHandler(async (req, res) => {
+  const result = await dealerService.getDealerOptions();
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
 export const getDealer = asyncHandler(async (req, res) => {
   const dealer = await dealerService.getDealerById(req.params.id);
   res.status(200).json({

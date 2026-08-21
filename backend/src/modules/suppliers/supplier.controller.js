@@ -9,6 +9,14 @@ export const listSuppliers = asyncHandler(async (req, res) => {
   });
 });
 
+export const getSupplierOptions = asyncHandler(async (req, res) => {
+  const result = await supplierService.getSupplierOptions();
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
 export const getSupplierById = asyncHandler(async (req, res) => {
   const supplier = await supplierService.getSupplierById(req.params.id);
   res.status(200).json({

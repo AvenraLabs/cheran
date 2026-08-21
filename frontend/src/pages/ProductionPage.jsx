@@ -70,11 +70,11 @@ export function ProductionPage() {
   const fetchDependencies = async () => {
     try {
       const [itemsRes, stockRes] = await Promise.all([
-        api.get("/items?limit=500&is_active=true"),
+        api.get("/items/options"),
         api.get("/inventory/stock"),
       ]);
 
-      const allItems = itemsRes.data?.items || [];
+      const allItems = itemsRes.data?.items || itemsRes.items || [];
       setItemsList(allItems);
 
       const rms = allItems.filter((i) => i.item_type === "RAW_MATERIAL");
@@ -322,7 +322,7 @@ export function ProductionPage() {
   );
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
+    <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Manufacturing & Daily Production"
         actions={
@@ -346,7 +346,7 @@ export function ProductionPage() {
         }
       />
 
-      <main className="flex-1 p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
         {/* KPI Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard

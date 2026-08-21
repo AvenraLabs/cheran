@@ -33,6 +33,15 @@ export async function listSuppliers({ search, is_active, page = 1, limit = 50 } 
   };
 }
 
+export async function getSupplierOptions() {
+  const suppliers = await Supplier.findAll({
+    where: { is_active: true },
+    attributes: ["id", "name", "phone", "gst_number"],
+    order: [["name", "ASC"]],
+  });
+  return { suppliers };
+}
+
 export async function getSupplierById(id) {
   const supplier = await Supplier.findByPk(id);
   if (!supplier) {

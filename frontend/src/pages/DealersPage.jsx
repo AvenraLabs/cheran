@@ -57,8 +57,8 @@ export function DealersPage() {
 
   const fetchAllDealersForMerge = async () => {
     try {
-      const res = await api.get("/dealers", { params: { limit: 500 } });
-      setAllDealersForSelect(res.data?.dealers || []);
+      const res = await api.get("/dealers/options");
+      setAllDealersForSelect(res.data?.dealers || res.dealers || []);
     } catch (err) {
       console.error("Failed to load dealers list:", err);
     }

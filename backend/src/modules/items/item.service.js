@@ -58,6 +58,19 @@ export async function listItems({ search, item_type, category, is_active, page =
   };
 }
 
+export async function getItemOptions({ item_type } = {}) {
+  const where = { is_active: true };
+  if (item_type) where.item_type = item_type;
+
+  const items = await Item.findAll({
+    where,
+    attributes: ["id", "code", "name", "item_type", "unit_id", "category"],
+    include: [{ model: Unit, as: "unit", attributes: ["id", "name", "symbol"] }],
+    order: [["name", "ASC"]],
+  });
+  return { items };
+}
+
 export async function getItemById(id) {
   const item = await Item.findByPk(id, {
     include: [

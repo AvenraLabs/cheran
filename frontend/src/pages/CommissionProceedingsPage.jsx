@@ -166,7 +166,7 @@ export function CommissionProceedingsPage() {
   const fetchMasterData = async () => {
     try {
       const [dealerRes, fundRes] = await Promise.all([
-        api.get("/dealers").catch(() => ({ dealers: [] })),
+        api.get("/dealers/options").catch(() => ({ dealers: [] })),
         api.get("/proceedings/fund-percentages").catch(() => ({ fund_percentages: [] })),
       ]);
       const dealersList = dealerRes?.dealers || dealerRes?.data?.dealers || [];

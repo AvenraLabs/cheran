@@ -87,8 +87,8 @@ export function ImportsPage() {
 
   const fetchDealers = async () => {
     try {
-      const res = await api.get("/dealers?limit=250");
-      setDealersList(res.data?.dealers || []);
+      const res = await api.get("/dealers/options");
+      setDealersList(res.data?.dealers || res.dealers || []);
     } catch (err) {
       console.error("Failed to load dealers:", err);
     }

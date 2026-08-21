@@ -183,7 +183,7 @@ export function UsersPage() {
         }
       />
 
-      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto max-w-7xl">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
         {/* Users Table */}
         <div className="bg-[#FFFFFF] border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
           {loading ? (

@@ -9,6 +9,14 @@ export const listItems = asyncHandler(async (req, res) => {
   });
 });
 
+export const getItemOptions = asyncHandler(async (req, res) => {
+  const result = await itemService.getItemOptions(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
 export const getItemById = asyncHandler(async (req, res) => {
   const item = await itemService.getItemById(req.params.id);
   res.status(200).json({

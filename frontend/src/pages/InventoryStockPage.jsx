@@ -74,13 +74,8 @@ export function InventoryStockPage() {
       if (searchVal) params.search = searchVal.trim();
       if (typeVal) params.item_type = typeVal;
 
-      const [stockRes, itemsRes] = await Promise.all([
-        api.get("/inventory/stock", { params }),
-        api.get("/items?limit=500&is_active=true"),
-      ]);
-
-      setStockList(stockRes.data?.stock || []);
-      setItemsList(itemsRes.data?.items || []);
+      const stockRes = await api.get("/inventory/stock", { params });
+      setStockList(stockRes.data?.stock || stockRes.stock || []);
     } catch (err) {
       console.error("Failed to load inventory stock:", err);
     } finally {
@@ -88,19 +83,32 @@ export function InventoryStockPage() {
     }
   };
 
+  const fetchItemOptions = async () => {
+    try {
+      const itemsRes = await api.get("/items/options");
+      setItemsList(itemsRes.data?.items || itemsRes.items || []);
+    } catch (err) {
+      console.error("Failed to load items options:", err);
+    }
+  };
+
   useEffect(() => {
-    fetchStock();
+    fetchItemOptions();
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchStock(search, selectedType);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search, selectedType]);
+
   const handleSearchChange = (e) => {
-    const val = e.target.value;
-    setSearch(val);
-    fetchStock(val, selectedType);
+    setSearch(e.target.value);
   };
 
   const handleTypeChange = (val) => {
     setSelectedType(val);
-    fetchStock(search, val);
   };
 
   const handleOpeningStock = async (e) => {
@@ -228,12 +236,12 @@ export function InventoryStockPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAF8] min-h-screen">
+    <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Inventory & Stock Management"
       />
 
-      <main className="flex-1 p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
         {/* KPI Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <MetricCard
