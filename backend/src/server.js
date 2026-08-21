@@ -13,6 +13,17 @@ async function startServer() {
     // Sync schema with models (creates any missing tables)
     console.log("🔄 Synchronizing database tables...");
     await db.sync({ force: false });
+
+    // Idempotent column check for dealer_commissions (adds any newly introduced columns safely)
+    await db.query(`
+      ALTER TABLE IF EXISTS dealer_commissions
+        ADD COLUMN IF NOT EXISTS fittings_amount DECIMAL(14, 2) DEFAULT 0.00,
+        ADD COLUMN IF NOT EXISTS fittings_status VARCHAR(50) DEFAULT 'PENDING',
+        ADD COLUMN IF NOT EXISTS fittings_paid_date DATE,
+        ADD COLUMN IF NOT EXISTS fittings_paid_ref VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS fittings_notes TEXT;
+    `);
+
     console.log("✅ Database schema synchronized.");
 
     // Ensure government statuses are seeded

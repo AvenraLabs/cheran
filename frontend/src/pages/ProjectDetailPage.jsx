@@ -43,17 +43,9 @@ export function ProjectDetailPage() {
   const [dispatchedMaterials, setDispatchedMaterials] = useState([]);
   const [commissionData, setCommissionData] = useState(null);
   const [masterStatuses, setMasterStatuses] = useState([]);
-  const [showAllMilestones, setShowAllMilestones] = useState(true);
+  const [showAllMilestones, setShowAllMilestones] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
-
-  // Commission Payment Modal State
-  const [payModalOpen, setPayModalOpen] = useState(false);
-  const [activeMilestone, setActiveMilestone] = useState("PART1");
-  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
-  const [payRef, setPayRef] = useState("");
-  const [payNotes, setPayNotes] = useState("");
-  const [savingPayment, setSavingPayment] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   const loadProjectDetails = async () => {
@@ -82,27 +74,6 @@ export function ProjectDetailPage() {
       console.error("Failed to load project details:", err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleRecordPayout = async (e) => {
-    e.preventDefault();
-    try {
-      setSavingPayment(true);
-      await api.post(`/government/projects/${id}/commission/payout`, {
-        milestone: activeMilestone,
-        paid_date: payDate,
-        paid_ref: payRef.trim() || "NEFT / Direct Bank Transfer",
-        notes: payNotes.trim() || null,
-      });
-      setPayModalOpen(false);
-      setPayRef("");
-      setPayNotes("");
-      loadProjectDetails();
-    } catch (err) {
-      console.error("Failed to record milestone payment:", err);
-    } finally {
-      setSavingPayment(false);
     }
   };
 
@@ -175,10 +146,21 @@ export function ProjectDetailPage() {
             </div>
           </div>
 
-          <div className="text-right sm:border-l sm:border-[#EDEAE1] sm:pl-6 space-y-1">
-            <div className="text-xs font-semibold uppercase text-[#52607D]">Assigned Dealer</div>
-            <div className="text-sm font-bold text-[#14213D]">
-              {project.dealer?.name || "Unassigned"}
+          <div className="flex flex-wrap items-center gap-6 sm:border-l sm:border-[#EDEAE1] sm:pl-6">
+            <div className="space-y-1">
+              <div className="text-xs font-semibold uppercase text-[#52607D]">Fund Type</div>
+              <div className="text-sm font-bold text-[#14213D]">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20 text-xs font-mono font-bold">
+                  {project.fund_type || "Regular"}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-xs font-semibold uppercase text-[#52607D]">Assigned Dealer</div>
+              <div className="text-sm font-bold text-[#14213D]">
+                {project.dealer?.name || "Unassigned"}
+              </div>
             </div>
           </div>
         </div>
@@ -271,23 +253,58 @@ export function ProjectDetailPage() {
 
           {/* Card 3: Financials & Quotation */}
           <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-3">
-              <IndianRupee size={18} className="text-[#2F6F5E]" />
-              <h2 className="text-sm font-bold font-display text-[#14213D]">Financial Quotation & Invoicing</h2>
+            <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
+              <div className="flex items-center gap-2">
+                <IndianRupee size={18} className="text-[#2F6F5E]" />
+                <h2 className="text-sm font-bold font-display text-[#14213D]">Government Financials & Quotation</h2>
+              </div>
+              <span className="text-[11px] font-mono text-[#52607D] bg-[#FAFAF8] border border-[#E4E1D8] px-2 py-0.5 rounded">
+                Fund Type: <strong className="text-[#14213D]">{project.fund_type || "Regular"}</strong>
+              </span>
             </div>
-            <div className="grid grid-cols-2 gap-y-3 text-xs">
+
+            {/* 4 Core Financial Columns */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#FAFAF8] p-3 rounded-[8px] border border-[#EDEAE1]">
               <div>
-                <span className="text-[#52607D]">Quotation Subsidy:</span>
-                <p className="font-semibold text-[#14213D]">
-                  {project.quotation_subsidy_amount ? `₹${parseFloat(project.quotation_subsidy_amount).toLocaleString("en-IN")}` : "—"}
+                <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Quotation Subsidy</span>
+                <p className="font-bold text-xs text-[#14213D] font-mono mt-0.5">
+                  {project.quotation_subsidy_amount ? `₹${Math.floor(parseFloat(project.quotation_subsidy_amount)).toLocaleString("en-IN")}` : "—"}
                 </p>
               </div>
+
               <div>
-                <span className="text-[#52607D]">Farmer Contribution:</span>
-                <p className="font-semibold text-[#14213D]">
-                  {project.farmer_contribution ? `₹${parseFloat(project.farmer_contribution).toLocaleString("en-IN")}` : "—"}
+                <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Farmer Contribution</span>
+                <p className="font-bold text-xs text-[#14213D] font-mono mt-0.5">
+                  {project.farmer_contribution ? `₹${Math.floor(parseFloat(project.farmer_contribution)).toLocaleString("en-IN")}` : "—"}
                 </p>
               </div>
+
+              <div>
+                <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Invoice Amount</span>
+                <p className="font-bold text-xs text-[#14213D] font-mono mt-0.5">
+                  {project.invoice_amount ? `₹${Math.floor(parseFloat(project.invoice_amount)).toLocaleString("en-IN")}` : "—"}
+                </p>
+              </div>
+
+              <div className="bg-[#EAF3F0] p-1.5 rounded border border-[#2F6F5E]/30">
+                <span className="text-[10px] text-[#2F6F5E] uppercase font-bold block">State Restricted</span>
+                <p className="font-extrabold text-xs text-[#2F6F5E] font-mono mt-0.5">
+                  {project.state_restricted_amount ? `₹${Math.floor(parseFloat(project.state_restricted_amount)).toLocaleString("en-IN")}` : "—"}
+                </p>
+              </div>
+            </div>
+
+            {/* Government Deduction Banner if invoice > state restricted */}
+            {parseFloat(project.invoice_amount || 0) > parseFloat(project.state_restricted_amount || 0) && (
+              <div className="p-2 bg-amber-50 border border-amber-200 rounded-[6px] text-xs text-amber-900 flex items-center justify-between">
+                <span>Govt Subsidy Deduction (Invoice Amount − State Restricted Amount):</span>
+                <strong className="font-mono text-amber-800">
+                  ₹{Math.floor(parseFloat(project.invoice_amount) - parseFloat(project.state_restricted_amount)).toLocaleString("en-IN")}
+                </strong>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-y-3 text-xs pt-1">
               <div>
                 <span className="text-[#52607D]">Invoice Number:</span>
                 <p className="font-semibold font-mono text-[#14213D]">{project.invoice_number || "—"}</p>
@@ -295,12 +312,6 @@ export function ProjectDetailPage() {
               <div>
                 <span className="text-[#52607D]">Invoice Date:</span>
                 <p className="font-semibold text-[#14213D]">{formatDate(project.invoice_date)}</p>
-              </div>
-              <div>
-                <span className="text-[#52607D]">Invoice Amount:</span>
-                <p className="font-semibold text-[#2F6F5E]">
-                  {project.invoice_amount ? `₹${parseFloat(project.invoice_amount).toLocaleString("en-IN")}` : "—"}
-                </p>
               </div>
               <div>
                 <span className="text-[#52607D]">Work Order No & Date:</span>
@@ -314,18 +325,16 @@ export function ProjectDetailPage() {
                 <p className="font-semibold text-[#14213D]">{formatDate(project.supply_date)}</p>
               </div>
               <div>
-                <span className="text-[#52607D]">Bank Guarantee Deducted (%):</span>
+                <span className="text-[#52607D]">Bank Guarantee Deducted:</span>
                 <p className="font-semibold text-[#14213D]">
-                  {project.bank_guarantee_deducted_pct ? `${project.bank_guarantee_deducted_pct}%` : "—"}
+                  {project.bank_guarantee_deducted_pct
+                    ? `${project.bank_guarantee_deducted_pct}% (${project.bank_guarantee_deducted_amount ? `₹${Math.floor(parseFloat(project.bank_guarantee_deducted_amount)).toLocaleString("en-IN")}` : "—"})`
+                    : "—"}
                 </p>
               </div>
               <div>
-                <span className="text-[#52607D]">Bank Guarantee Amount:</span>
-                <p className="font-semibold text-[#14213D]">
-                  {project.bank_guarantee_deducted_amount
-                    ? `₹${parseFloat(project.bank_guarantee_deducted_amount).toLocaleString("en-IN")}`
-                    : "—"}
-                </p>
+                <span className="text-[#52607D]">Commission Base:</span>
+                <p className="font-semibold text-[#2F6F5E]">State Restricted Amount</p>
               </div>
             </div>
           </div>
@@ -460,7 +469,7 @@ export function ProjectDetailPage() {
           )}
         </div>
 
-        {/* Dealer Commission & Milestone Payouts Card */}
+        {/* Dealer Commission Breakdown Card */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-4">
             <div className="flex items-center gap-2.5">
@@ -469,10 +478,10 @@ export function ProjectDetailPage() {
               </div>
               <div>
                 <h2 className="text-sm font-bold font-display text-[#14213D]">
-                  Dealer Commission & Milestone Payouts
+                  Dealer Commission Breakdown
                 </h2>
                 <p className="text-[11px] text-[#52607D]">
-                  Calculated from Invoiced Items Net Amount · 2-Stage Lifecycle (55% 1st Fund UTR / 45% Final Fund UTR) · 45-day Aging Penalty Rule
+                  Calculated from State Restricted Amount · Fund Type: <strong className="text-[#14213D]">{commissionData?.fund_type || project.fund_type || "Regular"}</strong> ({commissionData?.fund1_split_pct || 55}% 1st Fund / {commissionData?.fund2_split_pct || 45}% 2nd Fund Split)
                 </p>
               </div>
             </div>
@@ -493,7 +502,7 @@ export function ProjectDetailPage() {
             <div className="p-6 text-center bg-[#FAFAF8] border border-dashed border-[#E4E1D8] rounded-[8px] space-y-1">
               <p className="text-xs font-semibold text-[#14213D]">No Dealer Assigned to this Government Project</p>
               <p className="text-[11px] text-[#52607D]">
-                Dealer commission and milestone payouts are strictly calculated based on the assigned dealer's commission percentage in the Dealer Master.
+                Dealer commission is strictly calculated based on the assigned dealer's commission percentage in the Dealer Master.
               </p>
             </div>
           ) : (
@@ -502,7 +511,7 @@ export function ProjectDetailPage() {
               {commissionData?.applicable_tax_slab && (
                 <div className="p-2.5 bg-[#EAF3F0] border border-[#2F6F5E]/20 rounded-[8px] flex items-center justify-between text-xs text-[#14213D]">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#2F6F5E]">Scheme GST Deduction:</span>
+                    <span className="font-bold text-[#2F6F5E]">Scheme Deductions:</span>
                     <span className="font-mono font-bold px-2 py-0.5 rounded-full bg-white border border-[#2F6F5E]/30 text-[#14213D] text-[11px]">
                       {commissionData.applicable_tax_slab.gst_percentage}% GST + {commissionData.applicable_tax_slab.fittings_percentage}% Fittings
                     </span>
@@ -511,7 +520,7 @@ export function ProjectDetailPage() {
                     </span>
                   </div>
                   <div className="font-mono text-[11px] text-[#52607D]">
-                    Base Formula: Subsidy / {(1 + commissionData.applicable_tax_slab.gst_percentage / 100).toFixed(2)} / {(1 + commissionData.applicable_tax_slab.fittings_percentage / 100).toFixed(2)}
+                    Base Net: State Restricted / {(1 + commissionData.applicable_tax_slab.gst_percentage / 100).toFixed(2)} / {(1 + commissionData.applicable_tax_slab.fittings_percentage / 100).toFixed(2)}
                   </div>
                 </div>
               )}
@@ -557,7 +566,7 @@ export function ProjectDetailPage() {
                         : "0.00%"}
                     </span>
                     <span className="text-[10px] text-[#8C97AB]">
-                      on ₹{(commissionData?.base_amount || 0).toLocaleString("en-IN")} Net
+                      on ₹{Math.floor(commissionData?.base_amount || 0).toLocaleString("en-IN")} Net
                     </span>
                   </div>
                 </div>
@@ -565,185 +574,74 @@ export function ProjectDetailPage() {
                 <div className="p-3.5 bg-[#EAF3F0]/60 border border-[#2F6F5E]/20 rounded-[8px] space-y-1">
                   <div className="text-[11px] font-bold text-[#2F6F5E]">Total Commission Value</div>
                   <div className="text-base font-bold text-[#14213D] font-mono">
-                    ₹{parseFloat(commissionData?.total_commission_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    ₹{Math.floor(commissionData?.total_commission_amount || 0).toLocaleString("en-IN")}
                   </div>
                 </div>
               </div>
 
-              {/* 3-Part Milestone Payout Cards (Part 1, Part 2, and Fittings) */}
+              {/* 3-Part Milestone Commission Cards (Part 1, Part 2, and Fittings) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                {/* Milestone 1: Part 1 (55%) */}
-                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-3 relative shadow-2xs">
+                {/* Milestone 1: Part 1 */}
+                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-2 relative shadow-2xs">
                   <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2.5">
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-[#2F6F5E] text-white text-[11px] font-bold flex items-center justify-center">
                         1
                       </span>
-                      <h3 className="text-xs font-bold text-[#14213D]">First Fund Commission (55%)</h3>
+                      <h3 className="text-xs font-bold text-[#14213D]">
+                        First Fund Commission ({commissionData?.fund1_split_pct || 55}%)
+                      </h3>
                     </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        commissionData?.part1?.status === "PAID"
-                          ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
-                          : "bg-amber-50 text-amber-800 border border-amber-200"
-                      }`}
-                    >
-                      {commissionData?.part1?.status === "PAID" ? "✓ PAID" : "UNPAID"}
-                    </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Commission Amount</div>
-                      <div className="text-lg font-extrabold text-[#14213D] font-mono">
-                        ₹{parseFloat(commissionData?.part1?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </div>
+                  <div>
+                    <div className="text-[10px] text-[#52607D] uppercase font-semibold">Commission Amount</div>
+                    <div className="text-lg font-extrabold text-[#14213D] font-mono mt-0.5">
+                      ₹{Math.floor(commissionData?.part1?.amount || 0).toLocaleString("en-IN")}
                     </div>
-
-                    {commissionData?.part1?.status !== "PAID" && (
-                      <Button
-                        size="xs"
-                        variant="primary"
-                        icon={CreditCard}
-                        onClick={() => {
-                          setActiveMilestone("PART1");
-                          setPayRef("Direct Bank Transfer / NEFT");
-                          setPayNotes("");
-                          setPayModalOpen(true);
-                        }}
-                      >
-                        Pay
-                      </Button>
-                    )}
                   </div>
-
-                  {commissionData?.part1?.status === "PAID" && (
-                    <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
-                      <div className="flex justify-between font-medium">
-                        <span>Paid Date: <strong className="text-[#14213D]">{formatDate(commissionData.part1.paid_date)}</strong></span>
-                        <span>Ref: <strong className="text-[#14213D]">{commissionData.part1.paid_ref || "—"}</strong></span>
-                      </div>
-                      {commissionData.part1.notes && (
-                        <div className="text-[10px] italic">Notes: {commissionData.part1.notes}</div>
-                      )}
-                    </div>
-                  )}
                 </div>
 
-                {/* Milestone 2: Part 2 (45%) */}
-                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-3 relative shadow-2xs">
+                {/* Milestone 2: Part 2 */}
+                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-2 relative shadow-2xs">
                   <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2.5">
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-[#14213D] text-white text-[11px] font-bold flex items-center justify-center">
                         2
                       </span>
-                      <h3 className="text-xs font-bold text-[#14213D]">Second Fund Commission (45%)</h3>
+                      <h3 className="text-xs font-bold text-[#14213D]">
+                        Second Fund Commission ({commissionData?.fund2_split_pct || 45}%)
+                      </h3>
                     </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        commissionData?.part2?.status === "PAID"
-                          ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
-                          : "bg-amber-50 text-amber-800 border border-amber-200"
-                      }`}
-                    >
-                      {commissionData?.part2?.status === "PAID" ? "✓ PAID" : "UNPAID"}
-                    </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Commission Amount</div>
-                      <div className="text-lg font-extrabold text-[#14213D] font-mono">
-                        ₹{parseFloat(commissionData?.part2?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </div>
+                  <div>
+                    <div className="text-[10px] text-[#52607D] uppercase font-semibold">Commission Amount</div>
+                    <div className="text-lg font-extrabold text-[#14213D] font-mono mt-0.5">
+                      ₹{Math.floor(commissionData?.part2?.amount || 0).toLocaleString("en-IN")}
                     </div>
-
-                    {commissionData?.part2?.status !== "PAID" && (
-                      <Button
-                        size="xs"
-                        variant="primary"
-                        icon={CreditCard}
-                        onClick={() => {
-                          setActiveMilestone("PART2");
-                          setPayRef("Direct Bank Transfer / NEFT");
-                          setPayNotes("");
-                          setPayModalOpen(true);
-                        }}
-                      >
-                        Pay
-                      </Button>
-                    )}
                   </div>
-
-                  {commissionData?.part2?.status === "PAID" && (
-                    <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
-                      <div className="flex justify-between font-medium">
-                        <span>Paid Date: <strong className="text-[#14213D]">{formatDate(commissionData.part2.paid_date)}</strong></span>
-                        <span>Ref: <strong className="text-[#14213D]">{commissionData.part2.paid_ref || "—"}</strong></span>
-                      </div>
-                      {commissionData.part2.notes && (
-                        <div className="text-[10px] italic">Notes: {commissionData.part2.notes}</div>
-                      )}
-                    </div>
-                  )}
                 </div>
 
-                {/* Card 3: Fittings Cost Payout */}
-                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-3 relative shadow-2xs">
+                {/* Card 3: Fittings Cost */}
+                <div className="p-4 bg-white border border-[#E4E1D8] rounded-[8px] space-y-2 relative shadow-2xs">
                   <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2.5">
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-[#7C3AED] text-white text-[11px] font-bold flex items-center justify-center">
                         3
                       </span>
-                      <h3 className="text-xs font-bold text-[#14213D]">Fittings Cost ({commissionData?.fittings?.percentage || 5}%)</h3>
+                      <h3 className="text-xs font-bold text-[#14213D]">
+                        Fittings Cost ({commissionData?.fittings?.percentage || 5}%)
+                      </h3>
                     </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        commissionData?.fittings?.status === "PAID"
-                          ? "bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20"
-                          : "bg-purple-50 text-purple-800 border border-purple-200"
-                      }`}
-                    >
-                      {commissionData?.fittings?.status === "PAID" ? "✓ PAID" : "UNPAID"}
-                    </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] text-[#52607D] uppercase font-semibold">Fittings Amount</div>
-                      <div className="text-lg font-extrabold text-[#14213D] font-mono">
-                        ₹{parseFloat(commissionData?.fittings?.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </div>
+                  <div>
+                    <div className="text-[10px] text-[#52607D] uppercase font-semibold">Fittings Amount</div>
+                    <div className="text-lg font-extrabold text-[#14213D] font-mono mt-0.5">
+                      ₹{Math.floor(commissionData?.fittings?.amount || 0).toLocaleString("en-IN")}
                     </div>
-
-                    {commissionData?.fittings?.status !== "PAID" && (
-                      <Button
-                        size="xs"
-                        variant="primary"
-                        icon={CreditCard}
-                        onClick={() => {
-                          setActiveMilestone("FITTINGS");
-                          setPayRef("Direct Bank Transfer / NEFT");
-                          setPayNotes("");
-                          setPayModalOpen(true);
-                        }}
-                      >
-                        Pay
-                      </Button>
-                    )}
                   </div>
-
-                  {commissionData?.fittings?.status === "PAID" && (
-                    <div className="text-[11px] bg-[#FAFAF8] p-2.5 rounded-[6px] border border-[#EDEAE1] text-[#52607D] space-y-0.5">
-                      <div className="flex justify-between font-medium">
-                        <span>Paid Date: <strong className="text-[#14213D]">{formatDate(commissionData.fittings.paid_date)}</strong></span>
-                        <span>Ref: <strong className="text-[#14213D]">{commissionData.fittings.paid_ref || "—"}</strong></span>
-                      </div>
-                      {commissionData.fittings.notes && (
-                        <div className="text-[10px] italic">Notes: {commissionData.fittings.notes}</div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -879,12 +777,14 @@ export function ProjectDetailPage() {
                     onClick={() => setShowAllMilestones(!showAllMilestones)}
                     className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
                       showAllMilestones
-                        ? "bg-[#2F6F5E] text-white border-[#2F6F5E] shadow-xs"
-                        : "bg-[#FAFAF8] text-[#52607D] border-[#E4E1D8] hover:bg-gray-100"
+                        ? "bg-[#14213D] text-white border-[#14213D] shadow-xs"
+                        : "bg-white text-[#2F6F5E] border-[#2F6F5E]/40 hover:bg-[#EAF3F0]"
                     }`}
                   >
                     <Layers size={14} />
-                    {showAllMilestones ? "Showing All Stages (56)" : "Showing Recorded Only"}
+                    {showAllMilestones
+                      ? `Showing All 56 Stages (Click for Recorded Only)`
+                      : `Showing Recorded Only (${recordedCount}) · View All 56`}
                   </button>
                 </div>
               </div>
@@ -1020,84 +920,6 @@ export function ProjectDetailPage() {
           );
         })()}
       </main>
-
-      {/* Payout Record Modal */}
-      <Modal
-        isOpen={payModalOpen}
-        onClose={() => setPayModalOpen(false)}
-        title={`Record Dealer Payout (${
-          activeMilestone === "PART1"
-            ? "First Fund Commission (55%)"
-            : activeMilestone === "PART2"
-            ? "Second Fund Commission (45%)"
-            : "Fittings Cost Payout"
-        })`}
-      >
-        <form onSubmit={handleRecordPayout} className="space-y-4">
-          <div className="p-3 bg-[#EAF3F0] rounded-[8px] text-xs text-[#2F6F5E] flex items-center justify-between">
-            <span>Milestone Amount to Pay:</span>
-            <strong className="text-sm font-mono font-bold text-[#14213D]">
-              ₹
-              {parseFloat(
-                activeMilestone === "PART1"
-                  ? commissionData?.part1?.amount || 0
-                  : activeMilestone === "PART2"
-                  ? commissionData?.part2?.amount || 0
-                  : commissionData?.fittings?.amount || 0
-              ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-            </strong>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Payment Date <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={payDate}
-              onChange={(e) => setPayDate(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Payment Mode & UTR / Cheque Ref <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. NEFT-UTR-89123891, Cheque #49102"
-              value={payRef}
-              onChange={(e) => setPayRef(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Payment Remarks / Notes
-            </label>
-            <textarea
-              rows={2}
-              placeholder="Optional notes or remarks regarding this payout..."
-              value={payNotes}
-              onChange={(e) => setPayNotes(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
-            <Button variant="secondary" type="button" onClick={() => setPayModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={savingPayment} icon={Check}>
-              Confirm
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
       {/* Correct / Merge Application ID Modal */}
       <MergeProjectModal

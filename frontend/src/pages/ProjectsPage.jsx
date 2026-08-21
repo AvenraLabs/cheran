@@ -39,6 +39,7 @@ export function ProjectsPage() {
   // Filter state
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedFundType, setSelectedFundType] = useState("");
   const [selectedDealer, setSelectedDealer] = useState("");
   const [district, setDistrict] = useState("");
   const [minStatusDays, setMinStatusDays] = useState("");
@@ -64,6 +65,7 @@ export function ProjectsPage() {
         limit,
         ...(search ? { search: search.trim() } : {}),
         ...(selectedStatus ? { status: selectedStatus } : {}),
+        ...(selectedFundType ? { fund_type: selectedFundType } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
         ...(district ? { district: district.trim() } : {}),
         ...(orphanOnly ? { orphan_only: true } : {}),
@@ -114,15 +116,16 @@ export function ProjectsPage() {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [search, selectedStatus, selectedDealer, district, minStatusDays, orphanOnly]);
+  }, [search, selectedStatus, selectedFundType, selectedDealer, district, minStatusDays, orphanOnly]);
 
   const hasActiveFilters = Boolean(
-    search || selectedStatus || selectedDealer || district || minStatusDays !== "" || orphanOnly
+    search || selectedStatus || selectedFundType || selectedDealer || district || minStatusDays !== "" || orphanOnly
   );
 
   const handleResetFilters = () => {
     setSearch("");
     setSelectedStatus("");
+    setSelectedFundType("");
     setSelectedDealer("");
     setDistrict("");
     setMinStatusDays("");
@@ -157,6 +160,14 @@ export function ProjectsPage() {
   const statusOptions = [
     { value: "", label: "All Statuses" },
     ...statuses.map((s) => ({ value: s.name, label: s.name })),
+  ];
+
+  const fundTypeOptions = [
+    { value: "", label: "All Fund Types" },
+    { value: "40%-SPARSH", label: "40%-SPARSH (60/40 Split)" },
+    { value: "SPARSH", label: "SPARSH (60/40 Split)" },
+    { value: "Regular", label: "Regular (55/45 Split)" },
+    { value: "First Fund SNA SPARSH", label: "First Fund SNA SPARSH" },
   ];
 
   const dealerOptions = [
@@ -233,12 +244,24 @@ export function ProjectsPage() {
             </div>
 
             {/* Custom Status Dropdown */}
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-2">
               <CustomSelect
                 options={statusOptions}
                 value={selectedStatus}
                 onChange={(val) => setSelectedStatus(val)}
                 placeholder="All Statuses"
+                searchable={true}
+                size="sm"
+              />
+            </div>
+
+            {/* Custom Fund Type Dropdown */}
+            <div className="lg:col-span-2">
+              <CustomSelect
+                options={fundTypeOptions}
+                value={selectedFundType}
+                onChange={(val) => setSelectedFundType(val)}
+                placeholder="All Fund Types"
                 searchable={true}
                 size="sm"
               />
@@ -257,14 +280,13 @@ export function ProjectsPage() {
             </div>
 
             {/* Min Days in Current Status Filter */}
-            <div className="relative lg:col-span-2">
+            <div className="relative lg:col-span-1">
               <div className="relative flex items-center">
-                <Clock size={14} className="absolute left-2.5 text-[#52607D]" />
                 <input
                   type="number"
                   min="0"
                   step="1"
-                  placeholder="Min Days in Status (≥ N)"
+                  placeholder="Min Days"
                   value={minStatusDays}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -272,7 +294,7 @@ export function ProjectsPage() {
                       setMinStatusDays(val);
                     }
                   }}
-                  className="w-full pl-8 pr-6 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] placeholder:text-[#8C97AB]"
+                  className="w-full px-2.5 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] placeholder:text-[#8C97AB]"
                   title="Filter projects whose current status date is at least N days old"
                 />
                 {minStatusDays !== "" && (
@@ -366,7 +388,8 @@ export function ProjectsPage() {
                       <th className="py-3 px-4">Location</th>
                       <th className="py-3 px-4">Current Status</th>
                       <th className="py-3 px-4">Status Date</th>
-                      <th className="py-3 px-4">Area (Ha)</th>
+                      <th className="py-3 px-4">Invoice Date</th>
+                      <th className="py-3 px-4">Fund Type</th>
                       <th className="py-3 px-4">Dealer</th>
                       <th className="py-3 px-4 text-center">Actions</th>
                     </tr>
@@ -377,25 +400,10 @@ export function ProjectsPage() {
                       return (
                         <tr key={proj.id} className="hover:bg-[#FAFAF8] transition-colors">
                           <td className="py-3 px-4 font-mono font-medium text-[#14213D]">
-                            <div className="flex items-center gap-2">
-                              <span>{proj.application_id}</span>
-                              {!proj.farmer_name && (
-                                <span
-                                  className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 cursor-pointer"
-                                  title="Orphan invoice record - Click 'Merge' to link with government project"
-                                  onClick={() => {
-                                    setMergeSourceProject(proj);
-                                    setMergeModalOpen(true);
-                                  }}
-                                >
-                                  <FileQuestion size={10} />
-                                  <span>Orphan</span>
-                                </span>
-                              )}
-                            </div>
+                            {proj.application_id}
                           </td>
                           <td className="py-3 px-4">
-                            <div className="font-semibold text-[#14213D]">{proj.farmer_name || "— (Invoice only)"}</div>
+                            <div className="font-semibold text-[#14213D]">{proj.farmer_name || "—"}</div>
                             {proj.mobile && <div className="text-[11px] text-[#52607D]">{proj.mobile}</div>}
                           </td>
                           <td className="py-3 px-4">
@@ -427,7 +435,12 @@ export function ProjectsPage() {
                             </div>
                           </td>
                           <td className="py-3 px-4 text-[#14213D] font-medium font-mono">
-                            {proj.total_area_ha ? `${proj.total_area_ha} Ha` : "—"}
+                            {proj.invoice_date ? formatDate(proj.invoice_date) : "—"}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-[#FAFAF8] border border-[#E4E1D8] text-[#14213D]">
+                              {proj.fund_type || "Regular"}
+                            </span>
                           </td>
                           <td className="py-3 px-4 text-[#52607D]">
                             {proj.dealer?.name || "—"}

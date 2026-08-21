@@ -48,6 +48,10 @@ export function LoadOrderUploadPage() {
   const [previewData, setPreviewData] = useState(null);
   const [previewError, setPreviewError] = useState("");
 
+  // Upload Input Method: 'file' or 'paste'
+  const [inputMode, setInputMode] = useState("file");
+  const [pastedAppIds, setPastedAppIds] = useState("");
+
   // Invoice / Dispatch Date
   const [dispatchDate, setDispatchDate] = useState(
     new Intl.DateTimeFormat("en-CA", {
@@ -61,6 +65,8 @@ export function LoadOrderUploadPage() {
 
   // Projects list with user-editable / auto-incremented invoice numbers
   const [projectsList, setProjectsList] = useState([]);
+  // Excluded/Ignored projects (non-Work-Order or manually removed)
+  const [excludedProjects, setExcludedProjects] = useState([]);
 
   // Material Items: Array of { item_id, name, code, category, unit, unit_price, govt_qty, actual_qty, available_stock }
   const [batchItems, setBatchItems] = useState([]);
@@ -89,6 +95,47 @@ export function LoadOrderUploadPage() {
   // View Batch Modal
   const [selectedBatchModal, setSelectedBatchModal] = useState(null);
   const [batchModalLoading, setBatchModalLoading] = useState(false);
+
+  // Cancellation Modal State
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [batchToCancel, setBatchToCancel] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleOpenCancelModal = (batch) => {
+    setBatchToCancel(batch);
+    setCancelReason("");
+    setCancelModalOpen(true);
+  };
+
+  const handleConfirmCancelBatch = async (e) => {
+    e.preventDefault();
+    if (!batchToCancel) return;
+
+    try {
+      setCancelling(true);
+      await api.post(`/invoices/load-order/batches/${batchToCancel.id}/cancel`, {
+        reason: cancelReason.trim() || "Cancelled by user from Load Order History",
+      });
+      setCancelModalOpen(false);
+      setBatchToCancel(null);
+      if (selectedBatchModal?.id === batchToCancel.id) {
+        setSelectedBatchModal(null);
+      }
+      loadBatchHistory(historyPagination.page);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || "Failed to cancel batch");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  // Helper to check if status is "Issued Work Order"
+  const isIssuedWorkOrder = (status) => {
+    if (!status) return false;
+    const s = String(status).toLowerCase().replace(/[^a-z]/g, "");
+    return s.includes("issuedworkorder") || s.includes("workorderissued");
+  };
 
   // ==========================================
   // File Upload & Preview Handler
@@ -121,12 +168,24 @@ export function LoadOrderUploadPage() {
         setDispatchDate(data.defaultInvoiceDate);
       }
 
-      // Initialize project rows with default empty invoice number
-      const parsedProjects = (data.projects || []).map((p, idx) => ({
-        ...p,
-        invoice_number: "",
-      }));
-      setProjectsList(parsedProjects);
+      // Auto-filter: Only projects with 'Issued Work Order' are included by default!
+      const ready = [];
+      const excluded = [];
+
+      (data.projects || []).forEach((p) => {
+        const item = {
+          ...p,
+          invoice_number: "",
+        };
+        if (p.exists_in_db && isIssuedWorkOrder(p.current_status)) {
+          ready.push(item);
+        } else {
+          excluded.push(item);
+        }
+      });
+
+      setProjectsList(ready);
+      setExcludedProjects(excluded);
 
       // Map on-hand stock for finished goods
       const stockMap = new Map();
@@ -154,6 +213,101 @@ export function LoadOrderUploadPage() {
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  // ==========================================
+  // Pasted Application IDs Preview Handler
+  // ==========================================
+  const handlePastedIdsPreview = async (e) => {
+    e?.preventDefault();
+    if (!pastedAppIds || !pastedAppIds.trim()) {
+      setPreviewError("Please enter or paste at least one Government Application ID.");
+      return;
+    }
+
+    setFile(null);
+    setPreviewLoading(true);
+    setPreviewError("");
+    setCommitResult(null);
+    setCommitError("");
+
+    try {
+      const [previewRes, stockRes] = await Promise.all([
+        api.post("/invoices/load-order/preview", {
+          application_ids_text: pastedAppIds.trim(),
+          dispatch_date: dispatchDate,
+        }),
+        api.get("/inventory/stock").catch(() => ({ data: { stock: [] } })),
+      ]);
+
+      const data = previewRes.data?.data || previewRes.data || previewRes;
+      setPreviewData(data);
+
+      if (data.defaultInvoiceDate) {
+        setDispatchDate(data.defaultInvoiceDate);
+      }
+
+      // Auto-filter: Only Issued Work Order projects go to active projectsList
+      const ready = [];
+      const excluded = [];
+
+      (data.projects || []).forEach((p) => {
+        const item = { ...p, invoice_number: "" };
+        if (p.exists_in_db && isIssuedWorkOrder(p.current_status)) {
+          ready.push(item);
+        } else {
+          excluded.push(item);
+        }
+      });
+
+      setProjectsList(ready);
+      setExcludedProjects(excluded);
+
+      const stockMap = new Map();
+      (stockRes.data?.stock || []).forEach((s) => {
+        if (s.item_id) stockMap.set(s.item_id, parseFloat(s.available_quantity) || 0);
+      });
+
+      const goods = (data.availableFinishedGoods || []).map((fg) => ({
+        item_id: fg.id,
+        name: fg.name,
+        code: fg.code,
+        category: fg.category,
+        unit: fg.unit_symbol || "NOS",
+        unit_price: fg.unit_price,
+        govt_qty: "",
+        actual_qty: "",
+        available_stock: stockMap.get(fg.id) ?? 0,
+      }));
+      setBatchItems(goods);
+    } catch (err) {
+      console.error("Load Order Pasted IDs Preview Error:", err);
+      setPreviewError(
+        err.response?.data?.message || err.message || "Failed to process application IDs."
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // ==========================================
+  // Project Inclusion / Exclusion Handlers
+  // ==========================================
+  const handleRemoveProject = (index) => {
+    const projToRemove = projectsList[index];
+    setProjectsList((prev) => prev.filter((_, i) => i !== index));
+    setExcludedProjects((prev) => [...prev, projToRemove]);
+  };
+
+  const handleIncludeProject = (index) => {
+    const projToAdd = excludedProjects[index];
+    setExcludedProjects((prev) => prev.filter((_, i) => i !== index));
+    setProjectsList((prev) => [...prev, projToAdd]);
+  };
+
+  const handleIncludeAllExcluded = () => {
+    setProjectsList((prev) => [...prev, ...excludedProjects]);
+    setExcludedProjects([]);
   };
 
   // ==========================================
@@ -339,9 +493,9 @@ export function LoadOrderUploadPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#F4F2EB] min-h-screen">
+    <div className="flex-1 flex flex-col min-h-0">
       <Navbar
-        title="Load Order Upload & Batch Dispatch"
+        title="Upload Load Order"
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -373,13 +527,13 @@ export function LoadOrderUploadPage() {
         }
       />
 
-      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto">
         {/* TAB 1: UPLOAD & PREVIEW */}
         {activeTab === "upload" && (
           <div className="space-y-6">
             {/* Top Success Banner after commit */}
             {commitResult && (
-              <div className="bg-emerald-50 border border-emerald-300 rounded-[12px] p-6 shadow-sm space-y-3 animate-fade-in">
+              <div className="bg-emerald-50 border border-emerald-300 rounded-[12px] p-5 shadow-xs space-y-3 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold">
@@ -439,13 +593,16 @@ export function LoadOrderUploadPage() {
             )}
 
             {/* Upload & Date Card */}
-            <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-4">
+            <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-3">
                 <div>
                   <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
                     <Truck size={18} className="text-[#2F6F5E]" />
-                    <span>Upload Daily Load Order Spreadsheet</span>
+                    <span>Upload Load Order</span>
                   </h3>
+                  <p className="text-xs text-[#52607D] mt-0.5">
+                    Provide Application IDs via Excel spreadsheet upload or paste directly in group.
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -463,34 +620,93 @@ export function LoadOrderUploadPage() {
                 </div>
               </div>
 
-              {/* Upload Drop Zone */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Mode Toggle Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInputMode("file")}
+                  className={`px-3 py-1.5 rounded-[8px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    inputMode === "file"
+                      ? "bg-[#2F6F5E] text-white shadow-xs"
+                      : "bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8] hover:bg-[#EDEAE1]"
+                  }`}
+                >
+                  <FileSpreadsheet size={14} />
+                  <span>Upload Excel Spreadsheet</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInputMode("paste")}
+                  className={`px-3 py-1.5 rounded-[8px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    inputMode === "paste"
+                      ? "bg-[#2F6F5E] text-white shadow-xs"
+                      : "bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8] hover:bg-[#EDEAE1]"
+                  }`}
+                >
+                  <FileText size={14} />
+                  <span>Paste Application IDs Directly</span>
+                </button>
+              </div>
+
+              {/* Input Area */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
-                  <label
-                    htmlFor="loadOrderFile"
-                    className="border-2 border-dashed border-[#CCD5AE] hover:border-[#2F6F5E] bg-[#FAFAF8] rounded-[12px] p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors group min-h-[130px]"
-                  >
-                    <Upload
-                      size={28}
-                      className="text-[#52607D] group-hover:text-[#2F6F5E] mb-2 transition-colors"
-                    />
-                    <span className="text-xs font-bold text-[#14213D]">
-                      {file ? file.name : "Click or drag & drop Load Order file here"}
-                    </span>
-                    <span className="text-[11px] text-[#8C97AB] mt-1">
-                      Accepts Excel (.xlsx, .xls) containing Government Application IDs
-                    </span>
-                    <input
-                      id="loadOrderFile"
-                      type="file"
-                      accept=".xlsx,.xls"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
+                  {inputMode === "file" ? (
+                    <label
+                      htmlFor="loadOrderFile"
+                      className="border-2 border-dashed border-[#CCD5AE] hover:border-[#2F6F5E] bg-[#FAFAF8] rounded-[10px] p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors group min-h-[120px]"
+                    >
+                      <Upload
+                        size={24}
+                        className="text-[#52607D] group-hover:text-[#2F6F5E] mb-1.5 transition-colors"
+                      />
+                      <span className="text-xs font-bold text-[#14213D]">
+                        {file ? file.name : "Click or drag & drop Load Order file here"}
+                      </span>
+                      <span className="text-[11px] text-[#8C97AB] mt-0.5">
+                        Accepts Excel (.xlsx, .xls) containing Government Application IDs
+                      </span>
+                      <input
+                        id="loadOrderFile"
+                        type="file"
+                        accept=".xlsx,.xls"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  ) : (
+                    <div className="space-y-2">
+                      <textarea
+                        rows={4}
+                        value={pastedAppIds}
+                        onChange={(e) => setPastedAppIds(e.target.value)}
+                        placeholder={`Paste Government Application IDs here (one per line, commas, or spaces)...
+e.g.
+H-DPR-dpr-8808954450-2026-27
+H-DPR-dpr-3389958369-2026-27
+H-DPR-dpr-6428267253-2025-26`}
+                        className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#CCD5AE] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] leading-relaxed"
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#8C97AB]">
+                          {pastedAppIds.trim() ? pastedAppIds.trim().split(/[\r\n,]+/).filter(Boolean).length : 0} Application IDs entered
+                        </span>
+                        <Button
+                          type="button"
+                          onClick={handlePastedIdsPreview}
+                          loading={previewLoading}
+                          icon={Check}
+                          size="sm"
+                        >
+                          Match & Preview Application IDs
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <label className="block text-xs font-semibold text-[#14213D]">
                     Lorry / Vehicle / Batch Notes
                   </label>
@@ -508,7 +724,7 @@ export function LoadOrderUploadPage() {
                 <div className="p-4 text-center">
                   <SkeletonLoader count={2} />
                   <p className="text-xs text-[#52607D] mt-2 font-medium">
-                    Scanning workbook and extracting Government Application IDs...
+                    Matching Application IDs against database and verifying Work Order status...
                   </p>
                 </div>
               )}
@@ -523,9 +739,9 @@ export function LoadOrderUploadPage() {
 
             {/* PREVIEW SECTIONS: Show only when previewData exists */}
             {previewData && (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {/* SECTION 1: Parsed Government Application IDs & Smart Invoice Numbers */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
+                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-4 sm:p-5 shadow-xs space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-3">
                     <div>
                       <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
@@ -539,7 +755,7 @@ export function LoadOrderUploadPage() {
                     </div>
 
                     {/* Quick helper input */}
-                    <div className="flex items-center gap-2 bg-[#FAFAF8] p-1.5 rounded-[8px] border border-[#E4E1D8]">
+                    <div className="flex items-center gap-2 bg-[#FAFAF8] p-1.5 rounded-[8px] border border-[#E4E1D8] self-start sm:self-auto">
                       <span className="text-[11px] font-semibold text-[#52607D] pl-1">
                         Starting Number:
                       </span>
@@ -560,88 +776,177 @@ export function LoadOrderUploadPage() {
                           const val = document.getElementById("quickStartNum")?.value;
                           handleApplyStartingInvoiceNo(val);
                         }}
-                        className="px-2 py-1 text-[11px] font-bold bg-[#2F6F5E] text-white rounded cursor-pointer hover:bg-[#275c4e]"
+                        className="px-2.5 py-1 text-[11px] font-bold bg-[#2F6F5E] text-white rounded cursor-pointer hover:bg-[#275c4e]"
                       >
                         Auto-Fill All
                       </button>
                     </div>
                   </div>
 
-                  <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-[8px] text-xs text-amber-900 flex items-center gap-2">
-                    <Info size={16} className="shrink-0 text-amber-700" />
-                    <span>
-                      <strong>Smart Auto-Increment:</strong> Type any starting number (e.g.{" "}
-                      <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-300">
-                        300
-                      </code>
-                      ) in the first row. All following rows will automatically increment (301, 302,
-                      ...). You can still edit any individual row manually.
-                    </span>
-                  </div>
-
-                  {/* Projects Table */}
-                  <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden max-h-[380px] overflow-y-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                  {/* Projects Table with full mobile horizontal scroll support */}
+                  <div className="border border-[#EDEAE1] rounded-[10px] overflow-x-auto max-h-[420px] overflow-y-auto w-full">
+                    <table className="w-full text-left text-xs border-collapse table-auto">
                       <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] sticky top-0 z-10 text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
                         <tr>
-                          <th className="py-2.5 px-3 text-center w-12">#</th>
-                          <th className="py-2.5 px-3">Application ID</th>
-                          <th className="py-2.5 px-3">Farmer & Location</th>
-                          <th className="py-2.5 px-3">DB Status</th>
-                          <th className="py-2.5 px-3 w-56">Invoice Number (Manual / Auto)</th>
+                          <th className="py-2.5 px-3 text-center w-12 shrink-0">#</th>
+                          <th className="py-2.5 px-4 w-1/4 min-w-[220px]">Application ID</th>
+                          <th className="py-2.5 px-4 w-1/3 min-w-[200px]">Farmer & Location</th>
+                          <th className="py-2.5 px-4 w-1/5 min-w-[170px]">DB Status</th>
+                          <th className="py-2.5 px-4 w-1/5 min-w-[150px]">Invoice Number</th>
+                          <th className="py-2.5 px-3 text-center w-14 shrink-0">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#EDEAE1]">
-                        {projectsList.map((proj, idx) => (
-                          <tr key={proj.application_id} className="hover:bg-[#F9F8F5]">
-                            <td className="py-2.5 px-3 text-center font-mono text-[#8C97AB]">
-                              {idx + 1}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="font-mono font-bold text-[#14213D]">
-                                {proj.application_id}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-semibold text-[#14213D]">
-                                {proj.farmer_name || "—"}
-                              </div>
-                              <div className="text-[11px] text-[#52607D]">
-                                {[proj.village, proj.block, proj.district]
-                                  .filter(Boolean)
-                                  .join(", ") || "—"}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              {proj.exists_in_db ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                  <CheckCircle2 size={10} /> Linked ({proj.current_status})
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                                  + New Project
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <input
-                                type="text"
-                                placeholder={`e.g. ${300 + idx}`}
-                                value={proj.invoice_number}
-                                onChange={(e) => handleInvoiceNumberChange(idx, e.target.value)}
-                                className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-white border border-[#CCD5AE] rounded-[6px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-                              />
+                        {projectsList.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-6 text-center text-xs text-[#52607D]">
+                              No projects currently in this batch. You can add projects from the excluded list below.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          projectsList.map((proj, idx) => (
+                            <tr key={proj.application_id} className="hover:bg-[#F9F8F5]">
+                              <td className="py-2.5 px-3 text-center font-mono text-[#8C97AB]">
+                                {idx + 1}
+                              </td>
+                              <td className="py-2.5 px-4 whitespace-nowrap">
+                                <span className="font-mono font-bold text-[#14213D]">
+                                  {proj.application_id}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <div className="font-semibold text-[#14213D]">
+                                  {proj.farmer_name || "—"}
+                                </div>
+                                <div className="text-[11px] text-[#52607D]">
+                                  {[proj.village, proj.block, proj.district]
+                                    .filter(Boolean)
+                                    .join(", ") || "—"}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-4 whitespace-nowrap">
+                                {proj.exists_in_db ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                                    <CheckCircle2 size={10} /> Linked ({proj.current_status})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                                    + New Project
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                <input
+                                  type="text"
+                                  placeholder={`e.g. ${300 + idx}`}
+                                  value={proj.invoice_number}
+                                  onChange={(e) => handleInvoiceNumberChange(idx, e.target.value)}
+                                  className="w-full px-2.5 py-1.5 text-xs font-mono font-bold bg-white border border-[#CCD5AE] rounded-[6px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                                />
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveProject(idx)}
+                                  className="p-1 text-gray-400 hover:text-rose-600 rounded-[6px] hover:bg-rose-50 transition-colors cursor-pointer"
+                                  title="Remove from current batch (can be re-added below)"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Excluded / Other Status Projects Accordion Card */}
+                  {excludedProjects.length > 0 && (
+                    <div className="mt-4 p-3.5 bg-amber-50/50 border border-amber-200/80 rounded-[10px] space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-2.5">
+                        <div>
+                          <h4 className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                            <AlertTriangle size={15} className="text-amber-600" />
+                            <span>
+                              Excluded / Non-Work-Order Projects ({excludedProjects.length} Found)
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-amber-800/90 mt-0.5">
+                            Only projects in <strong>Issued Work Order</strong> status are included by default. You can selectively add any project below if you want to invoice it today, or leave it ignored.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleIncludeAllExcluded}
+                          className="px-2.5 py-1 text-[11px] font-bold bg-amber-700 text-white rounded-[6px] hover:bg-amber-800 cursor-pointer self-start sm:self-auto shrink-0 transition-colors flex items-center gap-1"
+                        >
+                          <Plus size={12} />
+                          <span>Include All ({excludedProjects.length})</span>
+                        </button>
+                      </div>
+
+                      <div className="border border-amber-200/80 rounded-[8px] overflow-x-auto max-h-[260px] overflow-y-auto bg-white">
+                        <table className="w-full text-left text-xs border-collapse table-auto">
+                          <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] sticky top-0 z-10 text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
+                            <tr>
+                              <th className="py-2 px-3 text-center w-12 shrink-0">#</th>
+                              <th className="py-2 px-3 min-w-[220px]">Application ID</th>
+                              <th className="py-2 px-3 min-w-[200px]">Farmer & Location</th>
+                              <th className="py-2 px-3 min-w-[180px]">Current DB Status</th>
+                              <th className="py-2 px-3 text-center w-28 shrink-0">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#EDEAE1]">
+                            {excludedProjects.map((ep, eIdx) => (
+                              <tr key={ep.application_id} className="hover:bg-amber-50/20">
+                                <td className="py-2 px-3 text-center font-mono text-[#8C97AB]">
+                                  {eIdx + 1}
+                                </td>
+                                <td className="py-2 px-3 whitespace-nowrap">
+                                  <span className="font-mono font-bold text-[#14213D]">
+                                    {ep.application_id}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <div className="font-semibold text-[#14213D]">
+                                    {ep.farmer_name || "—"}
+                                  </div>
+                                  <div className="text-[10px] text-[#52607D]">
+                                    {[ep.village, ep.block, ep.district]
+                                      .filter(Boolean)
+                                      .join(", ") || "—"}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-3 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-full border border-amber-300">
+                                    {ep.current_status || "Not in DB"}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleIncludeProject(eIdx)}
+                                    className="px-2 py-1 rounded text-[10px] font-bold bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/30 hover:bg-[#2F6F5E] hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1"
+                                    title="Add this project to current invoice batch"
+                                  >
+                                    <Plus size={10} />
+                                    Add
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* SECTION 2: Batch Material Counts (Govt vs Actual Tabs) */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#EDEAE1] pb-4">
+                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-4 sm:p-5 shadow-xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-3">
                     <div>
                       <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
                         <Package size={18} className="text-[#2F6F5E]" />
@@ -652,7 +957,7 @@ export function LoadOrderUploadPage() {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
                       <button
                         type="button"
                         onClick={handleCopyGovtToActual}
@@ -673,24 +978,9 @@ export function LoadOrderUploadPage() {
                     </div>
                   </div>
 
-                  {/* Warning Notice Banner */}
-                  <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-[10px] text-xs text-blue-950 flex items-start gap-2.5">
-                    <AlertTriangle size={18} className="text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="font-bold text-blue-900 block">
-                        Dual Ingestion & Inventory Rule:
-                      </strong>
-                      <span className="text-blue-800">
-                        • <strong>Govt Count:</strong> On-paper scheme quota reported officially.
-                        <br />• <strong>Actual Count:</strong> Physical items loaded onto the
-                        vehicle. <strong>Inventory stock is deducted ONLY for Actual items.</strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Materials Table */}
-                  <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden">
-                    <table className="w-full text-left text-xs border-collapse">
+                  {/* Materials Table with full mobile horizontal scroll support */}
+                  <div className="border border-[#EDEAE1] rounded-[10px] overflow-x-auto w-full">
+                    <table className="w-full min-w-[650px] text-left text-xs border-collapse">
                       <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
                         <tr>
                           <th className="py-3 px-4">Finished Good Item</th>
@@ -789,7 +1079,7 @@ export function LoadOrderUploadPage() {
                 </div>
 
                 {/* SECTION 3: Summary & Confirmation */}
-                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-6 shadow-xs space-y-4">
+                <div className="bg-white border border-[#E4E1D8] rounded-[12px] p-4 sm:p-5 shadow-xs space-y-3">
                   <h3 className="text-sm font-bold text-[#14213D] border-b border-[#EDEAE1] pb-3">
                     Batch Dispatch Summary & Inventory Impact
                   </h3>
@@ -936,16 +1226,17 @@ export function LoadOrderUploadPage() {
                     <tr>
                       <th className="py-3 px-4">Batch Number</th>
                       <th className="py-3 px-4">Dispatch Date</th>
-                      <th className="py-3 px-4 text-center">Projects Count</th>
-                      <th className="py-3 px-4 text-right">Govt Items Qty</th>
-                      <th className="py-3 px-4 text-right">Actual Items Qty</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-center">Projects</th>
+                      <th className="py-3 px-4 text-right">Govt Qty</th>
+                      <th className="py-3 px-4 text-right">Actual Qty</th>
                       <th className="py-3 px-4">Notes</th>
-                      <th className="py-3 px-4 text-center w-28">Actions</th>
+                      <th className="py-3 px-4 text-center w-36">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EDEAE1]">
                     {batches.map((b) => (
-                      <tr key={b.id} className="hover:bg-[#F9F8F5]">
+                      <tr key={b.id} className={`hover:bg-[#F9F8F5] ${b.is_cancelled ? "opacity-60 bg-gray-50/50" : ""}`}>
                         <td className="py-3 px-4">
                           <span className="font-mono font-bold text-[#14213D]">
                             {b.batch_number}
@@ -960,7 +1251,19 @@ export function LoadOrderUploadPage() {
                         </td>
 
                         <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                          {b.is_cancelled ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              ✕ Cancelled
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              ✓ Invoiced
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
                             {b.total_projects_count} Projects
                           </span>
                         </td>
@@ -974,18 +1277,34 @@ export function LoadOrderUploadPage() {
                         </td>
 
                         <td className="py-3 px-4 text-[#52607D] truncate max-w-xs">
-                          {b.notes || "—"}
+                          {b.is_cancelled && b.cancellation_reason
+                            ? `Cancelled: ${b.cancellation_reason}`
+                            : b.notes || "—"}
                         </td>
 
                         <td className="py-3 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenBatchDetails(b.id)}
-                            className="px-2.5 py-1 text-xs font-bold text-[#2F6F5E] bg-[#EAF3F0] hover:bg-[#d8ece6] rounded-[6px] transition-colors cursor-pointer inline-flex items-center gap-1"
-                          >
-                            <Eye size={13} />
-                            <span>Details</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenBatchDetails(b.id)}
+                              className="px-2 py-1 text-xs font-bold text-[#2F6F5E] bg-[#EAF3F0] hover:bg-[#d8ece6] rounded-[6px] transition-colors cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <Eye size={12} />
+                              <span>Details</span>
+                            </button>
+
+                            {!b.is_cancelled && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCancelModal(b)}
+                                className="px-2 py-1 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-[6px] transition-colors cursor-pointer inline-flex items-center gap-1"
+                                title="Cancel batch, reverse inventory stock & unlink invoices"
+                              >
+                                <Trash2 size={12} />
+                                <span>Cancel</span>
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1015,6 +1334,17 @@ export function LoadOrderUploadPage() {
       >
         {selectedBatchModal && (
           <div className="space-y-5">
+            {selectedBatchModal.is_cancelled && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-[8px] text-xs text-rose-800 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <AlertTriangle size={14} className="text-rose-600" />
+                  <span>This Batch was Cancelled on {formatDateTime(selectedBatchModal.cancelled_at)}</span>
+                </div>
+                <div>Reason: <strong>{selectedBatchModal.cancellation_reason || "Cancelled"}</strong></div>
+                <div className="text-[11px] text-rose-700">All linked invoice numbers were removed from government projects and inventory stock was restored.</div>
+              </div>
+            )}
+
             {/* Top Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#E4E1D8]">
@@ -1147,7 +1477,20 @@ export function LoadOrderUploadPage() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-[#EDEAE1]">
+            <div className="flex items-center justify-between pt-3 border-t border-[#EDEAE1]">
+              {!selectedBatchModal.is_cancelled ? (
+                <button
+                  type="button"
+                  onClick={() => handleOpenCancelModal(selectedBatchModal)}
+                  className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-[8px] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Trash2 size={14} />
+                  <span>Cancel & Reverse Batch</span>
+                </button>
+              ) : (
+                <div />
+              )}
+
               <Button variant="secondary" onClick={() => setSelectedBatchModal(null)}>
                 Close
               </Button>
@@ -1155,8 +1498,60 @@ export function LoadOrderUploadPage() {
           </div>
         )}
       </Modal>
+
+      {/* Batch Cancellation Confirmation Modal */}
+      <Modal
+        isOpen={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        title={`Cancel Load Order Batch #${batchToCancel?.batch_number || ""}`}
+      >
+        <form onSubmit={handleConfirmCancelBatch} className="space-y-4">
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-[8px] text-xs text-rose-900 space-y-2">
+            <div className="font-bold flex items-center gap-1.5 text-rose-950">
+              <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+              <span>Are you sure you want to cancel this load order batch?</span>
+            </div>
+            <ul className="list-disc list-inside space-y-1 text-rose-800 text-[11px]">
+              <li>
+                <strong>Unlinks & Clears</strong> invoice numbers on all {batchToCancel?.total_projects_count} projects and reverts status to <strong>Issued Work Order</strong>.
+              </li>
+              <li>
+                <strong>Restores & Reverses</strong> {batchToCancel?.total_actual_quantity} units of actual finished goods back to on-hand inventory stock.
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Reason for Cancellation (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Uploaded incorrect file / Shipment cancelled"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-rose-500 text-[#14213D]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+            <Button variant="secondary" type="button" onClick={() => setCancelModalOpen(false)}>
+              Keep Batch
+            </Button>
+            <button
+              type="submit"
+              disabled={cancelling}
+              className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-[8px] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Trash2 size={13} />
+              <span>{cancelling ? "Reversing..." : "Confirm Cancellation"}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
 
 export default LoadOrderUploadPage;
+

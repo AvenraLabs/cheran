@@ -45,6 +45,7 @@ export function Sidebar({ isOpen, onClose }) {
           { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
           { label: "Excel Imports", path: "/imports", icon: FileText },
           { label: "Dealers Directory", path: "/dealers", icon: Users },
+          { label: "Commission", path: "/commissions", icon: Receipt },
         ],
       },
       {
@@ -90,6 +91,7 @@ export function Sidebar({ isOpen, onClose }) {
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
           { label: "Excel Imports", path: "/imports", icon: FileText },
           { label: "Dealers Directory", path: "/dealers", icon: Users },
+          { label: "Commission", path: "/commissions", icon: Receipt },
         ],
       },
     ];
@@ -105,6 +107,7 @@ export function Sidebar({ isOpen, onClose }) {
           { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
           { label: "Excel Imports", path: "/imports", icon: FileText },
           { label: "Dealers Directory", path: "/dealers", icon: Users },
+          { label: "Commission", path: "/commissions", icon: Receipt },
         ],
       },
     ];

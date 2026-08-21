@@ -52,6 +52,19 @@ const LoadOrderBatch = db.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    is_cancelled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    cancelled_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    cancellation_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
   },
   {
     tableName: "load_order_batches",

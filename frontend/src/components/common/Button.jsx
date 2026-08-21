@@ -24,12 +24,14 @@ export function Button({
     primary:
       "bg-[#2F6F5E] text-white hover:bg-[#245749] focus:ring-[#2F6F5E] shadow-xs",
     secondary:
-      "bg-white border border-[#E4E1D8] text-[#14213D] hover:bg-[#FAFAF8] hover:border-[#D3E6E0] focus:ring-[#2F6F5E] shadow-xs",
+      "bg-white border border-[#E4E1D8] text-[#14213D] hover:bg-[#FAFAF8] hover:border-[#CCD5AE] focus:ring-[#2F6F5E] shadow-xs",
+    outline:
+      "bg-white border border-[#CCD5AE] text-[#14213D] hover:bg-[#EAF3F0] hover:text-[#2F6F5E] hover:border-[#2F6F5E] focus:ring-[#2F6F5E] shadow-xs",
     danger:
       "bg-[#B0403A] text-white hover:bg-[#8F332E] focus:ring-[#B0403A] shadow-xs",
     ghost:
       "bg-transparent text-[#52607D] hover:text-[#14213D] hover:bg-[#EAF3F0] focus:ring-[#2F6F5E]",
-  }[variant];
+  }[variant] || "bg-[#2F6F5E] text-white hover:bg-[#245749] focus:ring-[#2F6F5E] shadow-xs";
 
   return (
     <button

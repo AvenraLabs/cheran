@@ -305,3 +305,114 @@ export async function getLoadOrderBatchById(id) {
   }
   return batch;
 }
+
+/**
+ * Cancel and reverse a Load Order Batch:
+ * 1. Restores/reverses all deducted inventory stock for actual items.
+ * 2. Unlinks/clears invoice_number and invoice_date on all linked projects.
+ * 3. Reverts project status if it was INVOICED to 'Issued Work Order'.
+ * 4. Records cancellation history audit.
+ * 5. Marks batch as is_cancelled = true.
+ */
+export async function cancelLoadOrderBatch(id, { reason = null } = {}) {
+  const batch = await LoadOrderBatch.findByPk(id);
+  if (!batch) {
+    throw new AppError(`Load Order Batch #${id} not found`, 404);
+  }
+
+  if (batch.is_cancelled) {
+    throw new AppError("This Load Order batch has already been cancelled", 400);
+  }
+
+  const transaction = await db.transaction();
+
+  try {
+    const cancelDate = new Date().toISOString().split("T")[0];
+
+    // 1. Reverse Inventory Movements for Actual Items
+    for (const item of batch.actual_items_snapshot || []) {
+      const qty = parseFloat(item.quantity) || 0;
+      if (item.item_id && qty > 0) {
+        await applyStockMovement({
+          itemId: item.item_id,
+          movementType: "REVERSAL",
+          quantity: qty,
+          unitId: null,
+          referenceType: "LOAD_ORDER_BATCH_CANCEL",
+          referenceId: batch.id,
+          movementDate: cancelDate,
+          unitCost: item.unit_price || 0,
+          notes: `Reversal of Load Order Batch #${batch.batch_number} (${reason || "Batch Cancelled"})`,
+          transaction,
+        });
+      }
+    }
+
+    // 2. Revert Linked Projects & Remove Invoice Info
+    const revertedProjects = [];
+    for (const projItem of batch.projects_snapshot || []) {
+      const rawAppId = typeof projItem === "string" ? projItem : projItem?.application_id;
+      const appId = normalizeApplicationId(rawAppId);
+      if (!appId) continue;
+
+      const project = await GovernmentProject.findOne({
+        where: db.where(db.fn("UPPER", db.col("application_id")), appId),
+        transaction,
+      });
+
+      if (project) {
+        // Clear invoice number and date if they match this batch or dispatch date
+        const updates = {};
+        if (project.invoice_date === batch.dispatch_date) {
+          updates.invoice_date = null;
+        }
+        if (projItem.invoice_number && project.invoice_number === String(projItem.invoice_number).trim()) {
+          updates.invoice_number = null;
+        } else if (!project.invoice_date || project.invoice_date === batch.dispatch_date) {
+          updates.invoice_number = null;
+        }
+
+        // If status is currently INVOICED, revert to "Issued Work Order"
+        if (project.current_status === "INVOICED") {
+          updates.current_status = "Issued Work Order";
+          updates.current_status_date = cancelDate;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await project.update(updates, { transaction });
+        }
+
+        // Add history audit entry
+        await GovernmentProjectStatusHistory.create(
+          {
+            project_id: project.id,
+            status: project.current_status,
+            status_date: cancelDate,
+            remarks: `Cancelled Load Order Batch #${batch.batch_number}: Removed Invoice #${projItem?.invoice_number || "—"} and restored stock.`,
+            observed_at: new Date(),
+          },
+          { transaction }
+        );
+
+        revertedProjects.push(project.application_id);
+      }
+    }
+
+    // 3. Mark Batch as Cancelled
+    batch.is_cancelled = true;
+    batch.cancelled_at = new Date();
+    batch.cancellation_reason = reason ? reason.trim() : "Cancelled by user";
+    await batch.save({ transaction });
+
+    await transaction.commit();
+
+    return {
+      batch,
+      reverted_projects_count: revertedProjects.length,
+      reverted_actual_items_count: (batch.actual_items_snapshot || []).length,
+    };
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+}

@@ -103,15 +103,13 @@ export async function importHistoricalInvoiceJson(jsonData) {
     const transaction = await db.transaction();
 
     try {
-      const batchAppIds = batch.map((b) => b.application_id);
+      const batchAppIds = batch.map((b) => normalizeApplicationId(b.application_id)).filter(Boolean);
 
       // Preload all existing projects in 1 single query for this batch
       const existingProjects = await GovernmentProject.findAll({
-        where: {
-          application_id: {
-            [Op.in]: batchAppIds,
-          },
-        },
+        where: db.where(db.fn("UPPER", db.col("GovernmentProject.application_id")), {
+          [Op.in]: batchAppIds,
+        }),
         transaction,
       });
 

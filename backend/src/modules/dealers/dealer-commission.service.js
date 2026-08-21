@@ -56,37 +56,54 @@ export async function calculateProjectDealerCommission(projectId) {
   const applicableGstPct = effectiveSlab.gst_percentage;
   const applicableFittingsPct = effectiveSlab.fittings_percentage;
 
+  // Financial values directly from Government Project (prioritize State Restricted Amount as actual payable amount)
+  const rawStateRestricted = parseFloat(project.state_restricted_amount) || 0;
+  const rawInvoiceAmount = parseFloat(project.invoice_amount) || 0;
+  const rawQuotationSubsidy = parseFloat(project.quotation_subsidy_amount) || 0;
+  const rawFarmerContribution = parseFloat(project.farmer_contribution) || 0;
+
+  // Base government subsidy used for commission calculation (Strictly State Restricted Amount)
+  const grossGovAmount = rawStateRestricted > 0
+    ? rawStateRestricted
+    : rawInvoiceAmount > 0
+    ? rawInvoiceAmount
+    : rawQuotationSubsidy;
+
+  // Government Deduction / Penalty (Invoice Amount - State Restricted Amount)
+  const govDeduction = Math.max(0, Math.floor(rawInvoiceAmount - rawStateRestricted));
+
+  // Determine Fund Type and Split Percentages:
+  // 40%-SPARSH and SPARSH get 60% / 40% split.
+  // Regular and First Fund SNA SPARSH (and others) get 55% / 45% split.
+  const fundType = (project.fund_type || "Regular").trim();
+  const normalizedFundType = fundType.toUpperCase();
+  const is6040 = normalizedFundType === "40%-SPARSH" || normalizedFundType === "SPARSH";
+  const fund1SplitPct = is6040 ? 60 : 55;
+  const fund2SplitPct = is6040 ? 40 : 45;
+
   // Base Net Amount and Fittings Cost:
-  // Derived from Quotation Subsidy after reducing GST and Fittings sequentially
+  // Derived after reducing GST and Fittings sequentially, truncated to whole rupees (no decimal paise)
   let baseAmount = 0;
   let fittingsAmount = 0;
   let subsidyBreakdown = null;
 
-  if (project.quotation_subsidy_amount && parseFloat(project.quotation_subsidy_amount) > 0) {
+  if (grossGovAmount > 0) {
     subsidyBreakdown = calculateCommissionAndFittingsBreakdown(
-      project.quotation_subsidy_amount,
+      grossGovAmount,
       applicableGstPct,
       applicableFittingsPct
     );
-    baseAmount = subsidyBreakdown.base_amount;
-    fittingsAmount = subsidyBreakdown.fittings_amount;
+    baseAmount = Math.floor(subsidyBreakdown.base_amount);
+    fittingsAmount = Math.floor(subsidyBreakdown.fittings_amount);
   } else {
     const netInvoicedAmount = invoices.reduce((sum, inv) => {
       return sum + (parseFloat(inv.net_item_amount) || 0);
     }, 0);
     if (netInvoicedAmount > 0) {
-      baseAmount = netInvoicedAmount;
-      fittingsAmount = invoices.reduce((sum, inv) => {
+      baseAmount = Math.floor(netInvoicedAmount);
+      fittingsAmount = Math.floor(invoices.reduce((sum, inv) => {
         return sum + (parseFloat(inv.fittings_amount) || 0);
-      }, 0);
-    } else if (project.invoice_amount && parseFloat(project.invoice_amount) > 0) {
-      subsidyBreakdown = calculateCommissionAndFittingsBreakdown(
-        project.invoice_amount,
-        applicableGstPct,
-        applicableFittingsPct
-      );
-      baseAmount = subsidyBreakdown.base_amount;
-      fittingsAmount = subsidyBreakdown.fittings_amount;
+      }, 0));
     }
   }
 
@@ -94,6 +111,16 @@ export async function calculateProjectDealerCommission(projectId) {
   if (!dealer) {
     return {
       dealer: null,
+      fund_type: fundType,
+      fund1_split_pct: fund1SplitPct,
+      fund2_split_pct: fund2SplitPct,
+      financials: {
+        quotation_subsidy_amount: Math.floor(rawQuotationSubsidy),
+        farmer_contribution: Math.floor(rawFarmerContribution),
+        invoice_amount: Math.floor(rawInvoiceAmount),
+        state_restricted_amount: Math.floor(rawStateRestricted),
+        gov_deduction: govDeduction,
+      },
       base_amount: baseAmount,
       fittings_amount: fittingsAmount,
       base_percentage: null,
@@ -115,10 +142,10 @@ export async function calculateProjectDealerCommission(projectId) {
       ? parseFloat(dealer.commission_percentage)
       : 0.0;
 
-  // Original Total Commission before penalties
-  const originalTotalCommission = parseFloat(((baseAmount * basePercentage) / 100.0).toFixed(2));
+  // Original Total Commission before penalties (truncated paise)
+  const originalTotalCommission = Math.floor((baseAmount * basePercentage) / 100.0);
   // Fixed penalty amount per 45-day cycle: 1% of ORIGINAL TOTAL COMMISSION
-  const fixedPenaltyPerCycle = parseFloat(((originalTotalCommission * 1.0) / 100.0).toFixed(2));
+  const fixedPenaltyPerCycle = Math.floor((originalTotalCommission * 1.0) / 100.0);
 
   // Fetch status history in chronological order
   const histories = await GovernmentProjectStatusHistory.findAll({
@@ -147,7 +174,7 @@ export async function calculateProjectDealerCommission(projectId) {
     phase1DelayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
     if (phase1DelayDays > 45) {
       phase1Cycles = Math.floor(phase1DelayDays / 45);
-      phase1TotalPenalty = parseFloat((phase1Cycles * fixedPenaltyPerCycle).toFixed(2));
+      phase1TotalPenalty = Math.floor(phase1Cycles * fixedPenaltyPerCycle);
     }
   }
 
@@ -179,7 +206,7 @@ export async function calculateProjectDealerCommission(projectId) {
     phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
     if (phase2DelayDays > 45) {
       phase2Cycles = Math.floor(phase2DelayDays / 45);
-      phase2TotalPenalty = parseFloat((phase2Cycles * fixedPenaltyPerCycle).toFixed(2));
+      phase2TotalPenalty = Math.floor(phase2Cycles * fixedPenaltyPerCycle);
     }
   }
 
@@ -193,15 +220,15 @@ export async function calculateProjectDealerCommission(projectId) {
     parseFloat(project.final_fund_amount || 0) > 0 ||
     FINAL_FUND_STATUSES.some((st) => st.toLowerCase() === project.current_status?.toLowerCase());
 
-  // 55% First Fund Commission and 45% Final Fund Commission base splits
-  const fund1BaseAmount = parseFloat(((originalTotalCommission * 55.0) / 100.0).toFixed(2));
-  const fund2BaseAmount = parseFloat((originalTotalCommission - fund1BaseAmount).toFixed(2));
+  // Dynamic milestone splits based on Fund Type (60%/40% for SPARSH, 55%/45% for Regular)
+  const fund1BaseAmount = Math.floor((originalTotalCommission * fund1SplitPct) / 100.0);
+  const fund2BaseAmount = Math.floor(originalTotalCommission - fund1BaseAmount);
 
-  // Deduct Phase 1 penalty from First Fund (55%) and Phase 2 penalty from Final Fund (45%)
-  const part1Amount = Math.max(0, parseFloat((fund1BaseAmount - phase1TotalPenalty).toFixed(2)));
-  const part2Amount = Math.max(0, parseFloat((fund2BaseAmount - phase2TotalPenalty).toFixed(2)));
-  const totalCommissionAmount = parseFloat((part1Amount + part2Amount).toFixed(2));
-  const totalPenaltyAmount = parseFloat((phase1TotalPenalty + phase2TotalPenalty).toFixed(2));
+  // Deduct Phase 1 penalty from First Fund and Phase 2 penalty from Final Fund
+  const part1Amount = Math.max(0, Math.floor(fund1BaseAmount - phase1TotalPenalty));
+  const part2Amount = Math.max(0, Math.floor(fund2BaseAmount - phase2TotalPenalty));
+  const totalCommissionAmount = Math.floor(part1Amount + part2Amount);
+  const totalPenaltyAmount = Math.floor(phase1TotalPenalty + phase2TotalPenalty);
   const totalCycles = phase1Cycles + phase2Cycles;
   const penaltyPercentage = Math.min(100.0, parseFloat((totalCycles * 1.0).toFixed(2)));
 
@@ -210,30 +237,6 @@ export async function calculateProjectDealerCommission(projectId) {
     baseAmount > 0
       ? parseFloat(((totalCommissionAmount / baseAmount) * 100.0).toFixed(2))
       : basePercentage;
-
-  // Load existing commission record if already created to preserve payment states
-  let commissionRecord = await DealerCommission.findOne({
-    where: { project_id: projectId },
-  });
-
-  const part1Status = commissionRecord?.part1_status === "PAID"
-    ? "PAID"
-    : "PENDING";
-
-  const part2Status = commissionRecord?.part2_status === "PAID"
-    ? "PAID"
-    : "PENDING";
-
-  const fittingsStatus = commissionRecord?.fittings_status === "PAID"
-    ? "PAID"
-    : "PENDING";
-
-  const overallStatus =
-    part1Status === "PAID" && part2Status === "PAID"
-      ? "PAID"
-      : part1Status === "PAID" || part2Status === "PAID"
-      ? "APPROVED"
-      : "PENDING";
 
   const breakdownJson = {
     originalTotalCommission,
@@ -255,50 +258,11 @@ export async function calculateProjectDealerCommission(projectId) {
     isFinalFundReached,
     finalFundDate: finalFundHistory?.status_date || null,
     invoicesCount: invoices.length,
+    fundType,
+    fund1SplitPct,
+    fund2SplitPct,
+    govDeduction,
   };
-
-  // Upsert Dealer Commission Record
-  if (dealer) {
-    if (!commissionRecord) {
-      commissionRecord = await DealerCommission.create({
-        dealer_id: dealer.id,
-        project_id: project.id,
-        commission_percentage: basePercentage,
-        penalty_percentage: penaltyPercentage,
-        effective_percentage: effectivePercentage,
-        base_amount: baseAmount,
-        commission_amount: totalCommissionAmount,
-        status: overallStatus,
-        part1_percentage: 55.0,
-        part1_amount: part1Amount,
-        part1_status: part1Status,
-        part2_percentage: 45.0,
-        part2_amount: part2Amount,
-        part2_status: part2Status,
-        fittings_amount: fittingsAmount,
-        fittings_status: fittingsStatus,
-        breakdown_json: breakdownJson,
-      });
-    } else {
-      await commissionRecord.update({
-        dealer_id: dealer.id,
-        commission_percentage: basePercentage,
-        penalty_percentage: penaltyPercentage,
-        effective_percentage: effectivePercentage,
-        base_amount: baseAmount,
-        commission_amount: totalCommissionAmount,
-        status: overallStatus,
-        part1_percentage: 55.0,
-        part1_amount: part1Amount,
-        part1_status: part1Status,
-        part2_percentage: 45.0,
-        part2_amount: part2Amount,
-        part2_status: part2Status,
-        fittings_amount: fittingsAmount,
-        breakdown_json: breakdownJson,
-      });
-    }
-  }
 
   return {
     dealer: dealer
@@ -308,6 +272,16 @@ export async function calculateProjectDealerCommission(projectId) {
           commission_percentage: basePercentage,
         }
       : null,
+    fund_type: fundType,
+    fund1_split_pct: fund1SplitPct,
+    fund2_split_pct: fund2SplitPct,
+    financials: {
+      quotation_subsidy_amount: Math.floor(rawQuotationSubsidy),
+      farmer_contribution: Math.floor(rawFarmerContribution),
+      invoice_amount: Math.floor(rawInvoiceAmount),
+      state_restricted_amount: Math.floor(rawStateRestricted),
+      gov_deduction: govDeduction,
+    },
     applicable_tax_slab: {
       gst_percentage: applicableGstPct,
       fittings_percentage: applicableFittingsPct,
@@ -323,35 +297,21 @@ export async function calculateProjectDealerCommission(projectId) {
     penalty_amount: totalPenaltyAmount,
     effective_percentage: effectivePercentage,
     total_commission_amount: totalCommissionAmount,
-    status: overallStatus,
     part1: {
-      percentage: 55.0,
+      percentage: fund1SplitPct,
       amount: part1Amount,
-      status: part1Status,
       is_eligible: isFirstFundReached,
-      paid_date: commissionRecord?.part1_paid_date || null,
-      paid_ref: commissionRecord?.part1_paid_ref || null,
-      notes: commissionRecord?.part1_notes || null,
     },
     part2: {
-      percentage: 45.0,
+      percentage: fund2SplitPct,
       amount: part2Amount,
-      status: part2Status,
       is_eligible: isFinalFundReached,
-      paid_date: commissionRecord?.part2_paid_date || null,
-      paid_ref: commissionRecord?.part2_paid_ref || null,
-      notes: commissionRecord?.part2_notes || null,
     },
     fittings: {
       percentage: applicableFittingsPct,
       amount: fittingsAmount,
-      status: commissionRecord?.fittings_status || "PENDING",
-      paid_date: commissionRecord?.fittings_paid_date || null,
-      paid_ref: commissionRecord?.fittings_paid_ref || null,
-      notes: commissionRecord?.fittings_notes || null,
     },
     breakdown: breakdownJson,
-    commission_record_id: commissionRecord?.id || null,
   };
 }
 

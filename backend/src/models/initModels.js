@@ -39,6 +39,11 @@ import InvoiceItem from "../modules/invoices/invoice-item.model.js";
 import LoadOrderBatch from "../modules/invoices/load-order-batch.model.js";
 import SchemeTaxSlab from "../modules/settings/scheme-tax-slab.model.js";
 
+// Proceedings & Fund Percentages
+import FundPercentageMaster from "../modules/proceedings/fund-percentage.model.js";
+import ProceedingBatch from "../modules/proceedings/proceeding-batch.model.js";
+import ProceedingBatchProject from "../modules/proceedings/proceeding-batch-project.model.js";
+
 // ==========================================
 // 1. Government Module Associations
 // ==========================================
@@ -372,11 +377,49 @@ Dealer.hasMany(Invoice, {
   as: "invoices",
   onDelete: "SET NULL",
 });
-Invoice.belongsTo(Dealer, {
+// ==========================================
+// 8. Proceedings Associations
+// ==========================================
+
+FundPercentageMaster.hasMany(ProceedingBatch, {
+  foreignKey: "fund_percentage_id",
+  as: "batches",
+  onDelete: "SET NULL",
+});
+ProceedingBatch.belongsTo(FundPercentageMaster, {
+  foreignKey: "fund_percentage_id",
+  as: "fund_percentage",
+});
+
+ProceedingBatch.hasMany(ProceedingBatchProject, {
+  foreignKey: "proceeding_batch_id",
+  as: "projects",
+  onDelete: "CASCADE",
+});
+ProceedingBatchProject.belongsTo(ProceedingBatch, {
+  foreignKey: "proceeding_batch_id",
+  as: "batch",
+});
+
+GovernmentProject.hasMany(ProceedingBatchProject, {
+  foreignKey: "project_id",
+  as: "proceeding_links",
+  onDelete: "SET NULL",
+});
+ProceedingBatchProject.belongsTo(GovernmentProject, {
+  foreignKey: "project_id",
+  as: "project",
+});
+
+Dealer.hasMany(ProceedingBatchProject, {
+  foreignKey: "dealer_id",
+  as: "proceeding_projects",
+  onDelete: "SET NULL",
+});
+ProceedingBatchProject.belongsTo(Dealer, {
   foreignKey: "dealer_id",
   as: "dealer",
 });
-
 
 export {
   Dealer,
@@ -406,4 +449,7 @@ export {
   InvoiceItem,
   LoadOrderBatch,
   SchemeTaxSlab,
+  FundPercentageMaster,
+  ProceedingBatch,
+  ProceedingBatchProject,
 };

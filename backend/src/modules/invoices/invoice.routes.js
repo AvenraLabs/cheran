@@ -19,7 +19,12 @@ router.post(
 
 router.post(
   "/load-order/preview",
-  uploadExcel.single("file"),
+  (req, res, next) => {
+    if (req.is("json")) {
+      return next();
+    }
+    uploadExcel.single("file")(req, res, next);
+  },
   invoiceController.previewLoadOrder
 );
 
@@ -30,6 +35,7 @@ router.post(
 
 router.get("/load-order/batches", invoiceController.listLoadOrderBatches);
 router.get("/load-order/batches/:id", invoiceController.getLoadOrderBatchById);
+router.post("/load-order/batches/:id/cancel", invoiceController.cancelLoadOrderBatch);
 
 // 2. Standard Invoice CRUD
 router

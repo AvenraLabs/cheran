@@ -1,11 +1,12 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import * as invoiceService from "./invoice.service.js";
 import { importHistoricalInvoiceJson as importJsonService } from "./invoice-json-import.service.js";
-import { parseLoadOrderBuffer } from "./load-order-parser.service.js";
+import { parseLoadOrderBuffer, parseLoadOrderAppIdsText } from "./load-order-parser.service.js";
 import {
   commitLoadOrder as commitLoadOrderService,
   listLoadOrderBatches as listLoadOrderBatchesService,
   getLoadOrderBatchById as getLoadOrderBatchByIdService,
+  cancelLoadOrderBatch as cancelLoadOrderBatchService,
 } from "./load-order-commit.service.js";
 import AppError from "../../shared/appError.js";
 
@@ -82,14 +83,26 @@ export const importHistoricalInvoiceJson = asyncHandler(async (req, res) => {
 });
 
 /**
- * Load Order XLS Upload & Preview Controller
+ * Load Order Upload & Preview Controller
+ * Accepts either:
+ * 1. Multipart Excel file upload (.xlsx, .xls)
+ * 2. JSON body with pasted application_ids_text (multi-line / comma-separated)
  */
 export const previewLoadOrder = asyncHandler(async (req, res) => {
-  if (!req.file) {
-    throw new AppError("Please upload a Load Order Excel file (.xls, .xlsx)", 400);
+  let result;
+  if (req.file) {
+    result = await parseLoadOrderBuffer(req.file.buffer);
+  } else if (req.body && (req.body.application_ids_text || req.body.application_ids)) {
+    const text =
+      req.body.application_ids_text ||
+      (Array.isArray(req.body.application_ids)
+        ? req.body.application_ids.join("\n")
+        : req.body.application_ids);
+    result = await parseLoadOrderAppIdsText(text, req.body.dispatch_date || null);
+  } else {
+    throw new AppError("Please upload a Load Order Excel file or paste Government Application IDs", 400);
   }
 
-  const result = await parseLoadOrderBuffer(req.file.buffer);
   res.status(200).json({
     status: "success",
     data: result,
@@ -121,5 +134,14 @@ export const getLoadOrderBatchById = asyncHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     data: { batch },
+  });
+});
+
+export const cancelLoadOrderBatch = asyncHandler(async (req, res) => {
+  const result = await cancelLoadOrderBatchService(req.params.id, req.body);
+  res.status(200).json({
+    status: "success",
+    message: "Load Order batch cancelled and all inventory and invoice links reversed successfully",
+    data: result,
   });
 });

@@ -18,6 +18,7 @@ export async function listProjects(filters = {}) {
     year,
     farmer_name,
     application_id,
+    fund_type,
     search,
     min_status_days,
     orphan_only,
@@ -33,6 +34,7 @@ export async function listProjects(filters = {}) {
   if (district) where.district = { [Op.iLike]: `%${district}%` };
   if (block) where.block = { [Op.iLike]: `%${block}%` };
   if (village) where.village = { [Op.iLike]: `%${village}%` };
+  if (fund_type) where.fund_type = fund_type;
   if (dealer_id) {
     if (dealer_id === "UNASSIGNED" || dealer_id === "NONE" || dealer_id === "null") {
       where.dealer_id = null;

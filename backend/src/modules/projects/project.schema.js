@@ -10,6 +10,8 @@ export const listProjectsSchema = z.object({
     year: z.string().optional(),
     farmer_name: z.string().optional(),
     application_id: z.string().optional(),
+    fund_type: z.string().optional(),
+    orphan_only: z.union([z.string(), z.boolean()]).optional(),
     search: z.string().optional(),
     min_status_days: z.string().optional(),
     page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),

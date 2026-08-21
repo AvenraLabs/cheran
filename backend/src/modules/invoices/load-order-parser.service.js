@@ -240,3 +240,102 @@ export async function parseLoadOrderBuffer(fileBuffer) {
     availableFinishedGoods: formattedFinishedGoods,
   };
 }
+
+/**
+ * Parse multi-line or comma-separated pasted Application IDs
+ */
+export async function parseLoadOrderAppIdsText(applicationIdsText, customDate = null) {
+  if (!applicationIdsText || typeof applicationIdsText !== "string" || !applicationIdsText.trim()) {
+    throw new AppError("Please provide at least one Government Project / Application ID", 400);
+  }
+
+  // Parse lines or comma/space separated strings
+  const lines = applicationIdsText
+    .split(/[\r\n,]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+
+  const uniqueAppIds = [...new Set(lines)];
+
+  if (uniqueAppIds.length === 0) {
+    throw new AppError("No valid Application IDs found in input", 400);
+  }
+
+  // Check each Application ID in database (case-insensitive)
+  const existingProjects = await GovernmentProject.findAll({
+    where: db.where(db.fn("UPPER", db.col("application_id")), {
+      [Op.in]: uniqueAppIds,
+    }),
+    attributes: [
+      "id",
+      "application_id",
+      "farmer_name",
+      "district",
+      "block",
+      "village",
+      "current_status",
+      "current_status_date",
+      "invoice_date",
+    ],
+  });
+
+  const existingMap = new Map();
+  existingProjects.forEach((p) => {
+    existingMap.set(p.application_id, p);
+    existingMap.set(p.application_id.toUpperCase(), p);
+  });
+
+  const projectsSummary = uniqueAppIds.map((appId) => {
+    const dbProj = existingMap.get(appId);
+    return {
+      application_id: appId,
+      exists_in_db: Boolean(dbProj),
+      project_id: dbProj ? dbProj.id : null,
+      farmer_name: dbProj?.farmer_name || "Farmer",
+      district: dbProj?.district || null,
+      block: dbProj?.block || null,
+      village: dbProj?.village || null,
+      area_ha: null,
+      current_status: dbProj ? dbProj.current_status : "NEW_PROJECT",
+      current_status_date: dbProj?.current_status_date || null,
+      existing_invoice_date: dbProj?.invoice_date || null,
+    };
+  });
+
+  // Fetch all active Finished Goods from Item Master
+  const finishedGoods = await Item.findAll({
+    where: {
+      item_type: "FINISHED_GOOD",
+      is_active: true,
+    },
+    include: [{ model: Unit, as: "unit", attributes: ["id", "name", "symbol"] }],
+    order: [["name", "ASC"]],
+  });
+
+  const formattedFinishedGoods = finishedGoods.map((fg) => ({
+    id: fg.id,
+    code: fg.code,
+    name: fg.name,
+    category: fg.category,
+    unit_id: fg.unit_id,
+    unit_symbol: fg.unit?.symbol || "NOS",
+    unit_price: parseFloat(fg.unit_price) || 0.0,
+    default_quantity: 0,
+  }));
+
+  const todayKolkata = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+
+  return {
+    totalProjectsFound: uniqueAppIds.length,
+    existingProjectsCount: existingProjects.length,
+    newProjectsCount: uniqueAppIds.length - existingProjects.length,
+    defaultInvoiceDate: customDate || todayKolkata,
+    projects: projectsSummary,
+    availableFinishedGoods: formattedFinishedGoods,
+  };
+}

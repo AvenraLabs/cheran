@@ -14,6 +14,8 @@ import LoadOrderUploadPage from "./pages/LoadOrderUploadPage.jsx";
 import DirectSalesPage from "./pages/DirectSalesPage.jsx";
 import CreateDirectSalePage from "./pages/CreateDirectSalePage.jsx";
 import DealersPage from "./pages/DealersPage.jsx";
+import CommissionProceedingsPage from "./pages/CommissionProceedingsPage.jsx";
+import CommissionBatchDetailPage from "./pages/CommissionBatchDetailPage.jsx";
 
 // Core ERP Pages
 import ItemsPage from "./pages/ItemsPage.jsx";
@@ -110,6 +112,11 @@ export function App() {
           <Route path="projects/:id" element={<ProjectDetailPage />} />
           <Route path="imports" element={<ImportsPage />} />
           <Route path="dealers" element={<DealersPage />} />
+          <Route path="commissions" element={<CommissionProceedingsPage />} />
+          <Route path="commissions/:id" element={<CommissionBatchDetailPage />} />
+          <Route path="commission" element={<CommissionProceedingsPage />} />
+          <Route path="dealers/commissions" element={<CommissionProceedingsPage />} />
+          <Route path="dealers/commission" element={<CommissionProceedingsPage />} />
 
           {/* Operations Routes (Allowed for USER & ADMIN, Forbidden for DEALER) */}
           <Route
