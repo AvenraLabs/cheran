@@ -16,24 +16,36 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const verifyAuth = async () => {
       const savedToken = localStorage.getItem("cheran_auth_token");
       if (savedToken) {
         try {
           const res = await api.get("/auth/me");
-          if (res.data?.user) {
-            setUser(res.data.user);
-            localStorage.setItem("cheran_auth_user", JSON.stringify(res.data.user));
+          const authUser = res?.data?.user || res?.user || res?.data;
+          if (authUser && isMounted) {
+            setUser(authUser);
+            localStorage.setItem("cheran_auth_user", JSON.stringify(authUser));
           }
         } catch (err) {
-          console.warn("Session verification failed, logging out:", err.message);
-          logout();
+          console.warn("Session verification failed, logging out:", err?.message || err);
+          if (isMounted) {
+            logout();
+          }
         }
       }
-      setLoading(false);
+
+      if (isMounted) {
+        setLoading(false);
+      }
     };
 
     verifyAuth();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (username, password) => {
