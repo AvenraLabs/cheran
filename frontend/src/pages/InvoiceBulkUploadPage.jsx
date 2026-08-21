@@ -240,6 +240,13 @@ export function InvoiceBulkUploadPage() {
                 </thead>
                 <tbody className="divide-y divide-[#EDEAE1] font-mono">
                   {parsedData.sample.map((row, idx) => {
+                    const appId =
+                      row.government_project_id ||
+                      row.application_id ||
+                      row.project_id ||
+                      row.id ||
+                      "—";
+
                     const invNo =
                       row.invoice_number ||
                       row.invoice_no ||
@@ -248,11 +255,13 @@ export function InvoiceBulkUploadPage() {
                       row.voucher_no ||
                       null;
 
+                    const dateVal = row.invoice_date || row.date;
+
                     return (
                       <tr key={idx} className="hover:bg-[#FAFAF8]">
                         <td className="py-2.5 px-4 text-[#8C97AB] font-sans">{idx + 1}</td>
                         <td className="py-2.5 px-4 font-bold text-[#14213D]">
-                          {row.government_project_id || row.application_id || row.project_id || row.id}
+                          {appId}
                         </td>
                         <td className="py-2.5 px-4 text-[#14213D]">
                           {invNo ? (
@@ -264,7 +273,7 @@ export function InvoiceBulkUploadPage() {
                           )}
                         </td>
                         <td className="py-2.5 px-4 text-[#2F6F5E]">
-                          {formatDate(row.invoice_date || row.date)}
+                          {formatDate(dateVal)}
                         </td>
                         <td className="py-2.5 px-4 text-right font-sans">
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#2F6F5E] bg-[#2F6F5E]/10 px-2.5 py-0.5 rounded-full">
