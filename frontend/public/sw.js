@@ -1,4 +1,4 @@
-// Legacy Service Worker self-unregistration & cache purge
+// Legacy Service Worker self-unregistration & cache purge (silent without forcing full page reload)
 self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
@@ -9,14 +9,6 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
       .then(() => self.registration.unregister())
-      .then(() => self.clients.matchAll())
-      .then((clients) => {
-        clients.forEach((client) => {
-          if (client.url && "navigate" in client) {
-            client.navigate(client.url);
-          }
-        });
-      })
   );
 });
 

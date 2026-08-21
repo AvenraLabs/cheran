@@ -377,6 +377,10 @@ Dealer.hasMany(Invoice, {
   as: "invoices",
   onDelete: "SET NULL",
 });
+Invoice.belongsTo(Dealer, {
+  foreignKey: "dealer_id",
+  as: "dealer",
+});
 // ==========================================
 // 8. Proceedings Associations
 // ==========================================
