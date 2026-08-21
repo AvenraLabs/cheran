@@ -58,6 +58,16 @@ export const searchProjects = asyncHandler(async (req, res) => {
   });
 });
 
+export const recordCommissionPayment = asyncHandler(async (req, res) => {
+  const { recordCommissionMilestonePayment } = await import("../dealers/dealer-commission.service.js");
+  const result = await recordCommissionMilestonePayment(req.params.id, req.body);
+  res.status(200).json({
+    status: "success",
+    message: `Milestone ${req.body.milestone} payment recorded successfully.`,
+    data: result,
+  });
+});
+
 export const renameOrMergeProject = asyncHandler(async (req, res) => {
   const result = await projectService.renameOrMergeProject(req.params.id, req.body.target_application_id || req.body.application_id);
   res.status(200).json({
