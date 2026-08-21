@@ -84,6 +84,11 @@ export async function commitImport(importId) {
         transaction,
       });
 
+      const cleanImportedInvoiceNo =
+        rowData.invoice_number && String(rowData.invoice_number).trim().toUpperCase() !== "SALES"
+          ? String(rowData.invoice_number).trim()
+          : null;
+
       if (!project) {
         // Create new project
         const projectPayload = {
@@ -117,7 +122,7 @@ export async function commitImport(importId) {
           quotation_subsidy_amount: rowData.quotation_subsidy_amount || null,
           quotation_saca_subsidy_amount: rowData.quotation_saca_subsidy_amount || null,
           farmer_contribution: rowData.farmer_contribution || null,
-          invoice_number: rowData.invoice_number || null,
+          invoice_number: cleanImportedInvoiceNo,
           invoice_amount: rowData.invoice_amount || null,
           invoice_date: rowData.invoice_date || null,
           state_restricted_amount: rowData.state_restricted_amount || null,
@@ -159,13 +164,44 @@ export async function commitImport(importId) {
         project = await GovernmentProject.create(projectPayload, { transaction });
         createdCount++;
 
-        // Create initial status history entry
+        // Backfill milestone status history records from available date columns
+        const milestoneDates = [
+          { field: "application_received_date", status: "Application Received" },
+          { field: "quotation_date", status: "Quotation Prepared by MI Company" },
+          { field: "work_order_date", status: "Issued Work Order" },
+          { field: "invoice_date", status: "INVOICED" },
+          { field: "earlier_jv_completed_date", status: "Earlier JV Completed" },
+          { field: "jv_recommended_date", status: "Joint Verification Completed" },
+          { field: "first_fund_utr_date", status: "First Fund Credited (UTR Updated)" },
+          { field: "treasury_fund_utr_date", status: "Iamwarm Fund Credited (UTR Updated)" },
+          { field: "final_fund_utr_date", status: "Final Fund Credited (UTR Updated)" },
+        ];
+
+        for (const m of milestoneDates) {
+          const mDate = rowData[m.field];
+          if (mDate && m.status.toUpperCase() !== importedStatus?.toUpperCase()) {
+            await GovernmentProjectStatusHistory.create(
+              {
+                project_id: project.id,
+                status: m.status,
+                status_date: mDate,
+                remarks: `Milestone recorded from Annexure (${m.field})`,
+                source_import_id: importRecord.id,
+                observed_at: new Date(),
+              },
+              { transaction }
+            );
+            historyCreatedCount++;
+          }
+        }
+
+        // Create authoritative current status history entry
         await GovernmentProjectStatusHistory.create(
           {
             project_id: project.id,
             status: importedStatus,
             status_date: importedStatusDate || null,
-            remarks: rowData.current_status_remarks || "Initial Import",
+            remarks: rowData.current_status_remarks || "Initial Import (Current Status)",
             source_import_id: importRecord.id,
             observed_at: new Date(),
           },
@@ -179,6 +215,9 @@ export async function commitImport(importId) {
 
         // Helper for non-destructive updates (preserves existing DB value if Excel cell is null/undefined, preserves 0)
         const updateVal = (newVal, existingVal) => (newVal !== null && newVal !== undefined ? newVal : existingVal);
+
+        // Keep existing valid invoice_number if imported value is null or 'Sales'
+        const targetInvoiceNo = cleanImportedInvoiceNo || project.invoice_number;
 
         // Build updated fields payload from latest Excel
         const updatePayload = {
@@ -211,7 +250,7 @@ export async function commitImport(importId) {
           quotation_subsidy_amount: updateVal(rowData.quotation_subsidy_amount, project.quotation_subsidy_amount),
           quotation_saca_subsidy_amount: updateVal(rowData.quotation_saca_subsidy_amount, project.quotation_saca_subsidy_amount),
           farmer_contribution: updateVal(rowData.farmer_contribution, project.farmer_contribution),
-          invoice_number: updateVal(rowData.invoice_number, project.invoice_number),
+          invoice_number: targetInvoiceNo,
           invoice_amount: updateVal(rowData.invoice_amount, project.invoice_amount),
           invoice_date: updateVal(rowData.invoice_date, project.invoice_date),
           state_restricted_amount: updateVal(rowData.state_restricted_amount, project.state_restricted_amount),
@@ -242,7 +281,7 @@ export async function commitImport(importId) {
           bank_guarantee_deducted_pct: updateVal(rowData.bank_guarantee_deducted_pct, project.bank_guarantee_deducted_pct),
           bank_guarantee_deducted_amount: updateVal(rowData.bank_guarantee_deducted_amount, project.bank_guarantee_deducted_amount),
           current_status: shouldUpdateStatus ? importedStatus : project.current_status,
-          current_status_date: shouldUpdateStatus ? (importedStatusDate || project.current_status_date) : project.current_status_date,
+          current_status_date: shouldUpdateStatus ? (importedStatusDate || project.current_status_date) : (importedStatusDate || project.current_status_date),
           current_status_remarks: updateVal(rowData.current_status_remarks, project.current_status_remarks),
           no_of_days_pending: updateVal(rowData.no_of_days_pending, project.no_of_days_pending),
           fund_type: updateVal(rowData.fund_type, project.fund_type),
@@ -253,20 +292,82 @@ export async function commitImport(importId) {
         await project.update(updatePayload, { transaction });
         updatedCount++;
 
-        // If status differs and is advancing, insert new status history record
-        if (shouldUpdateStatus) {
-          await GovernmentProjectStatusHistory.create(
-            {
+        // Backfill/sync milestone status history
+        const milestoneDates = [
+          { field: "application_received_date", status: "Application Received" },
+          { field: "quotation_date", status: "Quotation Prepared by MI Company" },
+          { field: "work_order_date", status: "Issued Work Order" },
+          { field: "invoice_date", status: "INVOICED" },
+          { field: "earlier_jv_completed_date", status: "Earlier JV Completed" },
+          { field: "jv_recommended_date", status: "Joint Verification Completed" },
+          { field: "first_fund_utr_date", status: "First Fund Credited (UTR Updated)" },
+          { field: "treasury_fund_utr_date", status: "Iamwarm Fund Credited (UTR Updated)" },
+          { field: "final_fund_utr_date", status: "Final Fund Credited (UTR Updated)" },
+        ];
+
+        for (const m of milestoneDates) {
+          const mDate = rowData[m.field];
+          if (mDate && m.status.toUpperCase() !== importedStatus?.toUpperCase()) {
+            const existingHist = await GovernmentProjectStatusHistory.findOne({
+              where: {
+                project_id: project.id,
+                status: m.status,
+              },
+              transaction,
+            });
+
+            if (!existingHist) {
+              await GovernmentProjectStatusHistory.create(
+                {
+                  project_id: project.id,
+                  status: m.status,
+                  status_date: mDate,
+                  remarks: `Milestone recorded from Annexure (${m.field})`,
+                  source_import_id: importRecord.id,
+                  observed_at: new Date(),
+                },
+                { transaction }
+              );
+              historyCreatedCount++;
+            } else if (!existingHist.status_date || existingHist.status_date !== mDate) {
+              await existingHist.update({ status_date: mDate }, { transaction });
+            }
+          }
+        }
+
+        // Authoritative current status: ensure history entry exists and holds latest current_status_date
+        if (importedStatus) {
+          const existingCurrentHist = await GovernmentProjectStatusHistory.findOne({
+            where: {
               project_id: project.id,
               status: importedStatus,
-              status_date: importedStatusDate || null,
-              remarks: rowData.current_status_remarks || null,
-              source_import_id: importRecord.id,
-              observed_at: new Date(),
             },
-            { transaction }
-          );
-          historyCreatedCount++;
+            transaction,
+          });
+
+          if (!existingCurrentHist) {
+            await GovernmentProjectStatusHistory.create(
+              {
+                project_id: project.id,
+                status: importedStatus,
+                status_date: importedStatusDate || null,
+                remarks: rowData.current_status_remarks || "Updated from latest Annexure import",
+                source_import_id: importRecord.id,
+                observed_at: new Date(),
+              },
+              { transaction }
+            );
+            historyCreatedCount++;
+          } else if (importedStatusDate && existingCurrentHist.status_date !== importedStatusDate) {
+            // Authoritative overwrite: current status date from excel always overrides
+            await existingCurrentHist.update(
+              {
+                status_date: importedStatusDate,
+                remarks: rowData.current_status_remarks || existingCurrentHist.remarks,
+              },
+              { transaction }
+            );
+          }
         }
       }
     }

@@ -55,8 +55,14 @@ export function ProjectDetailPage() {
     try {
       setLoading(true);
       const [projRes, histRes, invRes, commRes, statRes] = await Promise.all([
-        api.get(`/government/projects/${id}`),
-        api.get(`/government/projects/${id}/status-history`),
+        api.get(`/government/projects/${id}`).catch((err) => {
+          console.error("Project details fetch error:", err);
+          return { data: { project: null } };
+        }),
+        api.get(`/government/projects/${id}/status-history`).catch((err) => {
+          console.error("Status history fetch error:", err);
+          return { data: { history: [] } };
+        }),
         api.get(`/government/projects/${id}/invoices`).catch(() => ({ data: { invoices: [], dispatchedMaterials: [] } })),
         api.get(`/government/projects/${id}/commission`).catch(() => ({ data: null })),
         api.get("/government/statuses").catch(() => ({ data: { statuses: [] } })),
@@ -703,34 +709,51 @@ export function ProjectDetailPage() {
 
         {/* Complete 56-Stage Government Lifecycle Roadmap & Status History */}
         {(() => {
-          // Build normalized lookup of recorded statuses
+          // 1. Seed milestones from project date columns
+          const MILESTONE_MAP = [
+            { field: "application_received_date", status: "Application Received" },
+            { field: "quotation_date", status: "Quotation Prepared by MI Company" },
+            { field: "work_order_date", status: "Issued Work Order" },
+            { field: "invoice_date", status: "INVOICED", remarks: "Government Scheme Invoiced" },
+            { field: "earlier_jv_completed_date", status: "Earlier JV Completed" },
+            { field: "jv_recommended_date", status: "Joint Verification Completed" },
+            { field: "first_fund_utr_date", status: "First Fund Credited (UTR Updated)" },
+            { field: "treasury_fund_utr_date", status: "Iamwarm Fund Credited (UTR Updated)" },
+            { field: "final_fund_utr_date", status: "Final Fund Credited (UTR Updated)" },
+          ];
+
           const historyMap = new Map();
-          (historyData || []).forEach((h) => {
-            if (h.status) {
-              historyMap.set(h.status.trim().toUpperCase(), h);
+
+          // Add milestone column dates from project
+          MILESTONE_MAP.forEach(({ field, status, remarks }) => {
+            if (project?.[field]) {
+              const key = status.trim().toUpperCase();
+              historyMap.set(key, {
+                status,
+                status_date: project[field],
+                observed_at: project.created_at,
+                remarks: remarks || `Recorded milestone date from Annexure (${field})`,
+              });
             }
           });
 
-          // Include current active status if missing from history
+          // 2. Overlay explicit history records from database audit logs
+          (historyData || []).forEach((h) => {
+            if (h.status) {
+              const key = h.status.trim().toUpperCase();
+              historyMap.set(key, h);
+            }
+          });
+
+          // 3. AUTHORITATIVE RULE: Current active status from Govt Excel ALWAYS takes highest priority and overwrites
           if (project?.current_status) {
             const key = project.current_status.trim().toUpperCase();
-            if (!historyMap.has(key)) {
-              historyMap.set(key, {
-                status: project.current_status,
-                status_date: project.current_status_date,
-                observed_at: project.created_at,
-                remarks: "Current active project status",
-              });
-            }
-          }
-
-          // Include INVOICED date if project has invoice_date
-          if (project?.invoice_date && !historyMap.has("INVOICED")) {
-            historyMap.set("INVOICED", {
-              status: "INVOICED",
-              status_date: project.invoice_date,
-              observed_at: project.created_at,
-              remarks: "Invoice generated from Load Order dispatch",
+            const existing = historyMap.get(key);
+            historyMap.set(key, {
+              status: project.current_status,
+              status_date: project.current_status_date || existing?.status_date || null,
+              observed_at: project.updated_at || project.created_at,
+              remarks: existing?.remarks || "Current active project status from government excel",
             });
           }
 
@@ -877,6 +900,25 @@ export function ProjectDetailPage() {
                                 </div>
                               )}
                             </div>
+
+                            {/* Invoiced Stage Details: Govt Invoice No and Internal Company Load Order Invoices */}
+                            {step.name.toUpperCase() === "INVOICED" && (
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                {project?.invoice_number && project.invoice_number.toUpperCase() !== "SALES" && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded">
+                                    Govt Invoice: <strong className="font-mono text-[#14213D]">{project.invoice_number}</strong>
+                                  </span>
+                                )}
+                                {invoices && invoices.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded">
+                                    Load Order Invoice:{" "}
+                                    <strong className="font-mono text-blue-900">
+                                      {invoices.map((inv) => inv.invoice_number).filter(Boolean).join(", ") || "Dispatched"}
+                                    </strong>
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
                             {step.remarks && (
                               <div className="text-[11px] text-[#52607D] italic">

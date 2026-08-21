@@ -49,7 +49,7 @@ export async function importHistoricalInvoiceJson(jsonData) {
       if (cleanDate && (!existing.invoice_date || cleanDate < existing.invoice_date)) {
         existing.invoice_date = cleanDate;
       }
-      if (cleanInvNo && !existing.invoice_number) {
+      if (cleanInvNo && (!existing.invoice_number || existing.invoice_number.toUpperCase() === "SALES")) {
         existing.invoice_number = cleanInvNo;
       }
     } else {
@@ -141,7 +141,7 @@ export async function importHistoricalInvoiceJson(jsonData) {
 
           // Update invoice details on existing project
           const updatePayload = {};
-          if (item.invoice_number && !project.invoice_number) {
+          if (item.invoice_number && (!project.invoice_number || project.invoice_number.toUpperCase() === "SALES" || item.invoice_number !== project.invoice_number)) {
             updatePayload.invoice_number = item.invoice_number;
           }
           if (!project.invoice_date || (item.invoice_date && item.invoice_date < project.invoice_date)) {

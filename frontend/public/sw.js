@@ -1,4 +1,4 @@
-const CACHE_NAME = "cheran-pwa-v2";
+const CACHE_NAME = "cheran-pwa-v4";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -12,6 +12,25 @@ const STATIC_ASSETS = [
   "/icons/apple-touch-icon.png",
 ];
 
+// Helper: fetch with strict timeout to prevent pending/hanging requests
+function fetchWithTimeout(request, timeoutMs = 4000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Service Worker Fetch Timeout"));
+    }, timeoutMs);
+
+    fetch(request)
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 // Install Event
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -22,7 +41,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// Activate Event
+// Activate Event - purge all older caches immediately
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -43,35 +62,37 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Do not cache API requests or non-GET requests
-  if (request.method !== "GET" || url.pathname.startsWith("/api/")) {
+  // 1. Completely bypass non-GET, API requests, WebSocket, and external origins
+  if (
+    request.method !== "GET" ||
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith("/api") ||
+    url.pathname.includes("/api/") ||
+    url.pathname.startsWith("/socket.io") ||
+    url.port === "5000"
+  ) {
     return;
   }
 
-  // Network-first for navigation requests (HTML pages)
+  // 2. SPA Navigation requests: always serve index.html shell immediately
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => {
-          return caches.match("/index.html") || caches.match("/");
-        })
+      caches.match("/index.html").then((cachedIndex) => {
+        if (cachedIndex) {
+          return cachedIndex;
+        }
+        return fetchWithTimeout("/index.html", 3000).catch(() => caches.match("/"));
+      })
     );
     return;
   }
 
-  // Cache-first falling back to network for assets (JS, CSS, images, fonts)
+  // 3. Static Assets: Cache-first with timeout-guarded background refresh
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch fresh in background
-        fetch(request)
+        // Refresh in background if connected (non-blocking)
+        fetchWithTimeout(request, 3000)
           .then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
               caches.open(CACHE_NAME).then((cache) => cache.put(request, networkResponse));
@@ -81,13 +102,17 @@ self.addEventListener("fetch", (event) => {
         return cachedResponse;
       }
 
-      return fetch(request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
-        }
-        return networkResponse;
-      });
+      return fetchWithTimeout(request, 6000)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+        });
     })
   );
 });
