@@ -13,20 +13,6 @@ import AppError from "../../shared/appError.js";
 export async function processImportPreview({ fileBuffer, fileName, uploadedBy = "System" }) {
   const fileHash = calculateSha256(fileBuffer);
 
-  // Check if identical completed file was already processed
-  const completedImport = await GovernmentImport.findOne({
-    where: { file_hash: fileHash, status: "COMPLETED" },
-  });
-  if (completedImport) {
-    throw new AppError(
-      `Duplicate file upload: An identical file '${completedImport.file_name}' was already imported on ${new Date(
-        completedImport.uploaded_at
-      ).toLocaleString()}.`,
-      400,
-      { previousImportId: completedImport.id, fileHash }
-    );
-  }
-
   // 1. Parse Excel buffer
   const { headers, fieldMapping, rows } = parseExcelBuffer(fileBuffer, fileName);
 

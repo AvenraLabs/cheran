@@ -13,7 +13,12 @@ export function AuthProvider({ children }) {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem("cheran_auth_token") || null);
-  const [loading, setLoading] = useState(true);
+  // If user & token are already present in localStorage, render immediately (0ms delay)
+  const [loading, setLoading] = useState(() => {
+    const savedToken = localStorage.getItem("cheran_auth_token");
+    const savedUser = localStorage.getItem("cheran_auth_user");
+    return !savedToken || !savedUser;
+  });
 
   useEffect(() => {
     let isMounted = true;
