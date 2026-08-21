@@ -74,15 +74,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 2. SPA Navigation requests: always serve index.html shell immediately
+  // 2. SPA Navigation requests (HTML pages):
+  // Network-first with a 1.5s timeout, falling back to cached index.html if offline/slow.
+  // Guarantees users always receive the latest deployed build while never hanging on stalled connections.
   if (request.mode === "navigate") {
     event.respondWith(
-      caches.match("/index.html").then((cachedIndex) => {
-        if (cachedIndex) {
-          return cachedIndex;
-        }
-        return fetchWithTimeout("/index.html", 3000).catch(() => caches.match("/"));
-      })
+      fetchWithTimeout("/index.html", 1500)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match("/index.html").then((cachedIndex) => {
+            if (cachedIndex) return cachedIndex;
+            return caches.match("/");
+          });
+        })
     );
     return;
   }
