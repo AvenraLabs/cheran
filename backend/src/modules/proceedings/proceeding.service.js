@@ -378,11 +378,25 @@ export async function createProceedingBatch({
     historyMap.get(h.project_id).push(h);
   }
 
+  const computedTotalStateRestricted = matchedProjects.reduce(
+    (sum, p) => sum + parseFloat(p.state_restricted_amount || 0),
+    0
+  );
+
+  const defaultTotalFundShare = Math.floor(computedTotalStateRestricted * (finalFundPct / 100));
+  const userEnteredProceedingAmt = parseFloat(total_proceeding_amount || 0);
+  const finalProceedingAmount = userEnteredProceedingAmt > 0 ? userEnteredProceedingAmt : defaultTotalFundShare;
+
+  // Effective fund share ratio across all projects in this batch
+  const effectiveFundRatio =
+    computedTotalStateRestricted > 0
+      ? finalProceedingAmount / computedTotalStateRestricted
+      : finalFundPct / 100;
+
   const isFirstFundMilestone = finalFundPct >= 50.0;
   const batchProjectRows = [];
   let totalCalcCommission = 0;
   let totalCalcFittings = 0;
-  let computedTotalStateRestricted = 0;
 
   for (const rawId of uniqueAppIds) {
     const key = rawId.trim().toUpperCase();
@@ -391,15 +405,14 @@ export async function createProceedingBatch({
     const invoiceAmt = parseFloat(proj.invoice_amount || 0);
     const subsidyAmt = parseFloat(proj.quotation_subsidy_amount || 0);
     const stateRestricted = parseFloat(proj.state_restricted_amount);
-    computedTotalStateRestricted += stateRestricted;
 
     // Resolve GST rate dynamically from DB using project's invoice_date
     const activeTaxSlab = await getEffectiveSchemeTaxSlab(proj.invoice_date);
     const gstPct = parseFloat(activeTaxSlab?.gst_percentage ?? 12.0);
     const fittingsPct = parseFloat(activeTaxSlab?.fittings_percentage ?? 5.0);
 
-    // Sequential Back-Calculation
-    const fundShare = Math.floor(stateRestricted * (finalFundPct / 100));
+    // Sequential Back-Calculation based on effective fund share
+    const fundShare = Math.floor(stateRestricted * effectiveFundRatio);
     const taxableShare = fundShare / (1 + gstPct / 100);
     const netMaterialBase = Math.floor(taxableShare / (1 + fittingsPct / 100));
     const fittingsAmount = Math.floor(netMaterialBase * (fittingsPct / 100));
@@ -443,9 +456,11 @@ export async function createProceedingBatch({
       const firstFundDate = firstFundHistory?.status_date || proj.first_fund_utr_date || null;
 
       const jvHistory = projHistories.find(
-        (h) => h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED"
+        (h) =>
+          h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED" ||
+          h.status?.toUpperCase() === "EARLIER JV COMPLETED"
       );
-      const jvCompletedDate = jvHistory?.status_date || null;
+      const jvCompletedDate = proj.earlier_jv_completed_date || jvHistory?.status_date || null;
 
       if (firstFundDate && jvCompletedDate) {
         delayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
@@ -456,8 +471,7 @@ export async function createProceedingBatch({
       }
     }
 
-    const effectiveDealerRate = Math.max(0, dealerBaseRate - penaltyPoints);
-    const commissionAmount = Math.floor(netMaterialBase * (effectiveDealerRate / 100));
+    const commissionAmount = Math.floor(netMaterialBase * (dealerBaseRate / 100));
     const penaltyAmount = Math.floor(netMaterialBase * (penaltyPoints / 100));
 
     totalCalcCommission += commissionAmount;
@@ -487,11 +501,6 @@ export async function createProceedingBatch({
       is_paid_to_dealer: false,
     });
   }
-
-  const finalProceedingAmount =
-    parseFloat(total_proceeding_amount || 0) > 0
-      ? parseFloat(total_proceeding_amount)
-      : computedTotalStateRestricted;
 
   // Create batch and project rows in a transaction
   return db.transaction(async (t) => {
@@ -682,10 +691,71 @@ export async function getProceedingBatchById(id) {
     throw new AppError("Proceeding batch not found", 404);
   }
 
-  // Aggregate Dealer-Wise Breakdown
+  // Fetch status histories for all projects in this batch for SLA milestone dates
+  const projectIds = batch.projects.map((p) => p.project_id).filter(Boolean);
+  const histories =
+    projectIds.length > 0
+      ? await GovernmentProjectStatusHistory.findAll({
+          where: { project_id: { [Op.in]: projectIds } },
+          order: [["status_date", "ASC"]],
+        })
+      : [];
+
+  const historyMap = new Map();
+  for (const h of histories) {
+    if (!historyMap.has(h.project_id)) {
+      historyMap.set(h.project_id, []);
+    }
+    historyMap.get(h.project_id).push(h);
+  }
+
+  // Aggregate Dealer-Wise Breakdown and attach milestone dates to each project
   const dealerMap = new Map();
 
   for (const item of batch.projects) {
+    const projHistories = historyMap.get(item.project_id) || [];
+
+    // Milestone 1 dates (INVOICED -> WORK COMPLETION APPROVED)
+    const invoicedHistory = projHistories.find((h) => h.status?.toUpperCase() === "INVOICED");
+    const invoiceDate = item.project?.invoice_date || invoicedHistory?.status_date || null;
+
+    const workCompletionHistory = projHistories.find(
+      (h) =>
+        h.status?.toUpperCase() === "WORK COMPLETION APPROVED" ||
+        h.status?.toUpperCase() === "WORK COMPLETED"
+    );
+    const workCompletionDate = workCompletionHistory?.status_date || null;
+    const m1DelayDays =
+      invoiceDate && workCompletionDate
+        ? Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate))
+        : null;
+
+    // Milestone 2 dates (FIRST FUND CREDITED -> JOINT VERIFICATION COMPLETED)
+    const firstFundHistory = projHistories.find((h) =>
+      FIRST_FUND_STATUSES.some((st) => st.toLowerCase() === h.status?.toLowerCase())
+    );
+    const firstFundDate =
+      item.project?.first_fund_utr_date || firstFundHistory?.status_date || null;
+
+    const jvHistory = projHistories.find(
+      (h) =>
+        h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED" ||
+        h.status?.toUpperCase() === "EARLIER JV COMPLETED"
+    );
+    const jvCompletedDate =
+      item.project?.earlier_jv_completed_date || jvHistory?.status_date || null;
+    const m2DelayDays =
+      firstFundDate && jvCompletedDate
+        ? Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate))
+        : null;
+
+    item.setDataValue("invoice_date", invoiceDate);
+    item.setDataValue("work_completion_date", workCompletionDate);
+    item.setDataValue("m1_delay_days", m1DelayDays);
+    item.setDataValue("first_fund_date", firstFundDate);
+    item.setDataValue("jv_completed_date", jvCompletedDate);
+    item.setDataValue("m2_delay_days", m2DelayDays);
+
     const dealerId = item.dealer_id || "UNASSIGNED";
     const dealerName = item.dealer?.name || "Unassigned Dealer";
     const dealerPhone = item.dealer?.phone || "—";
@@ -717,7 +787,7 @@ export async function getProceedingBatchById(id) {
     const d = dealerMap.get(dealerId);
     const comm = Math.floor(parseFloat(item.commission_amount || 0));
     const fit = Math.floor(parseFloat(item.fittings_amount || 0));
-    const pen = Math.floor(parseFloat(item.adjusted_penalty_amount || item.penalty_amount || 0));
+    const pen = Math.floor(parseFloat(item.adjusted_penalty_amount ?? item.penalty_amount ?? 0));
 
     d.projects_count += 1;
     d.total_invoice_amount += Math.floor(parseFloat(item.invoice_amount || 0));
@@ -728,7 +798,7 @@ export async function getProceedingBatchById(id) {
     d.total_commission_amount += comm;
     d.total_fittings_amount += fit;
     d.total_penalty_amount += pen;
-    d.total_net_payable += Math.max(0, comm + fit);
+    d.total_net_payable += Math.max(0, comm + fit - pen);
     d.project_ids.push(item.id);
 
     if (!item.is_paid_to_dealer) {
@@ -744,6 +814,28 @@ export async function getProceedingBatchById(id) {
     batch,
     dealer_summaries: dealerSummaries,
   };
+}
+
+/**
+ * Manually update/override penalty for an individual project in a proceeding batch
+ */
+export async function updateProjectPenalty(batchId, projectRecordId, { adjusted_penalty_amount }) {
+  const projectRecord = await ProceedingBatchProject.findOne({
+    where: {
+      id: projectRecordId,
+      proceeding_batch_id: batchId,
+    },
+  });
+
+  if (!projectRecord) {
+    throw new AppError("Batch project record not found", 404);
+  }
+
+  const newPenalty = Math.max(0, parseFloat(adjusted_penalty_amount) || 0);
+  projectRecord.adjusted_penalty_amount = newPenalty;
+  await projectRecord.save();
+
+  return getProceedingBatchById(batchId);
 }
 
 /**
@@ -849,9 +941,11 @@ export async function recalculateProceedingBatch(id) {
           const firstFundDate = firstFundHistory?.status_date || proj.first_fund_utr_date || null;
 
           const jvHistory = projHistories.find(
-            (h) => h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED"
+            (h) =>
+              h.status?.toUpperCase() === "JOINT VERIFICATION COMPLETED" ||
+              h.status?.toUpperCase() === "EARLIER JV COMPLETED"
           );
-          const jvCompletedDate = jvHistory?.status_date || null;
+          const jvCompletedDate = proj.earlier_jv_completed_date || jvHistory?.status_date || null;
 
           if (firstFundDate && jvCompletedDate) {
             delayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
@@ -862,8 +956,7 @@ export async function recalculateProceedingBatch(id) {
           }
         }
 
-        const effectiveDealerRate = Math.max(0, dealerBaseRate - penaltyPoints);
-        const commissionAmount = Math.floor(netMaterialBase * (effectiveDealerRate / 100));
+        const commissionAmount = Math.floor(netMaterialBase * (dealerBaseRate / 100));
         const penaltyAmount = Math.floor(netMaterialBase * (penaltyPoints / 100));
 
         totalCalcCommission += commissionAmount;

@@ -365,6 +365,7 @@ export async function listInvoices({
   government_project_id,
   dealer_id,
   customer_id,
+  month,
   start_date,
   end_date,
   page = 1,
@@ -384,7 +385,13 @@ export async function listInvoices({
   if (dealer_id) where.dealer_id = dealer_id;
   if (customer_id) where.customer_id = customer_id;
 
-  if (start_date && end_date) {
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [yr, mo] = month.split("-").map(Number);
+    const startDate = `${month}-01`;
+    const lastDay = new Date(yr, mo, 0).getDate();
+    const endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
+    where.invoice_date = { [Op.between]: [startDate, endDate] };
+  } else if (start_date && end_date) {
     where.invoice_date = { [Op.between]: [start_date, end_date] };
   } else if (start_date) {
     where.invoice_date = { [Op.gte]: start_date };
@@ -422,6 +429,11 @@ export async function listInvoices({
         as: "dealer",
         attributes: ["id", "name"],
       },
+      {
+        model: Customer,
+        as: "customer",
+        attributes: ["id", "name", "phone", "email", "gst_number"],
+      },
     ],
     order: [["invoice_date", "DESC"], ["created_at", "DESC"]],
     limit,
@@ -436,6 +448,105 @@ export async function listInvoices({
       limit,
       totalPages: Math.ceil(count / limit),
     },
+  };
+}
+
+/**
+ * Monthly and Client Analytics & History for Direct Commercial Sales
+ */
+export async function getDirectSalesAnalytics({ customer_id, year } = {}) {
+  const where = {
+    invoice_type: "DIRECT_SALE",
+    status: { [Op.ne]: "CANCELLED" },
+  };
+  if (customer_id) where.customer_id = customer_id;
+  if (year) {
+    where.invoice_date = {
+      [Op.between]: [`${year}-01-01`, `${year}-12-31`],
+    };
+  }
+
+  const invoices = await Invoice.findAll({
+    where,
+    include: [
+      {
+        model: Customer,
+        as: "customer",
+        attributes: ["id", "name", "phone", "email", "gst_number"],
+      },
+    ],
+    order: [["invoice_date", "DESC"]],
+  });
+
+  const monthlyMap = {};
+  const clientMap = {};
+
+  let grandTotalSales = 0;
+  let grandTotalCollected = 0;
+
+  for (const inv of invoices) {
+    const totalAmt = parseFloat(inv.total_amount) || 0;
+    const paidAmt = parseFloat(inv.paid_amount) || 0;
+    const pendingAmt = Math.max(0, totalAmt - paidAmt);
+
+    grandTotalSales += totalAmt;
+    grandTotalCollected += paidAmt;
+
+    // Month key YYYY-MM
+    const dateStr = inv.invoice_date ? String(inv.invoice_date).substring(0, 7) : "Unknown";
+    if (!monthlyMap[dateStr]) {
+      let monthLabel = dateStr;
+      if (dateStr !== "Unknown") {
+        const [y, m] = dateStr.split("-");
+        const d = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+        monthLabel = d.toLocaleString("en-US", { month: "long", year: "numeric" });
+      }
+      monthlyMap[dateStr] = {
+        month: dateStr,
+        monthLabel,
+        invoiceCount: 0,
+        totalSales: 0,
+        totalCollected: 0,
+        totalPending: 0,
+      };
+    }
+    monthlyMap[dateStr].invoiceCount += 1;
+    monthlyMap[dateStr].totalSales += totalAmt;
+    monthlyMap[dateStr].totalCollected += paidAmt;
+    monthlyMap[dateStr].totalPending += pendingAmt;
+
+    // Client key
+    const custId = inv.customer_id || "walk-in";
+    const custName = inv.customer?.name || inv.customer_name || "Walk-in Customer";
+    const custPhone = inv.customer?.phone || null;
+
+    if (!clientMap[custId]) {
+      clientMap[custId] = {
+        customerId: custId,
+        customerName: custName,
+        customerPhone: custPhone,
+        invoiceCount: 0,
+        totalSales: 0,
+        totalCollected: 0,
+        totalPending: 0,
+      };
+    }
+    clientMap[custId].invoiceCount += 1;
+    clientMap[custId].totalSales += totalAmt;
+    clientMap[custId].totalCollected += paidAmt;
+    clientMap[custId].totalPending += pendingAmt;
+  }
+
+  const monthlySummary = Object.values(monthlyMap).sort((a, b) => b.month.localeCompare(a.month));
+  const clientSummary = Object.values(clientMap).sort((a, b) => b.totalSales - a.totalSales);
+
+  return {
+    totalInvoices: invoices.length,
+    totalSales: parseFloat(grandTotalSales.toFixed(2)),
+    totalCollected: parseFloat(grandTotalCollected.toFixed(2)),
+    totalPending: parseFloat(Math.max(0, grandTotalSales - grandTotalCollected).toFixed(2)),
+    monthlySummary,
+    clientSummary,
   };
 }
 

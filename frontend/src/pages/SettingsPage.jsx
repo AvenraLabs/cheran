@@ -77,17 +77,42 @@ export function SettingsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.effective_from) {
-      setFormError("From Date is required.");
+    const cleanFrom = (formData.effective_from || "").trim();
+    const cleanTo = formData.effective_to ? formData.effective_to.trim() : null;
+
+    if (!cleanFrom) {
+      setFormError("Effective From Date is required.");
       return;
+    }
+
+    if (cleanTo && cleanTo < cleanFrom) {
+      setFormError("Effective To Date cannot be earlier than Effective From Date.");
+      return;
+    }
+
+    // Client-side overlap validation
+    const newEnd = cleanTo || "9999-12-31";
+    for (const existing of slabs) {
+      if (editingSlab && existing.id === editingSlab.id) continue;
+      const exFrom = existing.effective_from;
+      const exTo = existing.effective_to || "9999-12-31";
+
+      if (cleanFrom <= exTo && newEnd >= exFrom) {
+        const slabDesc = existing.description || `${existing.gst_percentage}% GST`;
+        const exToStr = existing.effective_to ? formatDate(existing.effective_to) : "Ongoing";
+        setFormError(
+          `Date Conflict: The date range (${formatDate(cleanFrom)} to ${cleanTo ? formatDate(cleanTo) : "Ongoing"}) clashes with existing slab '${slabDesc}' (${formatDate(exFrom)} to ${exToStr}). Tax slabs cannot have overlapping dates.`
+        );
+        return;
+      }
     }
 
     setFormSaving(true);
     setFormError("");
 
     const payload = {
-      effective_from: formData.effective_from,
-      effective_to: formData.effective_to || null,
+      effective_from: cleanFrom,
+      effective_to: cleanTo,
       gst_percentage: parseFloat(formData.gst_percentage) || 0,
       fittings_percentage: parseFloat(formData.fittings_percentage) || 5.0,
       description: formData.description ? formData.description.trim() : null,

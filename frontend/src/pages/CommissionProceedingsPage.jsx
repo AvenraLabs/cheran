@@ -120,10 +120,10 @@ export function CommissionProceedingsPage() {
         });
         const prev = res?.preview || res?.data?.preview || null;
         setIdPreview(prev);
-        if (prev && prev.total_state_restricted > 0) {
+        if (prev && prev.total_fund_share > 0) {
           setFormData((prevForm) => ({
             ...prevForm,
-            total_proceeding_amount: prev.total_state_restricted,
+            total_proceeding_amount: prev.total_fund_share,
           }));
         }
       } catch (err) {
@@ -700,33 +700,37 @@ export function CommissionProceedingsPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-[#FAFAF8] p-3.5 rounded-[10px] border border-[#EDEAE1]">
             <div>
               <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Proceeding Date <span className="text-rose-500">*</span>
+                Date <span className="text-rose-500">*</span>
               </label>
               <input
                 type="date"
                 value={formData.proceeding_date}
                 onChange={(e) => setFormData({ ...formData, proceeding_date: e.target.value })}
-                className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
                 required
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Fund Percentage <span className="text-rose-500">*</span>
+                Fund % <span className="text-rose-500">*</span>
               </label>
               <CustomSelect
                 options={fundSlabOptions}
                 value={formData.fund_percentage_id}
                 onChange={(val) => {
                   const sel = fundPercentages.find((s) => s.id === val);
+                  const newPct = sel ? sel.percentage : 55.0;
                   setFormData({
                     ...formData,
                     fund_percentage_id: val,
-                    fund_percentage_value: sel ? sel.percentage : 55.0,
+                    fund_percentage_value: newPct,
+                    total_proceeding_amount: idPreview?.total_state_restricted
+                      ? Math.floor(idPreview.total_state_restricted * (newPct / 100))
+                      : formData.total_proceeding_amount,
                   });
                 }}
                 placeholder="Select Fund %"
@@ -737,7 +741,17 @@ export function CommissionProceedingsPage() {
 
             <div>
               <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Total Proceeding (₹) <span className="text-rose-500">*</span>
+                State Restricted
+              </label>
+              <div className="w-full px-3 py-2 text-xs font-mono font-bold bg-white border border-[#E4E1D8] rounded-[8px] text-[#14213D] flex items-center justify-between">
+                <span>{idPreview && idPreview.total_state_restricted > 0 ? formatRupees(idPreview.total_state_restricted) : "₹0"}</span>
+                <span className="text-[10px] text-[#52607D] font-normal">100% Value</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#2F6F5E] mb-1">
+                Proceeding <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
@@ -745,7 +759,7 @@ export function CommissionProceedingsPage() {
                 placeholder="e.g. 540000"
                 value={formData.total_proceeding_amount}
                 onChange={(e) => setFormData({ ...formData, total_proceeding_amount: e.target.value })}
-                className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                className="w-full px-3 py-2 text-xs font-mono font-bold bg-white border border-[#2F6F5E]/40 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#2F6F5E]"
                 required
               />
             </div>
@@ -773,27 +787,45 @@ export function CommissionProceedingsPage() {
 
             {/* Live Calculation Preview Banner */}
             {idPreview && (
-              <div className="mt-2 p-3 bg-white border border-[#E4E1D8] rounded-[8px] text-xs space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#EDEAE1]">
+              <div className="mt-2 p-3.5 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] text-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-[#EDEAE1]">
                   <div className="flex items-center gap-2">
                     {idPreview.unmatched_count === 0 && idPreview.missing_state_restricted_count === 0 && idPreview.missing_invoice_date_count === 0 ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold font-mono">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold font-mono">
                         <CheckCircle2 size={13} className="text-emerald-700" />
                         {idPreview.matched_count} Valid Projects Ready
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono">
                         <AlertCircle size={13} className="text-amber-700" />
                         {idPreview.matched_count} Found ({idPreview.unmatched_count + idPreview.missing_state_restricted_count + idPreview.missing_invoice_date_count} issues)
                       </span>
                     )}
                   </div>
-                  <div className="font-mono text-emerald-800 font-bold text-xs">
-                    State Restricted Sum: {formatRupees(idPreview.total_state_restricted)}
+
+                  {/* Show both State Restricted and Selected % Proceeding Amount */}
+                  <div className="flex items-center gap-4 text-xs font-mono">
+                    <div className="text-right">
+                      <span className="text-[10px] text-[#52607D] uppercase font-semibold block">
+                        State Restricted
+                      </span>
+                      <strong className="text-[#14213D] text-sm">
+                        {formatRupees(idPreview.total_state_restricted)}
+                      </strong>
+                    </div>
+
+                    <div className="text-right pl-3 border-l border-[#EDEAE1]">
+                      <span className="text-[10px] text-[#2F6F5E] uppercase font-bold block">
+                        Proceeding Amount ({formData.fund_percentage_value}%)
+                      </span>
+                      <strong className="text-[#2F6F5E] text-sm font-extrabold">
+                        {formatRupees(idPreview.total_fund_share)}
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-[#52607D]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-[#52607D] bg-white p-2.5 rounded-[6px] border border-[#EDEAE1]">
                   <div>
                     <span className="text-[9px] uppercase block text-[#8C97AB]">Fund Share ({formData.fund_percentage_value}%)</span>
                     <span className="font-bold text-[#14213D]">{formatRupees(idPreview.total_fund_share)}</span>

@@ -138,6 +138,26 @@ export async function markDealerPayout(req, res, next) {
 }
 
 /**
+ * PATCH /api/proceedings/:id/projects/:projectRecordId/penalty
+ */
+export async function updateProjectPenalty(req, res, next) {
+  try {
+    const result = await proceedingService.updateProjectPenalty(
+      req.params.id,
+      req.params.projectRecordId,
+      req.body
+    );
+    res.json({
+      status: "success",
+      batch: result.batch,
+      dealer_summaries: result.dealer_summaries,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * DELETE /api/proceedings/:id
  */
 export async function deleteProceedingBatch(req, res, next) {

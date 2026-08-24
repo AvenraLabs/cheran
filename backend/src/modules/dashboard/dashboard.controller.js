@@ -34,7 +34,7 @@ export const getDistrictDistribution = asyncHandler(async (req, res) => {
 });
 
 export const getStageDurations = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getStageDurations();
+  const result = await dashboardService.getStageDurations(req.query);
   res.status(200).json({
     status: "success",
     data: result,

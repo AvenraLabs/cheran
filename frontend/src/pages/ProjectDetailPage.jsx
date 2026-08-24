@@ -68,7 +68,7 @@ export function ProjectDetailPage() {
       setHistoryData(histRes.data?.history || []);
       setInvoices(invRes.data?.invoices || []);
       setDispatchedMaterials(invRes.data?.dispatchedMaterials || []);
-      setCommissionData(commRes?.data || commRes || null);
+      setCommissionData(commRes?.data?.data || commRes?.data || null);
       setMasterStatuses(statRes.data?.statuses || []);
     } catch (err) {
       console.error("Failed to load project details:", err);
@@ -104,6 +104,21 @@ export function ProjectDetailPage() {
       </div>
     );
   }
+
+  // Invoice Comparison & Matching
+  const activeDispatchedInvoices = (invoices || []).filter((i) => i.status !== "CANCELLED");
+  const totalDispatchedInvoiceAmount = activeDispatchedInvoices.reduce(
+    (sum, inv) => sum + (parseFloat(inv.total_amount) || 0),
+    0
+  );
+  const govtInvoiceAmount = parseFloat(project.invoice_amount || 0);
+  const hasGovtInvoice = !isNaN(govtInvoiceAmount) && govtInvoiceAmount > 0;
+  const hasDispatchedInvoices = activeDispatchedInvoices.length > 0 && totalDispatchedInvoiceAmount > 0;
+  const invoiceDifference = Math.abs(govtInvoiceAmount - totalDispatchedInvoiceAmount);
+  const isInvoiceMatched = hasGovtInvoice && hasDispatchedInvoices && invoiceDifference < 1.0;
+  const isInvoiceMismatch = hasGovtInvoice && hasDispatchedInvoices && invoiceDifference >= 1.0;
+
+  const assignedDealer = commissionData?.dealer || project?.dealer;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -280,9 +295,25 @@ export function ProjectDetailPage() {
               </div>
 
               <div>
-                <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Invoice Amount</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Invoice Amount</span>
+                  {isInvoiceMatched && (
+                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
+                      ✓ Matched
+                    </span>
+                  )}
+                  {isInvoiceMismatch && (
+                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-full">
+                      Mismatch
+                    </span>
+                  )}
+                </div>
                 <p className="font-bold text-xs text-[#14213D] font-mono mt-0.5">
-                  {project.invoice_amount ? `₹${Math.floor(parseFloat(project.invoice_amount)).toLocaleString("en-IN")}` : "—"}
+                  {hasGovtInvoice
+                    ? `₹${Math.floor(govtInvoiceAmount).toLocaleString("en-IN")}`
+                    : hasDispatchedInvoices
+                    ? `₹${Math.floor(totalDispatchedInvoiceAmount).toLocaleString("en-IN")}`
+                    : "—"}
                 </p>
               </div>
 
@@ -293,6 +324,33 @@ export function ProjectDetailPage() {
                 </p>
               </div>
             </div>
+
+            {/* Invoice Amount Comparison / Mismatch Alert */}
+            {isInvoiceMismatch && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-[8px] text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                  <span>Invoice Amount Variance Detected:</span>
+                </div>
+                <div className="font-mono text-xs flex flex-wrap items-center gap-3">
+                  <span>Govt Annexure: <strong>₹{govtInvoiceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>
+                  <span>Load Order Dispatched: <strong>₹{totalDispatchedInvoiceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>
+                  <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                    Difference: ₹{invoiceDifference.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {isInvoiceMatched && (
+              <div className="p-2 bg-emerald-50/70 border border-emerald-200 rounded-[6px] text-xs text-emerald-900 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <CheckCircle2 size={14} className="text-[#2F6F5E]" />
+                  <span>Invoice Amount Verified: Govt Annexure and Load Order Dispatched totals match exactly.</span>
+                </span>
+                <strong className="font-mono text-[#2F6F5E]">₹{govtInvoiceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
+              </div>
+            )}
 
             {/* Government Deduction Banner if invoice > state restricted */}
             {parseFloat(project.invoice_amount || 0) > parseFloat(project.state_restricted_amount || 0) && (
@@ -382,15 +440,27 @@ export function ProjectDetailPage() {
 
         {/* Dispatched Materials & Linked Invoices Card */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
-          <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-3">
             <div className="flex items-center gap-2">
               <Sprout size={18} className="text-[#2F6F5E]" />
               <div>
-                <h2 className="text-sm font-bold font-display text-[#14213D]">
-                  Dispatched Materials & Invoices
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold font-display text-[#14213D]">
+                    Dispatched Materials & Invoices
+                  </h2>
+                  {isInvoiceMatched && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle2 size={11} /> Matched with Govt Amount
+                    </span>
+                  )}
+                  {isInvoiceMismatch && (
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <AlertTriangle size={11} className="text-amber-600" /> Amount Differs (₹{invoiceDifference.toLocaleString("en-IN")})
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-[#52607D]">
-                  Actual materials dispatched and deducted from physical inventory for this project
+                  Actual materials dispatched and deducted from physical inventory for this project · Total Dispatched: <strong className="font-mono text-[#14213D]">₹{totalDispatchedInvoiceAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
                 </p>
               </div>
             </div>
@@ -486,10 +556,10 @@ export function ProjectDetailPage() {
               </div>
             </div>
 
-            {commissionData?.dealer ? (
+            {assignedDealer ? (
               <span className="text-xs font-semibold text-[#14213D] bg-[#FAFAF8] border border-[#E4E1D8] px-3 py-1 rounded-full flex items-center gap-1.5 self-start sm:self-auto">
                 <span className="text-[#52607D]">Assigned:</span>
-                <strong>{commissionData.dealer.name}</strong>
+                <strong>{assignedDealer.name}</strong>
               </span>
             ) : (
               <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full self-start sm:self-auto font-medium">
@@ -498,7 +568,7 @@ export function ProjectDetailPage() {
             )}
           </div>
 
-          {!commissionData?.dealer ? (
+          {!assignedDealer ? (
             <div className="p-6 text-center bg-[#FAFAF8] border border-dashed border-[#E4E1D8] rounded-[8px] space-y-1">
               <p className="text-xs font-semibold text-[#14213D]">No Dealer Assigned to this Government Project</p>
               <p className="text-[11px] text-[#52607D]">
@@ -749,9 +819,40 @@ export function ProjectDetailPage() {
           });
 
           const recordedCount = fullRoadmap.filter((s) => s.hasOccurred).length;
-          const displayList = showAllMilestones
+
+          // When viewing recorded stages, sort chronologically by actual status date (with sequence tie-breaker)
+          let sortedStages = showAllMilestones
             ? fullRoadmap
-            : fullRoadmap.filter((s) => s.hasOccurred || s.isCurrent);
+            : fullRoadmap
+                .filter((s) => s.hasOccurred || s.isCurrent)
+                .sort((a, b) => {
+                  const dateA = a.status_date ? new Date(a.status_date).getTime() : 0;
+                  const dateB = b.status_date ? new Date(b.status_date).getTime() : 0;
+                  if (dateA && dateB && dateA !== dateB) return dateA - dateB;
+                  if (dateA && !dateB) return -1;
+                  if (!dateA && dateB) return 1;
+                  return (a.sequence || 0) - (b.sequence || 0);
+                });
+
+          // Calculate elapsed days strictly between consecutive chronological milestones
+          let lastMilestoneDate = null;
+          const displayList = sortedStages.map((step) => {
+            let daysElapsed = null;
+            if (step.status_date) {
+              const currentDate = new Date(step.status_date);
+              if (lastMilestoneDate) {
+                const diffTime = currentDate.getTime() - lastMilestoneDate.getTime();
+                daysElapsed = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+              } else {
+                daysElapsed = 0;
+              }
+              lastMilestoneDate = currentDate;
+            }
+            return {
+              ...step,
+              days_since_previous: daysElapsed !== null ? daysElapsed : step.days_since_previous,
+            };
+          });
 
           return (
             <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-5">

@@ -14,6 +14,11 @@ import {
   Building2,
   Users,
   Percent,
+  RefreshCw,
+  FileSpreadsheet,
+  TrendingUp,
+  Wrench,
+  Pencil,
 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -48,6 +53,13 @@ export function CommissionBatchDetailPage() {
   const [dealerPayPenalty, setDealerPayPenalty] = useState(0);
   const [markingDealerPaid, setMarkingDealerPaid] = useState(false);
   const [dealerPayError, setDealerPayError] = useState("");
+
+  // Modal: Manual Project Penalty Override
+  const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);
+  const [activeProjectForPenalty, setActiveProjectForPenalty] = useState(null);
+  const [manualPenaltyAmount, setManualPenaltyAmount] = useState(0);
+  const [savingPenalty, setSavingPenalty] = useState(false);
+  const [penaltyError, setPenaltyError] = useState("");
 
   const fetchBatchDetail = async () => {
     try {
@@ -143,6 +155,55 @@ export function CommissionBatchDetailPage() {
     }
   };
 
+  // Handle Open Manual Penalty Modal
+  const handleOpenPenaltyModal = (projectRecord) => {
+    setActiveProjectForPenalty(projectRecord);
+    setManualPenaltyAmount(
+      projectRecord.adjusted_penalty_amount !== undefined && projectRecord.adjusted_penalty_amount !== null
+        ? projectRecord.adjusted_penalty_amount
+        : projectRecord.penalty_amount || 0
+    );
+    setPenaltyError("");
+    setPenaltyModalOpen(true);
+  };
+
+  // Handle Save Manual Penalty
+  const handleSaveManualPenalty = async (e) => {
+    e.preventDefault();
+    if (!activeProjectForPenalty) return;
+    setPenaltyError("");
+    try {
+      setSavingPenalty(true);
+      const res = await api.patch(
+        `/proceedings/${id}/projects/${activeProjectForPenalty.id}/penalty`,
+        {
+          adjusted_penalty_amount: parseFloat(manualPenaltyAmount || 0),
+        }
+      );
+      setBatch(res?.batch || res?.data?.batch || batch);
+      setDealerSummaries(res?.dealer_summaries || res?.data?.dealer_summaries || dealerSummaries);
+      setPenaltyModalOpen(false);
+    } catch (err) {
+      setPenaltyError(err?.message || err?.response?.data?.message || "Failed to update penalty");
+    } finally {
+      setSavingPenalty(false);
+    }
+  };
+
+  const [recalculating, setRecalculating] = useState(false);
+  const handleRecalculateBatch = async () => {
+    try {
+      setRecalculating(true);
+      const res = await api.post(`/proceedings/${id}/recalculate`);
+      setBatch(res?.batch || res?.data?.batch || batch);
+      setDealerSummaries(res?.dealer_summaries || res?.data?.dealer_summaries || dealerSummaries);
+    } catch (err) {
+      console.error("Error recalculating batch:", err);
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   if (loading && !batch) {
     return (
       <div className="flex-1 flex flex-col min-h-0">
@@ -186,6 +247,16 @@ export function CommissionBatchDetailPage() {
               onClick={() => navigate("/commissions")}
             >
               Back to Batches
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={RefreshCw}
+              loading={recalculating}
+              onClick={handleRecalculateBatch}
+              title="Recalculate all delay penalties & commissions with latest scheme tax slabs and project milestones"
+            >
+              Recalculate Penalties
             </Button>
             <Button
               variant="outline"
@@ -482,8 +553,8 @@ export function CommissionBatchDetailPage() {
                   <th className="py-2.5 px-3">Application ID</th>
                   <th className="py-2.5 px-3">Farmer & District</th>
                   <th className="py-2.5 px-3">Dealer</th>
-                  <th className="py-2.5 px-3 text-right">Invoice Amount</th>
-                  <th className="py-2.5 px-3 text-right">Subsidy Amount</th>
+                  <th className="py-2.5 px-3">F1: Invoice → Work Completed</th>
+                  <th className="py-2.5 px-3">F2: 1st Fund → JV Completed</th>
                   <th className="py-2.5 px-3 text-right">State Restricted</th>
                   <th className="py-2.5 px-3 text-right">Fund Share</th>
                   <th className="py-2.5 px-3 text-right">Material Cost</th>
@@ -497,77 +568,138 @@ export function CommissionBatchDetailPage() {
               <tbody className="divide-y divide-[#EDEAE1]">
                 {filteredProjects.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="py-8 text-center text-xs text-[#8C97AB]">
+                    <td colSpan={13} className="py-8 text-center text-xs text-[#8C97AB]">
                       No matching projects found in this batch.
                     </td>
                   </tr>
                 ) : (
-                  filteredProjects.map((p, idx) => (
-                    <tr key={p.id || idx} className="hover:bg-[#FAFAF8]">
-                      <td className="py-2.5 px-3 font-mono font-bold text-[#14213D]">
-                        {p.application_id}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <div className="font-semibold text-[#14213D]">{p.farmer_name || "—"}</div>
-                        <div className="text-[10px] text-[#52607D]">{p.district || "—"}</div>
-                      </td>
-                      <td className="py-2.5 px-3 text-[#14213D] font-medium">
-                        {p.dealer?.name || "Unassigned"}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
-                        {formatRupees(p.invoice_amount)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
-                        {formatRupees(p.subsidy_amount)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
-                        {formatRupees(p.state_restricted_amount)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#2F6F5E] font-semibold">
-                        {formatRupees(p.fund_share_amount)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
-                        {formatRupees(p.net_material_base)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E]">
-                        {formatRupees(p.commission_amount)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
-                        {formatRupees(p.fittings_amount)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        {p.penalty_amount > 0 ? (
-                          <span className="text-rose-600 font-bold font-mono">
-                            -{formatRupees(p.adjusted_penalty_amount || p.penalty_amount)}
-                            {p.delay_days > 0 ? ` (${p.delay_days}d)` : ""}
+                  filteredProjects.map((p, idx) => {
+                    const penalty = parseFloat(
+                      p.adjusted_penalty_amount !== undefined && p.adjusted_penalty_amount !== null
+                        ? p.adjusted_penalty_amount
+                        : p.penalty_amount || 0
+                    );
+                    const comm = parseFloat(p.commission_amount || 0);
+                    const fit = parseFloat(p.fittings_amount || 0);
+                    const netPayable = Math.max(0, comm + fit - penalty);
+
+                    return (
+                      <tr key={p.id || idx} className="hover:bg-[#FAFAF8]">
+                        <td className="py-2.5 px-3 font-mono font-bold text-[#14213D]">
+                          {p.application_id}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-[#14213D]">{p.farmer_name || "—"}</div>
+                          <div className="text-[10px] text-[#52607D]">{p.district || "—"}</div>
+                        </td>
+                        <td className="py-2.5 px-3 text-[#14213D] font-medium">
+                          {p.dealer?.name || "Unassigned"}
+                        </td>
+
+                        {/* Milestone 1 SLA: Invoice -> Work Completion Approved */}
+                        <td className="py-2.5 px-3">
+                          <div className="text-[11px] text-[#14213D] font-mono">
+                            <span className="text-[#8C97AB]">Inv:</span> {formatDate(p.invoice_date)}
+                          </div>
+                          <div className="text-[11px] text-[#14213D] font-mono">
+                            <span className="text-[#8C97AB]">WC:</span> {formatDate(p.work_completion_date)}
+                          </div>
+                          <div className="mt-0.5">
+                            {p.m1_delay_days !== null ? (
+                              <span
+                                className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold font-mono ${
+                                  p.m1_delay_days > 45
+                                    ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                    : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                }`}
+                              >
+                                {p.m1_delay_days} days
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-[10px] italic">—</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Milestone 2 SLA: 1st Fund UTR -> JV Completed */}
+                        <td className="py-2.5 px-3">
+                          <div className="text-[11px] text-[#14213D] font-mono">
+                            <span className="text-[#8C97AB]">1st:</span> {formatDate(p.first_fund_date)}
+                          </div>
+                          <div className="text-[11px] text-[#14213D] font-mono">
+                            <span className="text-[#8C97AB]">JV:</span> {formatDate(p.jv_completed_date)}
+                          </div>
+                          <div className="mt-0.5">
+                            {p.m2_delay_days !== null ? (
+                              <span
+                                className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold font-mono ${
+                                  p.m2_delay_days > 45
+                                    ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                    : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                }`}
+                              >
+                                {p.m2_delay_days} days
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-[10px] italic">—</span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
+                          {formatRupees(p.state_restricted_amount)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-[#2F6F5E] font-semibold">
+                          {formatRupees(p.fund_share_amount)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
+                          {formatRupees(p.net_material_base)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                          {formatRupees(p.commission_amount)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
+                          {formatRupees(p.fittings_amount)}
+                        </td>
+
+                        {/* Penalty with Manual Override Action */}
+                        <td className="py-2.5 px-3 text-right font-mono">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {penalty > 0 ? (
+                              <span className="text-rose-600 font-bold font-mono">
+                                -{formatRupees(penalty)}
+                              </span>
+                            ) : (
+                              <span className="text-[#8C97AB]">₹0</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPenaltyModal(p)}
+                              className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer"
+                              title="Add / Edit Manual Penalty"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
+                          {formatRupees(netPayable)}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                              p.is_paid_to_dealer
+                                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                : "bg-gray-100 text-gray-700 border border-gray-200"
+                            }`}
+                          >
+                            {p.is_paid_to_dealer ? "PAID" : "UNPAID"}
                           </span>
-                        ) : (
-                          <span className="text-[#8C97AB]">₹0</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
-                        {formatRupees(
-                          Math.max(
-                            0,
-                            parseFloat(p.commission_amount || 0) +
-                              parseFloat(p.fittings_amount || 0) -
-                              parseFloat(p.adjusted_penalty_amount || p.penalty_amount || 0)
-                          )
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                            p.is_paid_to_dealer
-                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                              : "bg-gray-100 text-gray-700 border border-gray-200"
-                          }`}
-                        >
-                          {p.is_paid_to_dealer ? "PAID" : "UNPAID"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -726,6 +858,107 @@ export function CommissionBatchDetailPage() {
             </Button>
             <Button type="submit" loading={markingDealerPaid} icon={CheckCircle2}>
               Confirm Payout
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal 3: Manual Project Penalty Override Modal */}
+      <Modal
+        isOpen={penaltyModalOpen}
+        onClose={() => setPenaltyModalOpen(false)}
+        title={`Adjust Penalty: ${activeProjectForPenalty?.application_id || "Project"}`}
+      >
+        <form onSubmit={handleSaveManualPenalty} className="space-y-4">
+          {penaltyError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-[8px] text-xs text-rose-800 flex items-center gap-2">
+              <AlertCircle size={15} className="text-rose-600 shrink-0" />
+              <span>{penaltyError}</span>
+            </div>
+          )}
+
+          <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1] space-y-1.5 text-xs">
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Application ID:</span>
+              <strong className="font-mono text-[#14213D]">{activeProjectForPenalty?.application_id}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Farmer / District:</span>
+              <strong className="text-[#14213D]">
+                {activeProjectForPenalty?.farmer_name || "—"} ({activeProjectForPenalty?.district || "—"})
+              </strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Assigned Dealer:</span>
+              <strong className="text-[#14213D]">{activeProjectForPenalty?.dealer?.name || "Unassigned"}</strong>
+            </div>
+            <div className="flex justify-between border-t border-[#EDEAE1] pt-1.5">
+              <span className="text-[#52607D]">Calculated Commission:</span>
+              <strong className="font-mono text-[#2F6F5E]">
+                {formatRupees(activeProjectForPenalty?.commission_amount)}
+              </strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Fittings Reimbursement:</span>
+              <strong className="font-mono text-[#7C3AED]">
+                {formatRupees(activeProjectForPenalty?.fittings_amount)}
+              </strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">SLA Delay Observed:</span>
+              <strong className="font-mono text-amber-800">
+                {activeProjectForPenalty?.delay_days || 0} days
+              </strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">System Calculated Penalty:</span>
+              <strong className="font-mono text-rose-700">
+                {formatRupees(activeProjectForPenalty?.penalty_amount || 0)}
+              </strong>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Adjusted / Manual Penalty Amount (₹) <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              placeholder="0"
+              value={manualPenaltyAmount}
+              onChange={(e) => setManualPenaltyAmount(e.target.value)}
+              className="w-full px-3 py-2 text-xs font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              required
+              autoFocus
+            />
+            <span className="text-[10px] text-[#52607D] mt-0.5 block">
+              Enter 0 to waive all penalties, or enter a custom deduction amount.
+            </span>
+          </div>
+
+          {/* Live Preview of Resulting Net Payable */}
+          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-[6px] flex items-center justify-between text-xs">
+            <span className="font-semibold text-emerald-900">Resulting Net Payable to Dealer:</span>
+            <strong className="font-mono text-emerald-800 text-sm font-extrabold">
+              {formatRupees(
+                Math.max(
+                  0,
+                  parseFloat(activeProjectForPenalty?.commission_amount || 0) +
+                    parseFloat(activeProjectForPenalty?.fittings_amount || 0) -
+                    (parseFloat(manualPenaltyAmount) || 0)
+                )
+              )}
+            </strong>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
+            <Button variant="secondary" type="button" onClick={() => setPenaltyModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={savingPenalty} icon={CheckCircle2}>
+              Save Adjusted Penalty
             </Button>
           </div>
         </form>

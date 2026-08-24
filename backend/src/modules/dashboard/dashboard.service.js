@@ -1,5 +1,6 @@
 import { Op, QueryTypes } from "sequelize";
 import db from "../../config/db.js";
+import "../../models/initModels.js";
 import GovernmentProject from "../projects/project.model.js";
 import Dealer from "../dealers/dealer.model.js";
 import GovernmentStatus from "../statuses/status.model.js";
@@ -18,12 +19,28 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
   if (totalProjects === 0) {
     return {
       totalProjects: 0,
+      totalAreaHa: 0,
+      totalFundsReleased: 0,
+      totalInvoiceAmount: 0,
+      totalSubsidyAmount: 0,
       byStatus: [],
       byDistrict: [],
       byDealer: [],
       pendingProjects: 0,
     };
   }
+
+  // Global aggregate metrics
+  const overallStats = await GovernmentProject.findOne({
+    where,
+    attributes: [
+      [db.fn("SUM", db.col("total_area_ha")), "total_area_ha"],
+      [db.fn("SUM", db.col("total_fund_released")), "total_fund_released"],
+      [db.fn("SUM", db.col("invoice_amount")), "total_invoice_amount"],
+      [db.fn("SUM", db.col("quotation_subsidy_amount")), "total_subsidy_amount"],
+    ],
+    raw: true,
+  });
 
   // 1. Status Distribution (Dynamic from DB)
   const statusStats = await GovernmentProject.findAll({
@@ -32,6 +49,9 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
       "current_status",
       [db.fn("COUNT", db.col("id")), "count"],
       [db.fn("SUM", db.col("total_area_ha")), "total_area_ha"],
+      [db.fn("SUM", db.col("total_fund_released")), "total_fund_released"],
+      [db.fn("SUM", db.col("invoice_amount")), "total_invoice_amount"],
+      [db.fn("SUM", db.col("quotation_subsidy_amount")), "total_subsidy_amount"],
     ],
     group: ["current_status"],
     order: [[db.literal("count"), "DESC"]],
@@ -45,6 +65,9 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
       count,
       percentage: parseFloat(((count / totalProjects) * 100).toFixed(2)),
       totalAreaHa: s.total_area_ha ? parseFloat(s.total_area_ha) : 0,
+      totalFundReleased: s.total_fund_released ? parseFloat(s.total_fund_released) : 0,
+      totalInvoiceAmount: s.total_invoice_amount ? parseFloat(s.total_invoice_amount) : 0,
+      totalSubsidyAmount: s.total_subsidy_amount ? parseFloat(s.total_subsidy_amount) : 0,
     };
   });
 
@@ -124,6 +147,10 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
 
   return {
     totalProjects,
+    totalAreaHa: overallStats?.total_area_ha ? parseFloat(overallStats.total_area_ha) : 0,
+    totalFundsReleased: overallStats?.total_fund_released ? parseFloat(overallStats.total_fund_released) : 0,
+    totalInvoiceAmount: overallStats?.total_invoice_amount ? parseFloat(overallStats.total_invoice_amount) : 0,
+    totalSubsidyAmount: overallStats?.total_subsidy_amount ? parseFloat(overallStats.total_subsidy_amount) : 0,
     byStatus,
     byDistrict,
     byDealer,
@@ -292,18 +319,39 @@ export async function getDistrictDistribution({ year, dealer_id } = {}) {
 /**
  * Average stage durations computed strictly from observed status history transitions
  */
-export async function getStageDurations() {
+export async function getStageDurations(filters = {}) {
+  const whereClauses = [];
+  const replacements = {};
+
+  if (filters.year) {
+    whereClauses.push(`gp.year ILIKE :year`);
+    replacements.year = `%${filters.year}%`;
+  }
+  if (filters.district) {
+    whereClauses.push(`gp.district ILIKE :district`);
+    replacements.district = `%${filters.district}%`;
+  }
+  if (filters.dealer_id) {
+    whereClauses.push(`gp.dealer_id = :dealer_id`);
+    replacements.dealer_id = filters.dealer_id;
+  }
+
+  const joinClause = whereClauses.length > 0
+    ? `INNER JOIN government_projects gp ON gp.id = h.project_id WHERE ${whereClauses.join(" AND ")}`
+    : "";
+
   const sql = `
     WITH transitions AS (
       SELECT 
-        project_id,
-        status AS from_status,
-        status_date AS from_date,
-        observed_at AS from_observed_at,
-        LEAD(status) OVER (PARTITION BY project_id ORDER BY COALESCE(status_date, observed_at::date) ASC, observed_at ASC) AS to_status,
-        LEAD(status_date) OVER (PARTITION BY project_id ORDER BY COALESCE(status_date, observed_at::date) ASC, observed_at ASC) AS to_date,
-        LEAD(observed_at) OVER (PARTITION BY project_id ORDER BY COALESCE(status_date, observed_at::date) ASC, observed_at ASC) AS to_observed_at
-      FROM government_project_status_history
+        h.project_id,
+        h.status AS from_status,
+        h.status_date AS from_date,
+        h.observed_at AS from_observed_at,
+        LEAD(h.status) OVER (PARTITION BY h.project_id ORDER BY COALESCE(h.status_date, h.observed_at::date) ASC, h.observed_at ASC) AS to_status,
+        LEAD(h.status_date) OVER (PARTITION BY h.project_id ORDER BY COALESCE(h.status_date, h.observed_at::date) ASC, h.observed_at ASC) AS to_date,
+        LEAD(h.observed_at) OVER (PARTITION BY h.project_id ORDER BY COALESCE(h.status_date, h.observed_at::date) ASC, h.observed_at ASC) AS to_observed_at
+      FROM government_project_status_history h
+      ${joinClause}
     ),
     valid_transitions AS (
       SELECT
@@ -331,7 +379,7 @@ export async function getStageDurations() {
     ORDER BY count DESC;
   `;
 
-  const results = await db.query(sql, { type: QueryTypes.SELECT });
+  const results = await db.query(sql, { replacements, type: QueryTypes.SELECT });
 
   return {
     totalTransitions: results.reduce((acc, curr) => acc + curr.count, 0),

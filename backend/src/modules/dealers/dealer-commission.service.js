@@ -26,49 +26,68 @@ const FINAL_FUND_STATUSES = [
  * Calculate full dealer commission breakdown, fittings cost, 45-day aging penalties, and 2-part milestone eligibility
  */
 export async function calculateProjectDealerCommission(projectId) {
-  const project = await GovernmentProject.findByPk(projectId, {
-    include: [
-      {
-        model: Dealer,
-        as: "dealer",
-      },
-      {
-        model: Invoice,
-        as: "invoices",
-      },
-    ],
-  });
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId);
+  const include = [
+    {
+      model: Dealer,
+      as: "dealer",
+    },
+    {
+      model: Invoice,
+      as: "invoices",
+    },
+  ];
+
+  let project = null;
+  if (isUuid) {
+    project = await GovernmentProject.findByPk(projectId, { include });
+  }
+  if (!project) {
+    project = await GovernmentProject.findOne({
+      where: db.where(db.fn("UPPER", db.col("application_id")), String(projectId).trim().toUpperCase()),
+      include,
+    });
+  }
 
   if (!project) {
     throw new AppError(`Government Project not found with ID ${projectId}`, 404);
   }
 
-  const dealer = project.dealer;
+  // If project has dealer_id but dealer association didn't populate, load dealer directly
+  let dealer = project.dealer;
+  if (!dealer && project.dealer_id) {
+    dealer = await Dealer.findByPk(project.dealer_id);
+  }
+
   const invoices = project.invoices || [];
 
-  // Determine Project Date for Scheme GST Tax Slab lookup strictly from invoice_date
-  const projectDate = project.invoice_date || null;
+  // Determine Project Date for Scheme GST Tax Slab lookup strictly from invoice_date (or status date)
+  const projectDate = project.invoice_date || project.current_status_date || null;
   const effectiveSlab = await getEffectiveSchemeTaxSlab(projectDate);
-  const applicableGstPct = parseFloat(effectiveSlab.gst_percentage || 12.0);
-  const applicableFittingsPct = parseFloat(effectiveSlab.fittings_percentage || 5.0);
+  const applicableGstPct = parseFloat(effectiveSlab.gst_percentage ?? 12.0);
+  const applicableFittingsPct = parseFloat(effectiveSlab.fittings_percentage ?? 5.0);
 
-  // Financial values directly from Government Project (Strictly State Restricted Amount)
+  // Financial values directly from Government Project (Always use State Restricted Amount)
   const rawStateRestricted = parseFloat(project.state_restricted_amount) || 0;
   const rawInvoiceAmount = parseFloat(project.invoice_amount) || 0;
   const rawQuotationSubsidy = parseFloat(project.quotation_subsidy_amount) || 0;
   const rawFarmerContribution = parseFloat(project.farmer_contribution) || 0;
 
-  // Base Net Amount and Fittings Cost (Sequential Back-Out):
+  // Base Net Amount and Fittings Cost (Sequential Back-Out using State Restricted Amount)
+  // If state_restricted_amount is 0/null, fallback to invoice_amount
+  const calculationBaseGross = rawStateRestricted > 0 ? rawStateRestricted : rawInvoiceAmount;
   let baseAmount = 0;
   let fittingsAmount = 0;
 
-  if (rawStateRestricted > 0) {
-    const taxable = rawStateRestricted / (1 + applicableGstPct / 100);
+  if (calculationBaseGross > 0) {
+    const taxable = calculationBaseGross / (1 + applicableGstPct / 100);
     baseAmount = Math.floor(taxable / (1 + applicableFittingsPct / 100));
-    fittingsAmount = Math.floor(baseAmount * (applicableFittingsPct / 100));
+    fittingsAmount = Math.floor(taxable - baseAmount);
   }
 
-  // If no dealer is assigned to this project, do not calculate or hardcode any commission!
+  const govDeduction = Math.max(0, rawInvoiceAmount - (rawStateRestricted || rawInvoiceAmount));
+
+  // If no dealer is assigned to this project, return clear NO_DEALER response
   if (!dealer) {
     return {
       dealer: null,
@@ -77,6 +96,13 @@ export async function calculateProjectDealerCommission(projectId) {
         farmer_contribution: Math.floor(rawFarmerContribution),
         invoice_amount: Math.floor(rawInvoiceAmount),
         state_restricted_amount: Math.floor(rawStateRestricted),
+        gov_deduction: govDeduction,
+      },
+      applicable_tax_slab: {
+        gst_percentage: applicableGstPct,
+        fittings_percentage: applicableFittingsPct,
+        description: effectiveSlab.description,
+        project_date_used: projectDate,
       },
       base_amount: baseAmount,
       fittings_amount: fittingsAmount,
@@ -99,7 +125,7 @@ export async function calculateProjectDealerCommission(projectId) {
 
   // Fetch status history in chronological order
   const histories = await GovernmentProjectStatusHistory.findAll({
-    where: { project_id: projectId },
+    where: { project_id: project.id },
     order: [
       ["status_date", "ASC"],
       ["observed_at", "ASC"],
@@ -123,7 +149,7 @@ export async function calculateProjectDealerCommission(projectId) {
     phase1DelayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
     if (phase1DelayDays > 45) {
       phase1Cycles = Math.floor(phase1DelayDays / 45);
-      phase1PenaltyPoints = phase1Cycles * 1.0; // 1% points per 45-day cycle
+      phase1PenaltyPoints = phase1Cycles * 1.0; // 1% point penalty per 45-day cycle
     }
   }
 
@@ -146,18 +172,25 @@ export async function calculateProjectDealerCommission(projectId) {
     phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
     if (phase2DelayDays > 45) {
       phase2Cycles = Math.floor(phase2DelayDays / 45);
-      phase2PenaltyPoints = phase2Cycles * 1.0; // 1% points per 45-day cycle
+      phase2PenaltyPoints = phase2Cycles * 1.0; // 1% point penalty per 45-day cycle
     }
   }
 
-  // Milestone 2 (Final Fund Release)
+  // Milestone 1 Eligibility
+  const isFirstFundReached =
+    Boolean(firstFundHistory) ||
+    Boolean(project.first_fund_utr_no) ||
+    parseFloat(project.first_fund_amount || 0) > 0 ||
+    FIRST_FUND_STATUSES.some((st) => st.toLowerCase() === project.current_status?.toLowerCase());
+
+  // Milestone 2 Eligibility (Final Fund Release)
   const finalFundHistory = histories.find((h) =>
     FINAL_FUND_STATUSES.some((st) => st.toLowerCase() === h.status?.toLowerCase())
   );
   const isFinalFundReached =
     Boolean(finalFundHistory) ||
     Boolean(project.final_fund_utr_no) ||
-    parseFloat(project.final_fund_amount || 0) > 0 ||
+    parseFloat(project.second_fund_amount || project.final_fund_amount || 0) > 0 ||
     FINAL_FUND_STATUSES.some((st) => st.toLowerCase() === project.current_status?.toLowerCase());
 
   const fundType = (project.fund_type || "Regular").trim();
@@ -184,6 +217,7 @@ export async function calculateProjectDealerCommission(projectId) {
   const phase1TotalPenalty = originalPart1Commission - part1Amount;
   const phase2TotalPenalty = originalPart2Commission - part2Amount;
   const totalPenaltyAmount = phase1TotalPenalty + phase2TotalPenalty;
+  const totalPenaltyPoints = phase1PenaltyPoints + phase2PenaltyPoints;
   const totalCommissionAmount = part1Amount + part2Amount;
 
   // Effective percentage representation for display
@@ -191,6 +225,11 @@ export async function calculateProjectDealerCommission(projectId) {
     baseAmount > 0
       ? parseFloat(((totalCommissionAmount / baseAmount) * 100.0).toFixed(2))
       : basePercentage;
+
+  // Find or Create Dealer Commission Record for Tracking
+  let commissionRecord = await DealerCommission.findOne({
+    where: { project_id: project.id },
+  });
 
   const breakdownJson = {
     originalTotalCommission,
@@ -217,14 +256,53 @@ export async function calculateProjectDealerCommission(projectId) {
     fund2SplitPct,
   };
 
+  if (!commissionRecord) {
+    commissionRecord = await DealerCommission.create({
+      dealer_id: dealer.id,
+      project_id: project.id,
+      commission_percentage: basePercentage,
+      penalty_percentage: totalPenaltyPoints,
+      effective_percentage: effectivePercentage,
+      base_amount: baseAmount,
+      commission_amount: totalCommissionAmount,
+      part1_percentage: fund1SplitPct,
+      part1_amount: part1Amount,
+      part1_status: isFirstFundReached ? "UNPAID" : "LOCKED",
+      part2_percentage: fund2SplitPct,
+      part2_amount: part2Amount,
+      part2_status: isFinalFundReached ? "UNPAID" : "LOCKED",
+      fittings_amount: fittingsAmount,
+      fittings_status: "PENDING",
+      breakdown_json: breakdownJson,
+      status: "PENDING",
+    });
+  } else {
+    // Keep amounts and calculations up to date
+    await commissionRecord.update({
+      dealer_id: dealer.id,
+      commission_percentage: basePercentage,
+      penalty_percentage: totalPenaltyPoints,
+      effective_percentage: effectivePercentage,
+      base_amount: baseAmount,
+      commission_amount: totalCommissionAmount,
+      part1_percentage: fund1SplitPct,
+      part1_amount: part1Amount,
+      part1_status: commissionRecord.part1_status === "PAID" ? "PAID" : isFirstFundReached ? "UNPAID" : "LOCKED",
+      part2_percentage: fund2SplitPct,
+      part2_amount: part2Amount,
+      part2_status: commissionRecord.part2_status === "PAID" ? "PAID" : isFinalFundReached ? "UNPAID" : "LOCKED",
+      fittings_amount: fittingsAmount,
+      breakdown_json: breakdownJson,
+    });
+  }
+
   return {
-    dealer: dealer
-      ? {
-          id: dealer.id,
-          name: dealer.name,
-          commission_percentage: basePercentage,
-        }
-      : null,
+    commission_record_id: commissionRecord.id,
+    dealer: {
+      id: dealer.id,
+      name: dealer.name,
+      commission_percentage: basePercentage,
+    },
     fund_type: fundType,
     fund1_split_pct: fund1SplitPct,
     fund2_split_pct: fund2SplitPct,
@@ -245,8 +323,8 @@ export async function calculateProjectDealerCommission(projectId) {
     fittings_amount: fittingsAmount,
     base_percentage: basePercentage,
     original_commission_amount: originalTotalCommission,
-    fixed_penalty_per_cycle: fixedPenaltyPerCycle,
-    penalty_percentage: penaltyPercentage,
+    fixed_penalty_per_cycle: 1.0,
+    penalty_percentage: totalPenaltyPoints,
     penalty_amount: totalPenaltyAmount,
     effective_percentage: effectivePercentage,
     total_commission_amount: totalCommissionAmount,
@@ -254,15 +332,24 @@ export async function calculateProjectDealerCommission(projectId) {
       percentage: fund1SplitPct,
       amount: part1Amount,
       is_eligible: isFirstFundReached,
+      status: commissionRecord.part1_status,
+      paid_date: commissionRecord.part1_paid_date,
+      paid_ref: commissionRecord.part1_paid_ref,
     },
     part2: {
       percentage: fund2SplitPct,
       amount: part2Amount,
       is_eligible: isFinalFundReached,
+      status: commissionRecord.part2_status,
+      paid_date: commissionRecord.part2_paid_date,
+      paid_ref: commissionRecord.part2_paid_ref,
     },
     fittings: {
       percentage: applicableFittingsPct,
       amount: fittingsAmount,
+      status: commissionRecord.fittings_status,
+      paid_date: commissionRecord.fittings_paid_date,
+      paid_ref: commissionRecord.fittings_paid_ref,
     },
     breakdown: breakdownJson,
   };

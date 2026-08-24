@@ -62,6 +62,33 @@ export async function getEffectiveSchemeTaxSlab(projectDate) {
 }
 
 /**
+ * Helper to check date range conflicts against existing slabs
+ */
+async function validateNoDateRangeOverlap(cleanFrom, cleanTo, excludeId = null) {
+  const allSlabs = await SchemeTaxSlab.findAll();
+  const newEnd = cleanTo || "9999-12-31";
+
+  for (const existing of allSlabs) {
+    if (excludeId && existing.id === excludeId) continue;
+
+    const existingFrom = existing.effective_from;
+    const existingTo = existing.effective_to || "9999-12-31";
+
+    // Two intervals [A, B] and [C, D] overlap if A <= D and B >= C
+    if (cleanFrom <= existingTo && newEnd >= existingFrom) {
+      const label = existing.description || `${existing.gst_percentage}% GST`;
+      const fromStr = existing.effective_from;
+      const toStr = existing.effective_to ? existing.effective_to : "Ongoing";
+      const newToStr = cleanTo ? cleanTo : "Ongoing";
+      throw new AppError(
+        `Date conflict: The date range (${cleanFrom} to ${newToStr}) clashes with existing tax slab '${label}' (${fromStr} to ${toStr}). Tax slabs cannot have overlapping date ranges.`,
+        400
+      );
+    }
+  }
+}
+
+/**
  * Create a new Scheme Tax Slab
  */
 export async function createTaxSlab({
@@ -85,6 +112,9 @@ export async function createTaxSlab({
     throw new AppError("Effective to date cannot be earlier than effective from date", 400);
   }
 
+  // Prevent date clashing/overlapping with existing tax slabs
+  await validateNoDateRangeOverlap(cleanFrom, cleanTo);
+
   const slab = await SchemeTaxSlab.create({
     effective_from: cleanFrom,
     effective_to: cleanTo,
@@ -105,15 +135,26 @@ export async function updateTaxSlab(id, data) {
     throw new AppError(`Tax Slab with ID ${id} not found`, 404);
   }
 
-  const updatePayload = {};
-  if (data.effective_from !== undefined) {
-    updatePayload.effective_from = String(data.effective_from).trim().slice(0, 10);
+  const cleanFrom = data.effective_from !== undefined
+    ? String(data.effective_from).trim().slice(0, 10)
+    : slab.effective_from;
+
+  const cleanTo = data.effective_to !== undefined
+    ? (data.effective_to ? String(data.effective_to).trim().slice(0, 10) : null)
+    : slab.effective_to;
+
+  if (cleanTo && cleanTo < cleanFrom) {
+    throw new AppError("Effective to date cannot be earlier than effective from date", 400);
   }
-  if (data.effective_to !== undefined) {
-    updatePayload.effective_to = data.effective_to
-      ? String(data.effective_to).trim().slice(0, 10)
-      : null;
-  }
+
+  // Prevent date clashing/overlapping with existing tax slabs
+  await validateNoDateRangeOverlap(cleanFrom, cleanTo, id);
+
+  const updatePayload = {
+    effective_from: cleanFrom,
+    effective_to: cleanTo,
+  };
+
   if (data.gst_percentage !== undefined) {
     updatePayload.gst_percentage = parseFloat(data.gst_percentage);
   }

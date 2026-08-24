@@ -43,6 +43,7 @@ export const listInvoiceSchema = z.object({
     government_project_id: z.string().optional(),
     dealer_id: z.string().optional(),
     customer_id: z.string().optional(),
+    month: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),

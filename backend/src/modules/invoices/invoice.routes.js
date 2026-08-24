@@ -37,7 +37,9 @@ router.get("/load-order/batches", invoiceController.listLoadOrderBatches);
 router.get("/load-order/batches/:id", invoiceController.getLoadOrderBatchById);
 router.post("/load-order/batches/:id/cancel", invoiceController.cancelLoadOrderBatch);
 
-// 2. Standard Invoice CRUD
+// 2. Standard Invoice CRUD & Analytics
+router.get("/direct-sales/analytics", invoiceController.getDirectSalesAnalytics);
+
 router
   .route("/")
   .get(validate(listInvoiceSchema), invoiceController.listInvoices)

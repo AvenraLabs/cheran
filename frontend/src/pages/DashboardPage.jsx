@@ -54,9 +54,10 @@ export function DashboardPage() {
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
       };
 
-      const [summaryRes, allDealersRes] = await Promise.all([
+      const [summaryRes, allDealersRes, durationsRes] = await Promise.all([
         api.get("/dashboard/government/summary", { params }),
         api.get("/dealers/options").catch(() => ({ dealers: [] })),
+        api.get("/dashboard/government/stage-durations", { params }).catch(() => ({ data: { stageDurations: [] } })),
       ]);
 
       const summary = summaryRes?.data || summaryRes || {};
@@ -65,6 +66,7 @@ export function DashboardPage() {
       setDealerDistData(summary.byDealer || []);
       setDistrictDistData(summary.byDistrict || []);
       setDealersList(allDealersRes?.data?.dealers || allDealersRes?.dealers || []);
+      setStageDurationsData(durationsRes?.data?.stageDurations || durationsRes?.stageDurations || []);
 
       // Extract unique districts if not already populated
       if (summary.byDistrict?.length > 0 && districtsList.length === 0) {
@@ -82,20 +84,20 @@ export function DashboardPage() {
     fetchDashboardData();
   }, [selectedYear, selectedDistrict, selectedDealer]);
 
-  const totalExtentArea = statusDistData.reduce(
-    (acc, curr) => acc + (parseFloat(curr.totalAreaHa) || 0),
-    0
-  );
+  const totalExtentArea =
+    summaryData?.totalAreaHa !== undefined && summaryData?.totalAreaHa !== null
+      ? parseFloat(summaryData.totalAreaHa) || 0
+      : statusDistData.reduce((acc, curr) => acc + (parseFloat(curr.totalAreaHa) || 0), 0);
 
-  const totalFundsReleased = statusDistData.reduce(
-    (acc, curr) => acc + (parseFloat(curr.totalFundReleased) || 0),
-    0
-  );
+  const totalFundsReleased =
+    summaryData?.totalFundsReleased !== undefined && summaryData?.totalFundsReleased !== null
+      ? parseFloat(summaryData.totalFundsReleased) || 0
+      : statusDistData.reduce((acc, curr) => acc + (parseFloat(curr.totalFundReleased) || 0), 0);
 
-  const totalInvoiceSum = statusDistData.reduce(
-    (acc, curr) => acc + (parseFloat(curr.totalInvoiceAmount) || 0),
-    0
-  );
+  const totalInvoiceSum =
+    summaryData?.totalInvoiceAmount !== undefined && summaryData?.totalInvoiceAmount !== null
+      ? parseFloat(summaryData.totalInvoiceAmount) || 0
+      : statusDistData.reduce((acc, curr) => acc + (parseFloat(curr.totalInvoiceAmount) || 0), 0);
 
   const completedProjects =
     (summaryData?.totalProjects || 0) - (summaryData?.pendingProjects || 0);

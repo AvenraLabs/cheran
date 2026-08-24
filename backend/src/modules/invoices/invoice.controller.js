@@ -59,6 +59,14 @@ export const recordInvoicePayment = asyncHandler(async (req, res) => {
   });
 });
 
+export const getDirectSalesAnalytics = asyncHandler(async (req, res) => {
+  const analytics = await invoiceService.getDirectSalesAnalytics(req.query);
+  res.status(200).json({
+    status: "success",
+    data: analytics,
+  });
+});
+
 /**
  * Historical Invoice JSON Bulk Import Controller
  * Supports both JSON body payload and multipart file upload.
