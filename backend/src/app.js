@@ -34,6 +34,9 @@ import proceedingRoutes from "./modules/proceedings/proceeding.routes.js";
 
 const app = express();
 
+// Trust reverse proxy (Nginx, Cloudflare, Caddy) so IP rate-limiting works accurately
+app.set("trust proxy", 1);
+
 // Security Headers
 app.use(helmet());
 

@@ -5,6 +5,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App.jsx";
 import "./index.css";
 
+// Clean up any legacy / stuck Service Workers or CacheStorage from previous deployments
+if (typeof window !== "undefined") {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister();
+      }
+    }).catch(() => {});
+  }
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
