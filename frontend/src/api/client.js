@@ -52,8 +52,7 @@ rawAxios.interceptors.response.use(
   }
 );
 
-// --- In-Flight GET Request Deduplicator & Master Data Cache ---
-const inFlightRequests = new Map();
+// --- Master Data Cache for static dropdown options ---
 const masterDataCache = new Map();
 const MASTER_ENDPOINTS = [
   "/government/statuses",
@@ -76,7 +75,7 @@ export const api = {
   get: (url, config = {}) => {
     const key = getRequestKey(url, config.params);
 
-    // 1. Check Master Data Cache
+    // Check Master Data Cache
     const isMasterEndpoint = MASTER_ENDPOINTS.some((ep) => url.startsWith(ep));
     if (isMasterEndpoint && !config.bypassCache) {
       const cached = masterDataCache.get(key);
@@ -85,27 +84,14 @@ export const api = {
       }
     }
 
-    // 2. In-Flight Request Deduplication (merges concurrent identical GET requests)
-    if (inFlightRequests.has(key)) {
-      return inFlightRequests.get(key);
-    }
-
-    const promise = rawAxios.get(url, config)
-      .then((data) => {
-        if (isMasterEndpoint) {
-          masterDataCache.set(key, { data, timestamp: Date.now() });
-        }
-        return data;
-      })
-      .finally(() => {
-        inFlightRequests.delete(key);
-      });
-
-    inFlightRequests.set(key, promise);
-    return promise;
+    return rawAxios.get(url, config).then((data) => {
+      if (isMasterEndpoint) {
+        masterDataCache.set(key, { data, timestamp: Date.now() });
+      }
+      return data;
+    });
   },
   post: (url, data, config) => {
-    // Invalidate master caches on writes
     masterDataCache.clear();
     return rawAxios.post(url, data, config);
   },
