@@ -37,6 +37,18 @@ const app = express();
 // Trust reverse proxy (Nginx, Cloudflare, Caddy) so IP rate-limiting works accurately
 app.set("trust proxy", 1);
 
+// Disable ETags on dynamic API responses to prevent 304 HTTP/2 stream stalls
+app.disable("etag");
+
+// Enforce no-cache on all REST API responses so browser/proxies always get fresh 200 OK payloads
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  res.set("Surrogate-Control", "no-store");
+  next();
+});
+
 // Security Headers
 app.use(helmet());
 
