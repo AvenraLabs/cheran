@@ -6,7 +6,7 @@ const baseURL =
 
 const rawAxios = axios.create({
   baseURL,
-  timeout: 25000,
+  timeout: 120000, // 2 minutes default timeout
   headers: {
     "Content-Type": "application/json",
   },
@@ -18,6 +18,17 @@ rawAxios.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Exempt large file uploads and imports from client-side timeout limits
+  if (
+    config.data instanceof FormData ||
+    config.url?.includes("/imports") ||
+    config.url?.includes("/upload") ||
+    config.headers?.["Content-Type"] === "multipart/form-data"
+  ) {
+    config.timeout = 0; // Unlimited timeout for Excel bulk processing
+  }
+
   return config;
 });
 
