@@ -130,10 +130,10 @@ export async function previewProceedingExcel(
     const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
 
     // 1. Total Project Material Cost (Calculated from Subsidy Eligible Amount 100%)
-    // Deduct GST percentage (e.g. 12% -> * 0.88), then deduct 5% fittings (-> * 0.95)
-    const taxableEligible = subsidyEligible > 0 ? Math.floor(subsidyEligible * (1 - gstPct / 100)) : 0;
-    const totalFittings5pct = Math.floor(taxableEligible * (fittingsPct / 100));
-    const totalMaterialCost = Math.floor(taxableEligible - totalFittings5pct);
+    // Sequentially back out GST percentage (/ 1 + GST%), then back out 5% fittings (/ 1 + Fittings%)
+    const taxableEligible = subsidyEligible > 0 ? subsidyEligible / (1 + gstPct / 100) : 0;
+    const totalMaterialCost = taxableEligible > 0 ? Math.floor(taxableEligible / (1 + fittingsPct / 100)) : 0;
+    const totalFittings5pct = Math.floor(taxableEligible - totalMaterialCost);
 
     // Fittings Amount:
     // If includeFittings is true (First fund / checked): full 5% fittings cost calculated from 100% subsidy eligible amount
@@ -141,11 +141,10 @@ export async function previewProceedingExcel(
     const fittingsAmount = includeFittings ? totalFittings5pct : 0;
 
     // 2. Released Tranche Calculations (Main Base for Dealer Commission)
-    // Deduct GST percentage (e.g. 12% -> * 0.88), then deduct 5% fittings (-> * 0.95)
-    const taxableReleased = nowToBeReleased > 0 ? Math.floor(nowToBeReleased * (1 - gstPct / 100)) : 0;
-    const releasedFittings5pct = Math.floor(taxableReleased * (fittingsPct / 100));
-    const releasedNetMaterial = Math.floor(taxableReleased - releasedFittings5pct);
-    const calculatedGst = Math.floor(nowToBeReleased - taxableReleased);
+    // Net Material Base for this milestone tranche = (Total Material Cost * Fund Release %) / 100
+    const fundPct = detected_fund_percentage || 55.0;
+    const releasedNetMaterial = Math.floor((totalMaterialCost * fundPct) / 100.0);
+    const calculatedGst = Math.floor(subsidyEligible - taxableEligible);
 
     // Dealer Rate
     const dealer = proj?.dealer || null;
@@ -707,16 +706,17 @@ export async function recalculateProceedingBatch(id) {
       );
       const nowToBeReleased = Math.floor(parseFloat(item.now_to_be_released_amount || item.fund_share_amount || 0));
 
+      const fundPct = batch.fund_percentage_value || 55.0;
+
       // 1. Total Project Material Cost
-      const taxableEligible = subsidyEligible > 0 ? Math.floor(subsidyEligible * (1 - gstPct / 100)) : 0;
-      const totalFittings5pct = Math.floor(taxableEligible * (fittingsPct / 100));
-      const totalMaterialCost = Math.floor(taxableEligible - totalFittings5pct);
+      // Sequentially back out GST percentage (/ 1 + GST%), then back out 5% fittings (/ 1 + Fittings%)
+      const taxableEligible = subsidyEligible > 0 ? subsidyEligible / (1 + gstPct / 100) : 0;
+      const totalMaterialCost = taxableEligible > 0 ? Math.floor(taxableEligible / (1 + fittingsPct / 100)) : 0;
+      const totalFittings5pct = Math.floor(taxableEligible - totalMaterialCost);
       const fittingsAmt = includeFittings ? totalFittings5pct : 0;
 
-      // 2. Released Tranche Calculations (Always based on settings GST percentage)
-      const taxableReleased = nowToBeReleased > 0 ? Math.floor(nowToBeReleased * (1 - gstPct / 100)) : 0;
-      const releasedFittings5pct = Math.floor(taxableReleased * (fittingsPct / 100));
-      const releasedNetMaterial = Math.floor(taxableReleased - releasedFittings5pct);
+      // 2. Released Tranche Calculations (Main Base for Dealer Commission)
+      const releasedNetMaterial = Math.floor((totalMaterialCost * fundPct) / 100.0);
 
       let delayDays = 0;
       let penaltyPoints = 0;

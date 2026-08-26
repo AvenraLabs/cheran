@@ -504,9 +504,11 @@ export function CommissionProceedingsPage() {
     let newTotalNetPayout = 0;
 
     const updatedRows = previewData.rows.map((r) => {
-      const taxableEligible = r.subsidy_eligible_amount > 0 ? Math.floor(r.subsidy_eligible_amount * (1 - r.gst_percentage / 100)) : 0;
-      const totalFit5pct = Math.floor(taxableEligible * (r.fittings_percentage / 100));
-      const totalMatCost = Math.floor(taxableEligible - totalFit5pct);
+      const gstPct = parseFloat(r.gst_percentage ?? 12.0);
+      const fitPct = parseFloat(r.fittings_percentage ?? 5.0);
+      const taxableEligible = r.subsidy_eligible_amount > 0 ? r.subsidy_eligible_amount / (1 + gstPct / 100) : 0;
+      const totalMatCost = taxableEligible > 0 ? Math.floor(taxableEligible / (1 + fitPct / 100)) : 0;
+      const totalFit5pct = Math.floor(taxableEligible - totalMatCost);
 
       const fitAmt = checked ? totalFit5pct : 0;
       const netPayout = Math.max(0, r.commission_amount + fitAmt - (r.penalty_amount || 0));
