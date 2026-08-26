@@ -5,6 +5,8 @@ import { Toaster } from "sonner";
 
 export const LayoutContext = createContext({
   isMobileNavOpen: false,
+  isSidebarCollapsed: false,
+  toggleSidebar: () => {},
   toggleMobileNav: () => {},
   closeMobileNav: () => {},
 });
@@ -13,6 +15,13 @@ export const useLayout = () => useContext(LayoutContext);
 
 export function Layout() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("cheran_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
   const location = useLocation();
 
   // Close mobile drawer whenever route changes
@@ -20,14 +29,41 @@ export function Layout() {
     setIsMobileNavOpen(false);
   }, [location.pathname]);
 
+  const toggleSidebar = () => {
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setIsMobileNavOpen((prev) => !prev);
+    } else {
+      setIsSidebarCollapsed((prev) => {
+        const next = !prev;
+        try {
+          localStorage.setItem("cheran_sidebar_collapsed", String(next));
+        } catch {}
+        return next;
+      });
+    }
+  };
+
   const toggleMobileNav = () => setIsMobileNavOpen((prev) => !prev);
   const closeMobileNav = () => setIsMobileNavOpen(false);
 
   return (
-    <LayoutContext.Provider value={{ isMobileNavOpen, toggleMobileNav, closeMobileNav }}>
-      <div className="flex min-h-screen bg-[#FAFAF8] text-[#14213D] relative">
-        <Sidebar isOpen={isMobileNavOpen} onClose={closeMobileNav} />
-        <div className="flex-1 flex flex-col min-w-0">
+    <LayoutContext.Provider
+      value={{
+        isMobileNavOpen,
+        isSidebarCollapsed,
+        toggleSidebar,
+        toggleMobileNav,
+        closeMobileNav,
+      }}
+    >
+      <div className="flex h-screen max-h-screen w-screen overflow-hidden bg-[#FAFAF8] text-[#14213D]">
+        <Sidebar
+          isOpen={isMobileNavOpen}
+          isCollapsed={isSidebarCollapsed}
+          onClose={closeMobileNav}
+          onToggleCollapse={toggleSidebar}
+        />
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all duration-300">
           <Outlet />
         </div>
         <Toaster position="top-right" richColors closeButton />

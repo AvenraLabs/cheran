@@ -392,9 +392,9 @@ export function UsersPage() {
                 value={formData.role}
                 onChange={(val) => setFormData({ ...formData, role: val })}
                 options={[
-                  { value: "ADMIN", label: "Admin (Full ERP Access)" },
-                  { value: "USER", label: "User (Dashboard, Projects, Sales & Uploads)" },
-                  { value: "DEALER", label: "Dealer (Projects, Imports & Directory Only)" },
+                  { value: "ADMIN", label: "Admin" },
+                  { value: "USER", label: "User" },
+                  { value: "DEALER", label: "Dealer" },
                 ]}
               />
             </div>

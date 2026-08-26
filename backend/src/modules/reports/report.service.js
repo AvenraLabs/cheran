@@ -177,14 +177,18 @@ export async function getGovernmentFundsReport({ year, district } = {}) {
   );
 
   // 3. By District
+  const districtWhereClause = conditions.length > 0 
+    ? `WHERE ${conditions.join(" AND ")} AND district IS NOT NULL AND TRIM(district) != ''` 
+    : `WHERE district IS NOT NULL AND TRIM(district) != ''`;
+
   const byDistrict = await db.query(
     `SELECT 
-       COALESCE(district, 'Unassigned District') AS district,
+       TRIM(district) AS district,
        COUNT(*)::integer AS count,
        COALESCE(SUM(COALESCE(invoice_amount, quotation_subsidy_amount, 0)), 0)::float AS total_invoiced,
        COALESCE(SUM(COALESCE(total_fund_released, 0)), 0)::float AS total_received
      FROM government_projects
-     ${whereClause}
+     ${districtWhereClause}
      GROUP BY district
      ORDER BY total_received DESC
      LIMIT 50`,

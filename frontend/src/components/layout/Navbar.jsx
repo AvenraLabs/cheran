@@ -4,16 +4,17 @@ import { Menu } from "lucide-react";
 import { useLayout } from "./Layout.jsx";
 
 export function Navbar({ title, subtitle, actions }) {
-  const { toggleMobileNav } = useLayout();
+  const { toggleSidebar } = useLayout();
 
   return (
     <header className="min-h-16 py-3 px-4 sm:px-6 md:px-8 bg-white border-b border-[#E4E1D8] flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 z-20 shrink-0 shadow-[0_1px_2px_rgba(20,33,61,0.02)]">
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
-          onClick={toggleMobileNav}
+          onClick={toggleSidebar}
           aria-label="Toggle navigation menu"
-          className="lg:hidden p-2 -ml-1 text-[#14213D] hover:bg-[#FAFAF8] active:bg-[#EDEAE1] border border-[#E4E1D8] rounded-[8px] transition-colors cursor-pointer shrink-0"
+          className="p-2 -ml-1 text-[#14213D] hover:bg-[#FAFAF8] active:bg-[#EDEAE1] border border-[#E4E1D8] hover:border-[#2F6F5E] hover:text-[#2F6F5E] rounded-[8px] transition-colors cursor-pointer shrink-0"
+          title="Toggle Sidebar Menu"
         >
           <Menu size={18} />
         </button>

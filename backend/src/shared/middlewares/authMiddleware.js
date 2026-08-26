@@ -108,14 +108,13 @@ export const enforceRoleModuleAccess = (req, res, next) => {
       "/api/government/statuses",
       "/api/government/imports",
       "/api/dealers",
-      "/api/proceedings",
     ];
 
     const isAllowed = dealerAllowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
     if (!isAllowed) {
       return next(
         new AppError(
-          `Access forbidden. Dealer role is restricted to Govt Projects, Excel Imports, Dealers Directory, and Proceedings.`,
+          `Access forbidden. Dealer role is restricted to Govt Projects, Excel Imports, and Dealers Directory.`,
           403
         )
       );
@@ -123,17 +122,16 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     return next();
   }
 
-  // 'USER' role
+  // 'USER' role: 6 Operations & Govt modules (Govt Projects, Direct Sales, Load Orders, Excel Imports, Dealers Directory, Commissions)
   if (role === "USER") {
     const userAllowedPrefixes = [
-      "/api/dashboard",
       "/api/government/projects",
       "/api/government/statuses",
       "/api/sales",
       "/api/customers",
       "/api/items",
       "/api/units",
-      "/api/invoices/load-order",
+      "/api/invoices",
       "/api/government/imports",
       "/api/dealers",
       "/api/proceedings",
@@ -143,7 +141,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     if (!isAllowed) {
       return next(
         new AppError(
-          `Access forbidden. User role is restricted to Dashboard, Govt Projects, Direct Sales, Load Order, Excel Imports, and Dealers Directory.`,
+          `Access forbidden. User role is restricted to Govt Projects, Direct Sales, Load Order, Excel Imports, Dealers Directory, and Commissions.`,
           403
         )
       );

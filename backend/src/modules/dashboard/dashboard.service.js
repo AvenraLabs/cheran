@@ -71,9 +71,15 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
     };
   });
 
-  // 2. District Distribution
+  // 2. District Distribution (Excluding empty/null districts)
   const districtStats = await GovernmentProject.findAll({
-    where,
+    where: {
+      ...where,
+      district: {
+        [Op.ne]: null,
+        [Op.not]: "",
+      },
+    },
     attributes: [
       "district",
       [db.fn("COUNT", db.col("id")), "count"],
@@ -85,15 +91,17 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
     raw: true,
   });
 
-  const byDistrict = districtStats.map((d) => {
-    const count = parseInt(d.count, 10);
-    return {
-      district: d.district || "Unspecified",
-      count,
-      percentage: parseFloat(((count / totalProjects) * 100).toFixed(2)),
-      totalAreaHa: d.total_area_ha ? parseFloat(d.total_area_ha) : 0,
-    };
-  });
+  const byDistrict = districtStats
+    .filter((d) => d.district && d.district.trim() !== "")
+    .map((d) => {
+      const count = parseInt(d.count, 10);
+      return {
+        district: d.district.trim(),
+        count,
+        percentage: parseFloat(((count / totalProjects) * 100).toFixed(2)),
+        totalAreaHa: d.total_area_ha ? parseFloat(d.total_area_ha) : 0,
+      };
+    });
 
   // 3. Dealer Distribution
   const dealerStats = await GovernmentProject.findAll({

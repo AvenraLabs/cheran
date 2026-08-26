@@ -43,3 +43,10 @@ export const listDealerSchema = z.object({
     limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 20)),
   }),
 });
+
+export const setUniversalCommissionSchema = z.object({
+  body: z.object({
+    commission_percentage: z.number().min(0, "Commission percentage must be >= 0").max(100, "Commission percentage must be <= 100"),
+    overwrite_existing: z.boolean().optional().default(true),
+  }),
+});

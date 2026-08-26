@@ -23,10 +23,11 @@ import {
   UploadCloud,
   ShoppingCart,
   Settings,
+  Menu,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-export function Sidebar({ isOpen, onClose }) {
+export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
   const { user, logout } = useAuth();
   const role = (user?.role || "USER").toUpperCase();
   const isAdmin = role === "ADMIN";
@@ -86,22 +87,20 @@ export function Sidebar({ isOpen, onClose }) {
   } else if (isDealer) {
     navigationSections = [
       {
-        title: "Dealer Portal",
+        title: "Operations & Govt",
         items: [
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
           { label: "Excel Imports", path: "/imports", icon: FileText },
           { label: "Dealers Directory", path: "/dealers", icon: Users },
-          { label: "Commission", path: "/commissions", icon: Receipt },
         ],
       },
     ];
   } else {
-    // 'USER' role
+    // 'USER' role: 6 pages in Operations & Govt group (Dashboard excluded)
     navigationSections = [
       {
         title: "Operations & Govt",
         items: [
-          { label: "Dashboard", path: "/", icon: LayoutDashboard },
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
           { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
           { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
@@ -124,93 +123,105 @@ export function Sidebar({ isOpen, onClose }) {
         />
       )}
 
-      {/* Sidebar / Mobile Drawer */}
+      {/* Sidebar (Desktop pinned in-flow h-full, Mobile fixed drawer) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] lg:w-64 bg-white border-r border-[#E4E1D8] flex flex-col h-screen max-h-screen lg:sticky lg:top-0 shrink-0 select-none shadow-[2px_0_12px_rgba(20,33,61,0.08)] lg:shadow-[1px_0_2px_rgba(20,33,61,0.02)] transition-transform duration-300 ease-in-out ${
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        className={`bg-white border-r border-[#E4E1D8] flex flex-col h-full max-h-screen select-none transition-all duration-300 ease-in-out ${
+          /* Mobile Drawer Positioning */
+          isOpen
+            ? "fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] translate-x-0 shadow-2xl"
+            : "fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] -translate-x-full lg:translate-x-0"
+        } ${
+          /* Desktop Pinned & Collapse */
+          isCollapsed
+            ? "lg:w-0 lg:min-w-0 lg:max-w-0 lg:overflow-hidden lg:border-r-0 lg:p-0 lg:opacity-0 lg:pointer-events-none lg:shadow-none"
+            : "lg:relative lg:w-64 lg:min-w-[16rem] lg:max-w-[16rem] lg:shrink-0 lg:h-full lg:opacity-100 lg:pointer-events-auto lg:shadow-[1px_0_2px_rgba(20,33,61,0.02)]"
         }`}
       >
-        {/* Brand Header */}
-        <div className="h-16 px-5 border-b border-[#EDEAE1] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <img
-              src="/icon.png"
-              alt="Cheran Logo"
-              className="w-9 h-9 object-contain shrink-0"
-            />
-            <div className="min-w-0">
-              <div className="text-sm font-bold font-display tracking-tight text-[#14213D] truncate">
-                CHERAN IRRIGATION
-              </div>
-              <div className="text-[10px] font-medium text-[#52607D] truncate">
-                {isDealer ? "Dealer Portal" : "Horticulture & Irrigation ERP"}
+        {/* Inner Fixed-Width Wrapper to prevent text squishing during collapse transition */}
+        <div className="w-64 min-w-[16rem] max-w-[16rem] flex flex-col h-full overflow-hidden">
+          {/* Brand Header */}
+          <div className="h-16 px-4 border-b border-[#EDEAE1] flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src="/icon.png"
+                alt="Cheran Logo"
+                className="w-8 h-8 object-contain shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-bold font-display tracking-tight text-[#14213D] truncate">
+                  CHERAN IRRIGATION
+                </div>
+                <div className="text-[9px] font-medium text-[#52607D] truncate">
+                  {isDealer ? "Dealer Portal" : "Horticulture & Irrigation ERP"}
+                </div>
               </div>
             </div>
+
+            {/* Close button visible only on mobile drawer */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close mobile sidebar"
+              className="lg:hidden p-1.5 text-[#52607D] hover:text-[#14213D] hover:bg-[#FAFAF8] rounded-[6px] transition-colors cursor-pointer shrink-0"
+              title="Close Menu"
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          {/* Close button for Mobile */}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close sidebar"
-            className="lg:hidden p-1.5 text-[#52607D] hover:text-[#14213D] hover:bg-[#FAFAF8] rounded-[6px] transition-colors cursor-pointer"
-          >
-            <X size={18} />
-          </button>
-        </div>
+          {/* Nav Menu */}
+          <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+            {navigationSections.map((section, idx) => (
+              <div key={idx} className="space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#8C97AB] px-3 py-1">
+                  {section.title}
+                </div>
 
-        {/* Nav Menu */}
-        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
-          {navigationSections.map((section, idx) => (
-            <div key={idx} className="space-y-1">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-[#8C97AB] px-3 py-1">
-                {section.title}
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === "/" || item.path === "/inventory" || item.path === "/imports"}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2.5 px-3 py-2 rounded-[7px] text-xs font-medium transition-colors ${
+                        isActive
+                          ? "bg-[#EAF3F0] text-[#2F6F5E] font-bold shadow-xs"
+                          : "text-[#52607D] hover:bg-[#FAFAF8] hover:text-[#14213D]"
+                      }`
+                    }
+                  >
+                    <item.icon size={15} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
               </div>
+            ))}
+          </nav>
 
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === "/" || item.path === "/inventory" || item.path === "/imports"}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2.5 px-3 py-2 rounded-[7px] text-xs font-medium transition-colors ${
-                      isActive
-                        ? "bg-[#EAF3F0] text-[#2F6F5E] font-bold shadow-xs"
-                        : "text-[#52607D] hover:bg-[#FAFAF8] hover:text-[#14213D]"
-                    }`
-                  }
-                >
-                  <item.icon size={15} />
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        {/* User Session Footer */}
-        <div className="p-3 border-t border-[#EDEAE1] bg-[#FAFAF8] flex items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-[#2F6F5E]/15 text-[#2F6F5E] flex items-center justify-center font-bold text-xs shrink-0 font-mono">
-              {user?.name?.slice(0, 1) || user?.username?.slice(0, 1)?.toUpperCase() || "U"}
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-bold text-[#14213D] truncate">
-                {user?.name || user?.username || "User"}
+          {/* User Session Footer */}
+          <div className="p-3 border-t border-[#EDEAE1] bg-[#FAFAF8] flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-[#2F6F5E]/15 text-[#2F6F5E] flex items-center justify-center font-bold text-xs shrink-0 font-mono">
+                {user?.name?.slice(0, 1) || user?.username?.slice(0, 1)?.toUpperCase() || "U"}
               </div>
-              <div className="text-[10px] text-[#52607D] truncate uppercase font-mono font-medium">
-                {role}
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-[#14213D] truncate">
+                  {user?.name || user?.username || "User"}
+                </div>
+                <div className="text-[10px] text-[#52607D] truncate uppercase font-mono font-medium">
+                  {role}
+                </div>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={logout}
+              title="Sign out"
+              className="p-1.5 text-[#8C97AB] hover:text-[#B0403A] hover:bg-[#FDF2F1] rounded-[6px] transition-colors cursor-pointer"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            title="Sign out"
-            className="p-1.5 text-[#8C97AB] hover:text-[#B0403A] hover:bg-[#FDF2F1] rounded-[6px] transition-colors cursor-pointer"
-          >
-            <LogOut size={16} />
-          </button>
         </div>
       </aside>
     </>

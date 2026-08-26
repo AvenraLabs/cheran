@@ -56,12 +56,15 @@ function ProtectedLayout() {
 /**
  * Route guard for Admin-only pages
  */
+/**
+ * Route guard for Admin-only pages
+ */
 function AdminRoute({ children }) {
   const { user } = useAuth();
   const role = (user?.role || "USER").toUpperCase();
 
   if (role !== "ADMIN") {
-    return <Navigate to={role === "DEALER" ? "/projects" : "/"} replace />;
+    return <Navigate to="/projects" replace />;
   }
 
   return children;
@@ -82,13 +85,13 @@ function UserOrAdminRoute({ children }) {
 }
 
 /**
- * Index Route Handler: Dealers land on /projects, others on Dashboard
+ * Index Route Handler: Only Admin gets Dashboard, User & Dealer land on /projects
  */
 function IndexRoute() {
   const { user } = useAuth();
   const role = (user?.role || "USER").toUpperCase();
 
-  if (role === "DEALER") {
+  if (role !== "ADMIN") {
     return <Navigate to="/projects" replace />;
   }
 
@@ -112,13 +115,48 @@ export function App() {
           <Route path="projects/:id" element={<ProjectDetailPage />} />
           <Route path="imports" element={<ImportsPage />} />
           <Route path="dealers" element={<DealersPage />} />
-          <Route path="commissions" element={<CommissionProceedingsPage />} />
-          <Route path="commissions/:id" element={<CommissionBatchDetailPage />} />
-          <Route path="commission" element={<CommissionProceedingsPage />} />
-          <Route path="dealers/commissions" element={<CommissionProceedingsPage />} />
-          <Route path="dealers/commission" element={<CommissionProceedingsPage />} />
 
           {/* Operations Routes (Allowed for USER & ADMIN, Forbidden for DEALER) */}
+          <Route
+            path="commissions"
+            element={
+              <UserOrAdminRoute>
+                <CommissionProceedingsPage />
+              </UserOrAdminRoute>
+            }
+          />
+          <Route
+            path="commissions/:id"
+            element={
+              <UserOrAdminRoute>
+                <CommissionBatchDetailPage />
+              </UserOrAdminRoute>
+            }
+          />
+          <Route
+            path="commission"
+            element={
+              <UserOrAdminRoute>
+                <CommissionProceedingsPage />
+              </UserOrAdminRoute>
+            }
+          />
+          <Route
+            path="dealers/commissions"
+            element={
+              <UserOrAdminRoute>
+                <CommissionProceedingsPage />
+              </UserOrAdminRoute>
+            }
+          />
+          <Route
+            path="dealers/commission"
+            element={
+              <UserOrAdminRoute>
+                <CommissionProceedingsPage />
+              </UserOrAdminRoute>
+            }
+          />
           <Route
             path="sales"
             element={

@@ -1,0 +1,32 @@
+<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><META http-equiv="Content-Type" content="text/html; charset=utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Sheet1</x:Name><x:WorksheetOptions><x:Print><x:ValidPrinterInfo/></x:Print></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--> <style> .text-no {mso-number-format:\@;} </style></head><body lang=EN-US style='mso-element:header' id=h1><span style='mso--code:DATE'></span><div  style='font-size:12px;'><table>
+    <tr>
+        <th>Srl No</th>
+        <th>Application ID</th>
+        <th>Name of the Farmer</th>
+        <th>District</th>
+        <th>Block</th>
+        <th>Village</th>
+        <th>Spacing (m)</th>
+        <th>Area Laid out (Ha)</th>
+        <th>% of Assistance</th>
+        <th>Category of Farmer</th>
+        <th>Invoice Date</th>
+        <th>Subsidy Eligible Amount (in Rs)</th>
+        <th>Sugar Subsidy Invoice Amount (in Rs)</th>
+        <th>60% subsidy amount in Rs.</th>
+        <th>Balance 40% subsidy amount now to be released in Rs.</th>
+        <th>Invoice No</th>
+        <th>GOI Share</th>
+        <th>State Share</th>
+        <th>Addl State Share</th>
+        <th>GST Amount</th>
+        <th>Type of Mi System</th>
+        <th>Name of the Firm</th>
+        <th>Proceeding No.</th>
+        <th>UTR No</th>
+        <th>UTR Date</th>
+        <th>Treasury UTR No</th>
+        <th>Treasury UTR Date</th>
+    </tr>
+    <tr><td>1</td><td>H-DPR-pgm-7142245468-2024-25</td><td>KANAKA</td><td>Dharmapuri</td><td>Pennagaram</td><td>Sigaralahalli</td><td><1.2m*0.6m</td><td>0.420</td><td>SF / MF</td><td></td><td>04-11-2024</td><td>51170</td><td>0.00</td><td>30702</td><td>20468.3</td><td>-</td><td>6030.84</td><td>4020.56</td><td>8223.88</td><td>2193.03</td><td>Drip</td><td>Cherran Irrigation</td><td>B2/2345/2026(11)</td><td></td><td>00-00-0000</td><td></td><td>00-00-0000</td></tr><tr><td>1</td><td>H-DPR-pgm-3620941269-2023-24</td><td>CHINNASAMY</td><td>Dharmapuri</td><td>Pennagaram</td><td>Sigaralahalli</td><td><1.2m*0.6m</td><td>0.900</td><td>SF / MF</td><td></td><td>08-07-2024</td><td>121248</td><td>0.00</td><td>72748</td><td>48499</td><td>-</td><td>14289.88</td><td>9526.58</td><td>19486.20</td><td>5196.32</td><td>Drip</td><td>Cherran Irrigation</td><td>B2/2345/2026(11)</td><td></td><td>00-00-0000</td><td></td><td>00-00-0000</td></tr><tr><td>1</td><td>H-DPR-npy-5938730338-2023-24</td><td>PALANI</td><td>Dharmapuri</td><td>Nallampalli</td><td>Pangunatham</td><td><1.2m*0.6m</td><td>0.440</td><td>SF / MF</td><td></td><td>08-07-2024</td><td>47385</td><td>0.00</td><td>27781</td><td>19604</td><td>-</td><td>5776.17</td><td>3850.78</td><td>7876.60</td><td>2100.42</td><td>Drip</td><td>Cherran Irrigation</td><td>B2/2345/2026(11)</td><td></td><td>00-00-0000</td><td></td><td>00-00-0000</td></tr>
+</table></div></body></html>

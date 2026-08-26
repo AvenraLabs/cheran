@@ -1,0 +1,32 @@
+<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><META http-equiv="Content-Type" content="text/html; charset=utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Sheet1</x:Name><x:WorksheetOptions><x:Print><x:ValidPrinterInfo/></x:Print></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--> <style> .text-no {mso-number-format:\@;} </style></head><body lang=EN-US style='mso-element:header' id=h1><span style='mso--code:DATE'></span><div  style='font-size:12px;'><table>
+    <tr>
+         <th>Srl No</th>
+        <th>Application ID</th>
+        <th>Name of the Farmer</th>
+        <th>Invoice Year</th>
+        <th>District</th>
+        <th>Block</th>
+        <th>Village</th>
+        <th>Department</th>
+        <th>Spacing (m)</th>
+        <th>Area Laid out (Ha)</th>
+        <th>Category of Farmer</th>
+        <th>Social Status</th>
+        <th>Type of Mi System</th>
+        <th>Sugar Drip Type</th>
+        <th>Name of the Firm</th>
+        <th>Invoice Date</th>
+        <th>Invoice Amount (in Rs)</th>
+        <th>FC Amount (in Rs)</th>
+        <th>Sugar Subsidy Invoice Amount (in Rs)</th>
+        <th>State Restricted Amount (in Rs)</th>
+        <th>55% subsidy amount now to be released in Rs.</th>
+        <th>Goi Share amount in Rs.</th>
+        <th>State Share amount in Rs.</th>
+        <th>Balance 45% subsidy amount in Rs.</th>
+        <th>UTR No</th>
+        <th>UTR Date</th>
+    </tr>
+    <tr><td>1</td><td>H-KGI-bgr-9695788388-2025-26</td><td>RAJI M</td><td>2025-2026</td><td>Krishnagiri</td><td>Bargur</td><td>Chinnamettrapalli</td><td>Horticulture</td><td>1.2m*0.6m</td><td>1.280</td><td>SF / MF</td><td>Scheduled Caste</td><td>Drip</td><td></td><td>Cherran Irrigation</td><td>20-02-2026</td><td>158495</td><td>0</td><td></td><td>158495</td><td>83021</td><td>49813</td><td>33208</td><td>75474</td><td></td><td>00-00-0000</td></tr>
+</table>
+</div></body></html>

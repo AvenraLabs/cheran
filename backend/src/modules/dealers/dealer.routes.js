@@ -6,6 +6,7 @@ import {
   mergeDealersSchema,
   getDealerSchema,
   listDealerSchema,
+  setUniversalCommissionSchema,
 } from "./dealer.schema.js";
 import * as dealerController from "./dealer.controller.js";
 import * as commissionController from "./dealer-commission.controller.js";
@@ -36,6 +37,13 @@ router
 
 // Lightweight options for dropdown selects
 router.get("/options", dealerController.getDealerOptions);
+
+// Set universal commission percentage for all dealers
+router.post(
+  "/universal-commission",
+  validate(setUniversalCommissionSchema),
+  dealerController.setUniversalCommission
+);
 
 // Merge duplicate dealers into a target dealer
 router.post("/merge", validate(mergeDealersSchema), dealerController.mergeDealers);

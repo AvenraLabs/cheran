@@ -160,7 +160,72 @@ export async function getProjectById(id) {
     throw new AppError(`Government Project not found with ID ${id}`, 404);
   }
 
+  if (project.status_history && Array.isArray(project.status_history)) {
+    project.setDataValue(
+      "status_history",
+      sortProjectStatusHistories(project.status_history)
+    );
+  }
+
   return project;
+}
+
+const STATUS_LIFECYCLE_ORDER = {
+  "APPLICATION RECEIVED": 10,
+  "APPLICATION VERIFIED": 20,
+  "FIELD VERIFICATION": 25,
+  "FIELD VERIFICATION COMPLETED": 30,
+  "QUOTATION PREPARED BY MI COMPANY": 40,
+  "QUOTATION APPROVED": 50,
+  "WORK ORDER ISSUED": 60,
+  "ISSUED WORK ORDER": 60,
+  "INVOICED": 70,
+  "SUPPLY OF MATERIALS": 80,
+  "WORK COMPLETED": 90,
+  "WORK COMPLETION APPROVED": 100,
+  "FIRST FUND PROCEEDING COMPLETED": 110,
+  "DISTRICT FIRST FUND CREDITED (UTR UPDATED)": 120,
+  "FIRST FUND CREDITED (UTR UPDATED)": 120,
+  "IAMWARM FUND CREDITED (UTR UPDATED)": 120,
+  "DISTRICT FIRST FUND PROCEEDING COMPLETED": 120,
+  "EARLIER JV COMPLETED": 130,
+  "JOINT VERIFICATION COMPLETED": 140,
+  "JV RECOMMENDED": 140,
+  "SECOND FUND PROCEEDING COMPLETED": 150,
+  "FINAL FUND CREDITED (UTR UPDATED)": 160,
+  "TREASURY FUND CREDITED": 170,
+};
+
+function getStatusStageWeight(statusName) {
+  if (!statusName) return 500;
+  const upper = String(statusName).trim().toUpperCase();
+  return STATUS_LIFECYCLE_ORDER[upper] ?? 500;
+}
+
+export function sortProjectStatusHistories(histories = []) {
+  return [...histories].sort((a, b) => {
+    // 1. Primary sort by status_date (earliest date first)
+    const dateA = a.status_date ? new Date(a.status_date).getTime() : 0;
+    const dateB = b.status_date ? new Date(b.status_date).getTime() : 0;
+
+    if (dateA !== dateB) {
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateA - dateB;
+    }
+
+    // 2. Secondary tie-breaker by lifecycle stage progression weight
+    const weightA = getStatusStageWeight(a.status);
+    const weightB = getStatusStageWeight(b.status);
+    if (weightA !== weightB) {
+      return weightA - weightB;
+    }
+
+    // 3. Tertiary tie-breaker by observed_at
+    const obsA = a.observed_at ? new Date(a.observed_at).getTime() : 0;
+    const obsB = b.observed_at ? new Date(b.observed_at).getTime() : 0;
+    return obsA - obsB;
+  });
 }
 
 export async function getProjectStatusHistory(projectId) {
@@ -181,22 +246,14 @@ export async function getProjectStatusHistory(projectId) {
         attributes: ["id", "file_name", "uploaded_at"],
       },
     ],
-    order: [
-      ["status_date", "ASC"],
-      ["observed_at", "ASC"],
-    ],
   });
 
-  // Ensure INVOICED status is sorted first as baseline stage
-  const sortedHistories = [...histories].sort((a, b) => {
-    if (a.status === "INVOICED" && b.status !== "INVOICED") return -1;
-    if (b.status === "INVOICED" && a.status !== "INVOICED") return 1;
-    return new Date(a.status_date || 0) - new Date(b.status_date || 0);
-  });
+  // Sort chronologically by status_date, then by logical lifecycle stage
+  const sortedHistories = sortProjectStatusHistories(histories);
 
   // Calculate days between consecutive observed statuses
   const historyWithIntervals = sortedHistories.map((entry, index) => {
-    const json = entry.toJSON ? entry.toJSON() : entry;
+    const json = entry.toJSON ? entry.toJSON() : { ...entry };
     if (index === 0) {
       json.days_since_previous = 0;
       json.previous_status = null;

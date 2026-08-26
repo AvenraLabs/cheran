@@ -54,6 +54,15 @@ export const ProceedingBatch = sequelize.define(
       allowNull: false,
       defaultValue: "UNPAID", // UNPAID, PARTIAL, PAID
     },
+    file_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    include_fittings: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,

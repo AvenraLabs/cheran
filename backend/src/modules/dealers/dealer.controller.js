@@ -73,3 +73,17 @@ export const mergeDealers = asyncHandler(async (req, res) => {
     data: result,
   });
 });
+
+export const setUniversalCommission = asyncHandler(async (req, res) => {
+  const { commission_percentage, overwrite_existing } = req.body;
+  const result = await dealerService.setUniversalCommission({
+    commission_percentage,
+    overwrite_existing,
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: `Commission percentage set to ${result.commission_percentage}% for ${result.updated_dealers_count} dealers.`,
+    data: result,
+  });
+});

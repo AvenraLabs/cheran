@@ -1,36 +1,76 @@
 import * as proceedingService from "./proceeding.service.js";
+import AppError from "../../shared/appError.js";
 
 /**
- * GET /api/proceedings/fund-percentages
+ * POST /api/proceedings/preview-excel
+ * Accepts multipart/form-data with `file`
  */
-export async function getFundPercentages(req, res, next) {
+export async function previewProceedingExcel(req, res, next) {
   try {
-    const slabs = await proceedingService.listFundPercentages();
-    res.json({ status: "success", fund_percentages: slabs });
+    if (!req.file || !req.file.buffer) {
+      throw new AppError("Please upload a valid Excel file (.xls or .xlsx)", 400);
+    }
+
+    const originalFilename = req.file.originalname || "proceeding.xls";
+    const includeFittingsParam =
+      req.body.include_fittings !== undefined
+        ? req.body.include_fittings
+        : req.query.include_fittings;
+
+    const preview = await proceedingService.previewProceedingExcel(
+      req.file.buffer,
+      originalFilename,
+      includeFittingsParam !== undefined ? includeFittingsParam === "true" || includeFittingsParam === true : null
+    );
+
+    res.json({
+      status: "success",
+      preview,
+    });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * POST /api/proceedings/fund-percentages
+ * POST /api/proceedings/import-excel
+ * Accepts multipart/form-data with `file` and optional fields
  */
-export async function createFundPercentage(req, res, next) {
+export async function importProceedingExcel(req, res, next) {
   try {
-    const slab = await proceedingService.createFundPercentage(req.body);
-    res.status(201).json({ status: "success", fund_percentage: slab });
-  } catch (err) {
-    next(err);
-  }
-}
+    if (!req.file || !req.file.buffer) {
+      throw new AppError("Please upload a valid Excel file (.xls or .xlsx)", 400);
+    }
 
-/**
- * DELETE /api/proceedings/fund-percentages/:id
- */
-export async function deleteFundPercentage(req, res, next) {
-  try {
-    await proceedingService.deleteFundPercentage(req.params.id);
-    res.json({ status: "success", message: "Fund percentage slab deactivated" });
+    const {
+      proceeding_no,
+      proceeding_date,
+      fund_percentage_value,
+      include_fittings,
+      skip_unmatched,
+      payment_received_date,
+      payment_received_ref,
+      notes,
+    } = req.body;
+
+    const originalFilename = req.file.originalname || "proceeding.xls";
+    const batch = await proceedingService.importProceedingBatch({
+      file_buffer: req.file.buffer,
+      original_filename: originalFilename,
+      proceeding_no,
+      proceeding_date,
+      fund_percentage_value,
+      include_fittings: include_fittings !== undefined ? include_fittings === "true" || include_fittings === true : null,
+      skip_unmatched: skip_unmatched === "true" || skip_unmatched === true,
+      payment_received_date,
+      payment_received_ref,
+      notes,
+    });
+
+    res.status(201).json({
+      status: "success",
+      batch,
+    });
   } catch (err) {
     next(err);
   }
@@ -54,24 +94,17 @@ export async function listProceedingBatches(req, res, next) {
 }
 
 /**
- * POST /api/proceedings/preview-ids
+ * GET /api/proceedings/:id
  */
-export async function previewProceedingIds(req, res, next) {
+export async function getProceedingBatchById(req, res, next) {
   try {
-    const result = await proceedingService.previewProceedingIds(req.body);
-    res.json({ status: "success", preview: result });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * POST /api/proceedings
- */
-export async function createProceedingBatch(req, res, next) {
-  try {
-    const batch = await proceedingService.createProceedingBatch(req.body);
-    res.status(201).json({ status: "success", batch });
+    const result = await proceedingService.getProceedingBatchById(req.params.id);
+    res.json({
+      status: "success",
+      batch: result.batch,
+      dealer_summaries: result.dealer_summaries,
+      unmatched_in_db_count: result.unmatched_in_db_count,
+    });
   } catch (err) {
     next(err);
   }
@@ -87,22 +120,7 @@ export async function recalculateProceedingBatch(req, res, next) {
       status: "success",
       batch: result.batch,
       dealer_summaries: result.dealer_summaries,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * GET /api/proceedings/:id
- */
-export async function getProceedingBatchById(req, res, next) {
-  try {
-    const result = await proceedingService.getProceedingBatchById(req.params.id);
-    res.json({
-      status: "success",
-      batch: result.batch,
-      dealer_summaries: result.dealer_summaries,
+      unmatched_in_db_count: result.unmatched_in_db_count,
     });
   } catch (err) {
     next(err);
@@ -131,6 +149,7 @@ export async function markDealerPayout(req, res, next) {
       status: "success",
       batch: result.batch,
       dealer_summaries: result.dealer_summaries,
+      unmatched_in_db_count: result.unmatched_in_db_count,
     });
   } catch (err) {
     next(err);
@@ -151,6 +170,7 @@ export async function updateProjectPenalty(req, res, next) {
       status: "success",
       batch: result.batch,
       dealer_summaries: result.dealer_summaries,
+      unmatched_in_db_count: result.unmatched_in_db_count,
     });
   } catch (err) {
     next(err);
@@ -164,6 +184,24 @@ export async function deleteProceedingBatch(req, res, next) {
   try {
     await proceedingService.deleteProceedingBatch(req.params.id);
     res.json({ status: "success", message: "Proceeding batch deleted" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/proceedings/dealer-statement
+ */
+export async function getDealerCommissionStatement(req, res, next) {
+  try {
+    const result = await proceedingService.getDealerCommissionStatement(req.query);
+    res.json({
+      status: "success",
+      projects: result.projects,
+      summary: result.summary,
+      selectedDealer: result.selectedDealer,
+      pagination: result.pagination,
+    });
   } catch (err) {
     next(err);
   }

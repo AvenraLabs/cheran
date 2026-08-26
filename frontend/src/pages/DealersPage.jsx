@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Users, Search, RefreshCw, Edit2, Trash2, GitMerge, ArrowRight, Info } from "lucide-react";
+import { Plus, Users, Search, RefreshCw, Edit2, Trash2, GitMerge, ArrowRight, Info, Percent, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -16,6 +16,12 @@ export function DealersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
+
+  // Bulk / Universal Commission Modal State
+  const [bulkCommissionModalOpen, setBulkCommissionModalOpen] = useState(false);
+  const [universalCommissionInput, setUniversalCommissionInput] = useState("8.0");
+  const [overwriteExisting, setOverwriteExisting] = useState(true);
+  const [applyingBulkCommission, setApplyingBulkCommission] = useState(false);
 
   // Add Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -185,6 +191,42 @@ export function DealersPage() {
     }
   };
 
+  const openUniversalCommissionModal = () => {
+    setUniversalCommissionInput("8.0");
+    setOverwriteExisting(true);
+    setBulkCommissionModalOpen(true);
+  };
+
+  const handleSetUniversalCommission = async (e) => {
+    e.preventDefault();
+    if (universalCommissionInput === "" || isNaN(parseFloat(universalCommissionInput))) {
+      toast.error("Please enter a valid commission percentage");
+      return;
+    }
+    const val = parseFloat(universalCommissionInput);
+    if (val < 0 || val > 100) {
+      toast.error("Commission percentage must be between 0% and 100%");
+      return;
+    }
+
+    try {
+      setApplyingBulkCommission(true);
+      const res = await api.post("/dealers/universal-commission", {
+        commission_percentage: val,
+        overwrite_existing: overwriteExisting,
+      });
+
+      toast.success(res.data?.message || `Commission percentage set to ${val}% for all dealers`);
+      setBulkCommissionModalOpen(false);
+      fetchDealers(pagination.page, pagination.limit);
+      fetchAllDealersForMerge();
+    } catch (err) {
+      toast.error(err.message || "Failed to set universal commission percentage");
+    } finally {
+      setApplyingBulkCommission(false);
+    }
+  };
+
   const targetDealerObj = allDealersForSelect.find((d) => d.id === targetDealerId);
   const sourceDealerObj = allDealersForSelect.find((d) => d.id === sourceDealerId);
 
@@ -194,11 +236,19 @@ export function DealersPage() {
         title="Dealers Directory"
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              icon={Percent}
+              onClick={openUniversalCommissionModal}
+              title="Set universal standard commission percentage for all dealers"
+            >
+              Set Commission for All
+            </Button>
             <Button variant="secondary" icon={GitMerge} onClick={openMergeModal}>
               Merge
             </Button>
             <Button icon={Plus} onClick={() => setCreateModalOpen(true)}>
-              Add
+              Add Dealer
             </Button>
           </div>
         }
@@ -541,6 +591,86 @@ export function DealersPage() {
             </Button>
             <Button type="submit" size="sm" loading={updating}>
               Save
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Universal / Bulk Commission Modal */}
+      <Modal
+        isOpen={bulkCommissionModalOpen}
+        onClose={() => setBulkCommissionModalOpen(false)}
+        title="Set Universal Commission for All Dealers"
+      >
+        <form onSubmit={handleSetUniversalCommission} className="space-y-4 text-xs">
+          <div className="p-3 bg-[#EAF3F0] rounded-[8px] border border-[#C2DFD6] space-y-1.5 text-xs text-[#2F6F5E]">
+            <div className="flex items-center gap-2 font-bold text-[#14213D]">
+              <Percent size={15} className="text-[#2F6F5E]" />
+              <span>Universal Standard Commission</span>
+            </div>
+            <p className="text-[#52607D] text-[11px] leading-relaxed">
+              This will update the standard commission percentage for all registered dealers across the system. You can still customize or override any dealer's commission individually anytime from the table.
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-[#14213D] mb-1">
+              Standard Commission Percentage (%) <span className="text-rose-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                required
+                placeholder="e.g. 8.0"
+                value={universalCommissionInput}
+                onChange={(e) => setUniversalCommissionInput(e.target.value)}
+                className="w-full px-3 py-2 font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] pr-8"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-xs text-[#52607D]">
+                %
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1] space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="overwriteExisting"
+                checked={overwriteExisting}
+                onChange={(e) => setOverwriteExisting(e.target.checked)}
+                className="rounded border-[#E4E1D8] text-[#2F6F5E] focus:ring-[#2F6F5E] cursor-pointer"
+              />
+              <label htmlFor="overwriteExisting" className="font-semibold text-[#14213D] cursor-pointer">
+                Overwrite dealers with existing custom commission %
+              </label>
+            </div>
+            <div className="text-[11px] text-[#52607D]">
+              {overwriteExisting
+                ? `Will update all active dealers to ${universalCommissionInput || 0}%.`
+                : `Will only assign ${universalCommissionInput || 0}% to dealers who currently have no commission percentage set.`}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setBulkCommissionModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              loading={applyingBulkCommission}
+              icon={CheckCircle2}
+            >
+              Apply to All Dealers
             </Button>
           </div>
         </form>

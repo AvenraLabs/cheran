@@ -204,3 +204,29 @@ export async function mergeDealers({ targetDealerId, sourceDealerIds }) {
     };
   });
 }
+
+export async function setUniversalCommission({ commission_percentage, overwrite_existing = true }) {
+  if (commission_percentage === undefined || commission_percentage === null || isNaN(parseFloat(commission_percentage))) {
+    throw new AppError("A valid commission_percentage number is required", 400);
+  }
+
+  const parsedPct = parseFloat(commission_percentage);
+  if (parsedPct < 0 || parsedPct > 100) {
+    throw new AppError("Commission percentage must be between 0 and 100", 400);
+  }
+
+  const where = { is_active: true };
+  if (!overwrite_existing) {
+    where.commission_percentage = null;
+  }
+
+  const [affectedCount] = await Dealer.update(
+    { commission_percentage: parsedPct },
+    { where }
+  );
+
+  return {
+    updated_dealers_count: affectedCount,
+    commission_percentage: parsedPct,
+  };
+}

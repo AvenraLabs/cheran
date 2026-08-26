@@ -33,8 +33,24 @@ export const ProceedingBatchProject = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    block: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    village: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     fund_type: {
       type: DataTypes.STRING,
+      allowNull: true,
+    },
+    invoice_number: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    invoice_date: {
+      type: DataTypes.DATEONLY,
       allowNull: true,
     },
     invoice_amount: {
@@ -49,6 +65,30 @@ export const ProceedingBatchProject = sequelize.define(
       type: DataTypes.DECIMAL(14, 2),
       defaultValue: 0,
     },
+    total_material_cost: {
+      type: DataTypes.DECIMAL(14, 2),
+      defaultValue: 0,
+    },
+    now_to_be_released_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      defaultValue: 0,
+    },
+    excel_gst_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      defaultValue: 0,
+    },
+    goi_share_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      defaultValue: 0,
+    },
+    state_share_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      defaultValue: 0,
+    },
+    addl_state_share_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      defaultValue: 0,
+    },
     fund_share_amount: {
       type: DataTypes.DECIMAL(14, 2),
       defaultValue: 0,
@@ -60,6 +100,10 @@ export const ProceedingBatchProject = sequelize.define(
     fittings_percentage: {
       type: DataTypes.FLOAT,
       defaultValue: 5.0,
+    },
+    penalty_percentage: {
+      type: DataTypes.FLOAT,
+      defaultValue: 0,
     },
     net_material_base: {
       type: DataTypes.DECIMAL(14, 2),
@@ -76,6 +120,18 @@ export const ProceedingBatchProject = sequelize.define(
     fittings_amount: {
       type: DataTypes.DECIMAL(14, 2),
       defaultValue: 0,
+    },
+    milestone_type: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    milestone_start_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    milestone_end_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
     },
     delay_days: {
       type: DataTypes.INTEGER,
