@@ -5,6 +5,7 @@ import "../../models/initModels.js";
 import GovernmentProject from "../projects/project.model.js";
 import Item from "../items/item.model.js";
 import Unit from "../units/unit.model.js";
+import InventoryStock from "../inventory/inventory-stock.model.js";
 import AppError from "../../shared/appError.js";
 
 /**
@@ -202,13 +203,16 @@ export async function parseLoadOrderBuffer(fileBuffer) {
     };
   });
 
-  // Fetch all active Finished Goods from Item Master
+  // Fetch all active Finished Goods from Item Master with on-hand stock
   const finishedGoods = await Item.findAll({
     where: {
       item_type: "FINISHED_GOOD",
       is_active: true,
     },
-    include: [{ model: Unit, as: "unit", attributes: ["id", "name", "symbol"] }],
+    include: [
+      { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
+      { model: InventoryStock, as: "stock", attributes: ["quantity_on_hand"] },
+    ],
     order: [["name", "ASC"]],
   });
 
@@ -220,6 +224,7 @@ export async function parseLoadOrderBuffer(fileBuffer) {
     unit_id: fg.unit_id,
     unit_symbol: fg.unit?.symbol || "NOS",
     unit_price: parseFloat(fg.unit_price) || 0.0,
+    available_stock: fg.stock ? parseFloat(fg.stock.quantity_on_hand) : 0,
     default_quantity: 0,
   }));
 
@@ -302,13 +307,16 @@ export async function parseLoadOrderAppIdsText(applicationIdsText, customDate = 
     };
   });
 
-  // Fetch all active Finished Goods from Item Master
+  // Fetch all active Finished Goods from Item Master with on-hand stock
   const finishedGoods = await Item.findAll({
     where: {
       item_type: "FINISHED_GOOD",
       is_active: true,
     },
-    include: [{ model: Unit, as: "unit", attributes: ["id", "name", "symbol"] }],
+    include: [
+      { model: Unit, as: "unit", attributes: ["id", "name", "symbol"] },
+      { model: InventoryStock, as: "stock", attributes: ["quantity_on_hand"] },
+    ],
     order: [["name", "ASC"]],
   });
 
@@ -320,6 +328,7 @@ export async function parseLoadOrderAppIdsText(applicationIdsText, customDate = 
     unit_id: fg.unit_id,
     unit_symbol: fg.unit?.symbol || "NOS",
     unit_price: parseFloat(fg.unit_price) || 0.0,
+    available_stock: fg.stock ? parseFloat(fg.stock.quantity_on_hand) : 0,
     default_quantity: 0,
   }));
 

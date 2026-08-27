@@ -298,8 +298,9 @@ export function CommissionProceedingsPage() {
         "Now Released (Rs.)",
         "Delay",
         "Commission (Rs.)",
-        "Fittings 5% (Rs.)",
         "Penalty (Rs.)",
+        "Net Comm. (Rs.)",
+        "Fittings 5% (Rs.)",
         "Net Payout (Rs.)",
         "Payout Status",
       ],
@@ -310,8 +311,9 @@ export function CommissionProceedingsPage() {
     let totalMat = 0;
     let totalRel = 0;
     let totalComm = 0;
-    let totalFit = 0;
     let totalPen = 0;
+    let totalNetComm = 0;
+    let totalFit = 0;
     let totalNet = 0;
 
     const rows = statementProjects.map((p, index) => {
@@ -328,23 +330,25 @@ export function CommissionProceedingsPage() {
             : p.penalty_amount || 0
         )
       );
-      const netPayable = Math.max(0, commAmt + fitAmt - penalty);
+      const netComm = Math.max(0, commAmt - penalty);
+      const netPayable = Math.max(0, netComm + fitAmt);
 
       totalInv += invAmt;
       totalSub += subAmt;
       totalMat += matCost;
       totalRel += nowRel;
       totalComm += commAmt;
-      totalFit += fitAmt;
       totalPen += penalty;
+      totalNetComm += netComm;
+      totalFit += fitAmt;
       totalNet += netPayable;
 
       const isFirstFund = (p.batch?.fund_percentage_value || 55) >= 50.0;
       const startLabel = isFirstFund ? "Inv Date" : "1st Fund";
       const endLabel = isFirstFund ? "Work Comp" : "Joint Verif";
 
-      const datesText = `${startLabel}: ${formatDate(p.milestone_start_date)}\n${endLabel}: ${formatDate(p.milestone_end_date)}${
-        p.delay_days > 45 ? `\nDelay: ${p.delay_days}d (${p.penalty_percentage || 0}%)` : ""
+      const datesText = `${startLabel}: ${formatDate(p.milestone_start_date)}\n${endLabel}: ${formatDate(p.milestone_end_date)}\nDelay: ${p.delay_days || 0}d${
+        p.delay_days > 45 ? ` (${p.penalty_percentage || 0}%)` : ""
       }`;
 
       const invNoText = p.invoice_number && p.invoice_number !== "—" ? `\nInv: #${p.invoice_number}` : "";
@@ -366,8 +370,9 @@ export function CommissionProceedingsPage() {
         nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
         datesText,
         commAmt ? commAmt.toLocaleString("en-IN") : "0",
-        fitAmt ? fitAmt.toLocaleString("en-IN") : "0",
         penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
+        netComm.toLocaleString("en-IN"),
+        fitAmt ? fitAmt.toLocaleString("en-IN") : "0",
         netPayable.toLocaleString("en-IN"),
         payoutStatusText,
       ];
@@ -387,8 +392,9 @@ export function CommissionProceedingsPage() {
         totalRel.toLocaleString("en-IN"),
         "—",
         totalComm.toLocaleString("en-IN"),
-        totalFit.toLocaleString("en-IN"),
         totalPen > 0 ? `-${totalPen.toLocaleString("en-IN")}` : "0",
+        totalNetComm.toLocaleString("en-IN"),
+        totalFit.toLocaleString("en-IN"),
         totalNet.toLocaleString("en-IN"),
         "—",
       ],
@@ -422,21 +428,22 @@ export function CommissionProceedingsPage() {
         fontSize: 6.8,
       },
       columnStyles: {
-        0: { cellWidth: 16, halign: "center" },
-        1: { cellWidth: 70 },
-        2: { cellWidth: 75 },
-        3: { cellWidth: 75 },
-        4: { cellWidth: 60 },
-        5: { cellWidth: 48, halign: "right" },
-        6: { cellWidth: 48, halign: "right" },
-        7: { cellWidth: 48, halign: "right" },
-        8: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-        9: { cellWidth: 75 },
-        10: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-        11: { cellWidth: 46, halign: "right", textColor: [124, 58, 237] },
-        12: { cellWidth: 44, halign: "right", textColor: [225, 29, 72] },
-        13: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
-        14: { cellWidth: 50, halign: "center" },
+        0: { cellWidth: 15, halign: "center" },
+        1: { cellWidth: 65 },
+        2: { cellWidth: 70 },
+        3: { cellWidth: 70 },
+        4: { cellWidth: 55 },
+        5: { cellWidth: 44, halign: "right" },
+        6: { cellWidth: 44, halign: "right" },
+        7: { cellWidth: 44, halign: "right" },
+        8: { cellWidth: 44, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+        9: { cellWidth: 70 },
+        10: { cellWidth: 44, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+        11: { cellWidth: 42, halign: "right", textColor: [225, 29, 72] },
+        12: { cellWidth: 44, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+        13: { cellWidth: 42, halign: "right", textColor: [124, 58, 237] },
+        14: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
+        15: { cellWidth: 46, halign: "center" },
       },
       didDrawPage: (data) => {
         const pageCount = doc.internal.getNumberOfPages();
@@ -1047,10 +1054,11 @@ export function CommissionProceedingsPage() {
                           <th className="py-3 px-3 text-right font-bold text-[#2F6F5E]">Now Released</th>
                           <th className="py-3 px-3">Delay</th>
                           <th className="py-3 px-3 text-right font-bold text-[#2F6F5E]">Dealer Comm.</th>
+                          <th className="py-3 px-3 text-right text-rose-600">Penalty</th>
+                          <th className="py-3 px-3 text-right font-bold text-[#14213D]">Net Comm.</th>
                           {formData.include_fittings && (
                             <th className="py-3 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>
                           )}
-                          <th className="py-3 px-3 text-right text-rose-600">Penalty</th>
                           <th className="py-3 px-3 text-right font-bold text-emerald-800">Net Payout</th>
                           <th className="py-3 px-3 text-center">DB Match</th>
                         </tr>
@@ -1058,12 +1066,17 @@ export function CommissionProceedingsPage() {
                       <tbody className="divide-y divide-[#EDEAE1]">
                         {filteredPreviewRows.length === 0 ? (
                           <tr>
-                            <td colSpan={formData.include_fittings ? 14 : 13} className="py-8 text-center text-xs text-[#8C97AB]">
+                            <td colSpan={formData.include_fittings ? 15 : 14} className="py-8 text-center text-xs text-[#8C97AB]">
                               No matching records found.
                             </td>
                           </tr>
                         ) : (
-                          filteredPreviewRows.map((r, i) => (
+                          filteredPreviewRows.map((r, i) => {
+                            const commAmt = r.commission_amount || 0;
+                            const penAmt = r.penalty_amount || 0;
+                            const netComm = Math.max(0, commAmt - penAmt);
+
+                            return (
                             <tr key={r.application_id || i} className="hover:bg-[#FAFAF8] transition-colors">
                               <td className="py-2.5 px-3 text-center font-mono text-[#8C97AB]">{r.row_index}</td>
                               <td className="py-2.5 px-3">
@@ -1134,12 +1147,12 @@ export function CommissionProceedingsPage() {
                                     </div>
                                   </div>
                                   {r.delay_days > 45 ? (
-                                    <div className="text-amber-700 font-bold text-[10px] pt-0.5">
-                                      ⚠️ {r.delay_days} days ({r.penalty_percentage}% penalty)
+                                    <div className="text-rose-600 font-bold text-[10px] pt-0.5">
+                                      {r.delay_days}d ({r.penalty_percentage}% penalty)
                                     </div>
                                   ) : (
-                                    <div className="text-emerald-700 font-medium text-[10px] pt-0.5">
-                                      ✓ Within 45d SLA (0% penalty)
+                                    <div className="text-emerald-700 font-bold text-[10px] pt-0.5">
+                                      {r.delay_days || 0}d
                                     </div>
                                   )}
                                 </div>
@@ -1148,12 +1161,6 @@ export function CommissionProceedingsPage() {
                               <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E]">
                                 {formatRupees(r.commission_amount)}
                               </td>
-
-                              {formData.include_fittings && (
-                                <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
-                                  {formatRupees(r.fittings_amount)}
-                                </td>
-                              )}
 
                               {/* Penalty with manual edit button - strictly single line */}
                               <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap min-w-[110px]">
@@ -1176,6 +1183,16 @@ export function CommissionProceedingsPage() {
                                 </div>
                               </td>
 
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-[#14213D]">
+                                {formatRupees(netComm)}
+                              </td>
+
+                              {formData.include_fittings && (
+                                <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
+                                  {formatRupees(r.fittings_amount)}
+                                </td>
+                              )}
+
                               <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
                                 {formatRupees(r.net_dealer_payout)}
                               </td>
@@ -1192,7 +1209,8 @@ export function CommissionProceedingsPage() {
                                 )}
                               </td>
                             </tr>
-                          ))
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -1803,8 +1821,9 @@ export function CommissionProceedingsPage() {
                               <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Now Released</th>
                               <th className="py-2.5 px-3">Delay</th>
                               <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Commission</th>
-                              <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>
                               <th className="py-2.5 px-3 text-right text-rose-600">Penalty</th>
+                              <th className="py-2.5 px-3 text-right font-bold text-[#14213D]">Net Commission</th>
+                              <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>
                               <th className="py-2.5 px-3 text-right font-bold text-emerald-800">Net Payout</th>
                               <th className="py-2.5 px-3 text-center">Payout Status</th>
                             </tr>
@@ -1824,7 +1843,8 @@ export function CommissionProceedingsPage() {
                                     : p.penalty_amount || 0
                                 )
                               );
-                              const netPayout = Math.max(0, commAmt + fitAmt - penAmt);
+                              const netComm = Math.max(0, commAmt - penAmt);
+                              const netPayout = Math.max(0, netComm + fitAmt);
 
                               const isFirstFund = (p.batch?.fund_percentage_value || 55) >= 50.0;
                               const startLabel = isFirstFund ? "Inv Date" : "1st Fund Credited";
@@ -1910,20 +1930,18 @@ export function CommissionProceedingsPage() {
                                       </div>
                                     )}
                                     {p.delay_days > 45 ? (
-                                      <div className="text-[10px] font-bold text-amber-700 font-mono">
-                                        ⚠️ {p.delay_days} days ({p.penalty_percentage || 0}% penalty)
+                                      <div className="text-[10px] font-bold text-rose-600 font-mono">
+                                        {p.delay_days}d ({p.penalty_percentage || 0}% penalty)
                                       </div>
                                     ) : (
-                                      <div className="text-[10px] text-emerald-700 font-medium">✓ Within 45d SLA</div>
+                                      <div className="text-[10px] font-bold text-emerald-700 font-mono">
+                                        {p.delay_days || 0}d
+                                      </div>
                                     )}
                                   </td>
 
                                   <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
                                     {formatRupees(commAmt)}
-                                  </td>
-
-                                  <td className="py-3 px-3 text-right font-mono text-[#7C3AED] font-semibold">
-                                    {fitAmt > 0 ? formatRupees(fitAmt) : "—"}
                                   </td>
 
                                   <td className="py-3 px-3 text-right font-mono">
@@ -1932,6 +1950,14 @@ export function CommissionProceedingsPage() {
                                     ) : (
                                       <span className="text-[#8C97AB]">₹0</span>
                                     )}
+                                  </td>
+
+                                  <td className="py-3 px-3 text-right font-mono font-bold text-[#14213D]">
+                                    {formatRupees(netComm)}
+                                  </td>
+
+                                  <td className="py-3 px-3 text-right font-mono text-[#7C3AED] font-semibold">
+                                    {fitAmt > 0 ? formatRupees(fitAmt) : "—"}
                                   </td>
 
                                   <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">

@@ -28,10 +28,12 @@ export function DashboardPage() {
 
   // Filter state
   const [selectedYear, setSelectedYear] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [selectedDealer, setSelectedDealer] = useState("");
 
   // Filter options
+  const [yearsList, setYearsList] = useState([]);
   const [districtsList, setDistrictsList] = useState([]);
   const [dealersList, setDealersList] = useState([]);
 
@@ -43,6 +45,22 @@ export function DashboardPage() {
   const [stageDurationsData, setStageDurationsData] = useState([]);
   const [financialOverview, setFinancialOverview] = useState(null);
 
+  const monthsList = [
+    { value: "", label: "All Months" },
+    { value: "1", label: "January (01)" },
+    { value: "2", label: "February (02)" },
+    { value: "3", label: "March (03)" },
+    { value: "4", label: "April (04)" },
+    { value: "5", label: "May (05)" },
+    { value: "6", label: "June (06)" },
+    { value: "7", label: "July (07)" },
+    { value: "8", label: "August (08)" },
+    { value: "9", label: "September (09)" },
+    { value: "10", label: "October (10)" },
+    { value: "11", label: "November (11)" },
+    { value: "12", label: "December (12)" },
+  ];
+
   const fetchDashboardData = async (isManualRefresh = false) => {
     try {
       if (isManualRefresh) setRefreshing(true);
@@ -50,6 +68,7 @@ export function DashboardPage() {
 
       const params = {
         ...(selectedYear ? { year: selectedYear } : {}),
+        ...(selectedMonth ? { month: selectedMonth } : {}),
         ...(selectedDistrict ? { district: selectedDistrict } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
       };
@@ -68,6 +87,10 @@ export function DashboardPage() {
       setDealersList(allDealersRes?.data?.dealers || allDealersRes?.dealers || []);
       setStageDurationsData(durationsRes?.data?.stageDurations || durationsRes?.stageDurations || []);
 
+      if (summary.availableYears?.length > 0) {
+        setYearsList(summary.availableYears);
+      }
+
       // Extract unique districts if not already populated
       if (summary.byDistrict?.length > 0 && districtsList.length === 0) {
         setDistrictsList(summary.byDistrict.map((d) => d.district).filter(Boolean));
@@ -82,7 +105,19 @@ export function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedYear, selectedDistrict, selectedDealer]);
+  }, [selectedYear, selectedMonth, selectedDistrict, selectedDealer]);
+
+  const availableYearOptions = [
+    { value: "", label: "All Years" },
+    ...(yearsList.length > 0
+      ? yearsList.map((y) => ({ value: y, label: y }))
+      : [
+          { value: "2026", label: "2026" },
+          { value: "2025", label: "2025" },
+          { value: "2024", label: "2024" },
+          { value: "2023", label: "2023" },
+        ]),
+  ];
 
   const totalExtentArea =
     summaryData?.totalAreaHa !== undefined && summaryData?.totalAreaHa !== null
@@ -125,12 +160,36 @@ export function DashboardPage() {
 
       <main className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 flex-1 overflow-y-auto">
         {/* Dynamic Filter Strip */}
-        <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <span className="text-xs font-semibold text-[#52607D]">Filter Analytics:</span>
+        <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+            <span className="text-xs font-semibold text-[#52607D]">Filter (Invoice Date):</span>
+
+            {/* Year Selector */}
+            <div className="w-36">
+              <CustomSelect
+                options={availableYearOptions}
+                value={selectedYear}
+                onChange={(val) => setSelectedYear(val)}
+                placeholder="All Years"
+                size="sm"
+                searchable={true}
+              />
+            </div>
+
+            {/* Month Selector */}
+            <div className="w-40">
+              <CustomSelect
+                options={monthsList}
+                value={selectedMonth}
+                onChange={(val) => setSelectedMonth(val)}
+                placeholder="All Months"
+                size="sm"
+                searchable={true}
+              />
+            </div>
 
             {/* District Selector */}
-            <div className="w-48">
+            <div className="w-44">
               <CustomSelect
                 options={[
                   { value: "", label: "All Districts" },
@@ -145,7 +204,7 @@ export function DashboardPage() {
             </div>
 
             {/* Dealer Selector */}
-            <div className="w-56">
+            <div className="w-48">
               <CustomSelect
                 options={[
                   { value: "", label: "All Dealers" },
@@ -159,13 +218,15 @@ export function DashboardPage() {
               />
             </div>
 
-            {(selectedDistrict || selectedDealer) && (
+            {(selectedYear || selectedMonth || selectedDistrict || selectedDealer) && (
               <button
                 onClick={() => {
+                  setSelectedYear("");
+                  setSelectedMonth("");
                   setSelectedDistrict("");
                   setSelectedDealer("");
                 }}
-                className="text-xs text-[#2F6F5E] hover:underline font-semibold cursor-pointer"
+                className="text-xs text-[#2F6F5E] hover:underline font-semibold cursor-pointer px-1 py-1"
               >
                 Clear Filters
               </button>

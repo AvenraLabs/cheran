@@ -116,12 +116,13 @@ export function StockReceiptsPage() {
     setSupplierName("");
     setReceiptDate(new Date().toISOString().split("T")[0]);
     setRefNumber("");
+    const firstRM = rawMaterialsList.length > 0 ? rawMaterialsList[0] : null;
     setLines([
       {
-        item_id: rawMaterialsList.length > 0 ? rawMaterialsList[0].id : "",
+        item_id: firstRM ? firstRM.id : "",
         quantity: "",
-        unit_price: rawMaterialsList.length > 0 ? (rawMaterialsList[0].unit_price || "") : "",
-        unit_symbol: rawMaterialsList.length > 0 ? (rawMaterialsList[0].unit?.symbol || "NOS") : "",
+        unit_price: firstRM && firstRM.unit_price !== undefined && firstRM.unit_price !== null && parseFloat(firstRM.unit_price) >= 0 ? firstRM.unit_price : "",
+        unit_symbol: firstRM ? (firstRM.unit?.symbol || "NOS") : "",
       },
     ]);
     setErrorMsg("");
@@ -135,7 +136,7 @@ export function StockReceiptsPage() {
       {
         item_id: defaultItem ? defaultItem.id : "",
         quantity: "",
-        unit_price: defaultItem ? (defaultItem.unit_price || "") : "",
+        unit_price: defaultItem && defaultItem.unit_price !== undefined && defaultItem.unit_price !== null && parseFloat(defaultItem.unit_price) >= 0 ? defaultItem.unit_price : "",
         unit_symbol: defaultItem ? (defaultItem.unit?.symbol || "NOS") : "",
       },
     ]);
@@ -151,8 +152,10 @@ export function StockReceiptsPage() {
     const updated = [...lines];
     updated[idx].item_id = itemId;
     updated[idx].unit_symbol = selected?.unit?.symbol || selected?.unit?.name || "NOS";
-    if (selected && selected.unit_price !== undefined && selected.unit_price !== null && parseFloat(selected.unit_price) > 0) {
+    if (selected && selected.unit_price !== undefined && selected.unit_price !== null && parseFloat(selected.unit_price) >= 0) {
       updated[idx].unit_price = selected.unit_price;
+    } else {
+      updated[idx].unit_price = "";
     }
     setLines(updated);
   };

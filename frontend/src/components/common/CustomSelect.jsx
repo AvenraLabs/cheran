@@ -60,14 +60,15 @@ export function CustomSelect({
     const shouldOpenUpwards = spaceBelow < 260 && spaceAbove > spaceBelow;
 
     const availableHeight = shouldOpenUpwards ? spaceAbove : spaceBelow;
-    const calculatedMaxHeight = Math.min(280, Math.max(140, availableHeight - 16));
+    const calculatedMaxHeight = Math.min(320, Math.max(140, availableHeight - 16));
 
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8));
+    const menuWidth = Math.max(rect.width, Math.min(320, window.innerWidth - 16));
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
 
     setMenuStyle({
       position: "fixed",
       left: `${left}px`,
-      width: `${rect.width}px`,
+      width: `${menuWidth}px`,
       zIndex: 99999,
       ...(shouldOpenUpwards
         ? {

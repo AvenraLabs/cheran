@@ -64,7 +64,7 @@ export async function getItemOptions({ item_type } = {}) {
 
   const items = await Item.findAll({
     where,
-    attributes: ["id", "code", "name", "item_type", "unit_id", "category"],
+    attributes: ["id", "code", "name", "item_type", "unit_id", "category", "unit_price"],
     include: [{ model: Unit, as: "unit", attributes: ["id", "name", "symbol"] }],
     order: [["name", "ASC"]],
   });

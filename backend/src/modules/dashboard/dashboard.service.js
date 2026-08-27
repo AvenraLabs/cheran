@@ -8,13 +8,57 @@ import GovernmentStatus from "../statuses/status.model.js";
 /**
  * High-level government project metrics & distributions
  */
-export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
+function buildDashboardWhere({ year, month, district, dealer_id } = {}) {
   const where = {};
-  if (year) where.year = year;
   if (district) where.district = { [Op.iLike]: `%${district}%` };
   if (dealer_id) where.dealer_id = dealer_id;
 
+  if (year && month) {
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    if (!isNaN(y) && !isNaN(m)) {
+      const mm = String(m).padStart(2, "0");
+      const lastDay = new Date(y, m, 0).getDate();
+      where.invoice_date = {
+        [Op.between]: [`${y}-${mm}-01`, `${y}-${mm}-${String(lastDay).padStart(2, "0")}`],
+      };
+    }
+  } else if (year) {
+    const y = parseInt(year, 10);
+    if (!isNaN(y)) {
+      where.invoice_date = {
+        [Op.between]: [`${y}-01-01`, `${y}-12-31`],
+      };
+    }
+  } else if (month) {
+    const m = parseInt(month, 10);
+    if (!isNaN(m)) {
+      where[Op.and] = [
+        db.where(db.fn("EXTRACT", db.literal('MONTH FROM "GovernmentProject"."invoice_date"')), m),
+      ];
+    }
+  }
+
+  return where;
+}
+
+/**
+ * High-level government project metrics & distributions
+ */
+export async function getGovernmentSummary(params = {}) {
+  const where = buildDashboardWhere(params);
+
   const totalProjects = await GovernmentProject.count({ where });
+
+  // Fetch available distinct years for dynamic dropdown
+  const yearsRes = await db.query(
+    `SELECT DISTINCT EXTRACT(YEAR FROM invoice_date)::integer AS y 
+     FROM government_projects 
+     WHERE invoice_date IS NOT NULL 
+     ORDER BY y DESC;`,
+    { type: QueryTypes.SELECT }
+  ).catch(() => []);
+  const availableYears = yearsRes.map((r) => String(r.y)).filter(Boolean);
 
   if (totalProjects === 0) {
     return {
@@ -27,6 +71,7 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
       byDistrict: [],
       byDealer: [],
       pendingProjects: 0,
+      availableYears,
     };
   }
 
@@ -163,17 +208,15 @@ export async function getGovernmentSummary({ year, district, dealer_id } = {}) {
     byDistrict,
     byDealer,
     pendingProjects,
+    availableYears,
   };
 }
 
 /**
  * Status distribution breakdown with count and percentage
  */
-export async function getStatusDistribution({ year, district, dealer_id } = {}) {
-  const where = {};
-  if (year) where.year = year;
-  if (district) where.district = { [Op.iLike]: `%${district}%` };
-  if (dealer_id) where.dealer_id = dealer_id;
+export async function getStatusDistribution(params = {}) {
+  const where = buildDashboardWhere(params);
 
   const totalProjects = await GovernmentProject.count({ where });
   if (totalProjects === 0) {
@@ -218,10 +261,8 @@ export async function getStatusDistribution({ year, district, dealer_id } = {}) 
 /**
  * Dealer distribution breakdown
  */
-export async function getDealerDistribution({ year, district } = {}) {
-  const where = {};
-  if (year) where.year = year;
-  if (district) where.district = { [Op.iLike]: `%${district}%` };
+export async function getDealerDistribution(params = {}) {
+  const where = buildDashboardWhere(params);
 
   const totalProjects = await GovernmentProject.count({ where });
   if (totalProjects === 0) {
@@ -279,10 +320,8 @@ export async function getDealerDistribution({ year, district } = {}) {
 /**
  * District distribution breakdown
  */
-export async function getDistrictDistribution({ year, dealer_id } = {}) {
-  const where = {};
-  if (year) where.year = year;
-  if (dealer_id) where.dealer_id = dealer_id;
+export async function getDistrictDistribution(params = {}) {
+  const where = buildDashboardWhere(params);
 
   const totalProjects = await GovernmentProject.count({ where });
   if (totalProjects === 0) {
@@ -331,10 +370,31 @@ export async function getStageDurations(filters = {}) {
   const whereClauses = [];
   const replacements = {};
 
-  if (filters.year) {
-    whereClauses.push(`gp.year ILIKE :year`);
-    replacements.year = `%${filters.year}%`;
+  if (filters.year && filters.month) {
+    const y = parseInt(filters.year, 10);
+    const m = parseInt(filters.month, 10);
+    if (!isNaN(y) && !isNaN(m)) {
+      const mm = String(m).padStart(2, "0");
+      const lastDay = new Date(y, m, 0).getDate();
+      whereClauses.push(`gp.invoice_date BETWEEN :startDate AND :endDate`);
+      replacements.startDate = `${y}-${mm}-01`;
+      replacements.endDate = `${y}-${mm}-${String(lastDay).padStart(2, "0")}`;
+    }
+  } else if (filters.year) {
+    const y = parseInt(filters.year, 10);
+    if (!isNaN(y)) {
+      whereClauses.push(`gp.invoice_date BETWEEN :startDate AND :endDate`);
+      replacements.startDate = `${y}-01-01`;
+      replacements.endDate = `${y}-12-31`;
+    }
+  } else if (filters.month) {
+    const m = parseInt(filters.month, 10);
+    if (!isNaN(m)) {
+      whereClauses.push(`EXTRACT(MONTH FROM gp.invoice_date) = :month`);
+      replacements.month = m;
+    }
   }
+
   if (filters.district) {
     whereClauses.push(`gp.district ILIKE :district`);
     replacements.district = `%${filters.district}%`;

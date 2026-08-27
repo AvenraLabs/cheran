@@ -27,11 +27,13 @@ import {
   Eye,
   Info,
   ArrowDownRight,
+  RotateCcw,
 } from "lucide-react";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import MetricCard from "../components/common/MetricCard.jsx";
 import Button from "../components/common/Button.jsx";
+import CustomSelect from "../components/common/CustomSelect.jsx";
 import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
@@ -69,6 +71,7 @@ export function LoadOrderUploadPage() {
   const [excludedProjects, setExcludedProjects] = useState([]);
 
   // Material Items: Array of { item_id, name, code, category, unit, unit_price, govt_qty, actual_qty, available_stock }
+  const [masterFinishedGoods, setMasterFinishedGoods] = useState([]);
   const [batchItems, setBatchItems] = useState([]);
   const [materialSubTab, setMaterialSubTab] = useState("actual"); // 'actual' or 'govt'
 
@@ -189,8 +192,11 @@ export function LoadOrderUploadPage() {
 
       // Map on-hand stock for finished goods
       const stockMap = new Map();
-      (stockRes.data?.stock || []).forEach((s) => {
-        if (s.item_id) stockMap.set(s.item_id, parseFloat(s.available_quantity) || 0);
+      const rawStockList = stockRes.data?.stock || stockRes.data || [];
+      (Array.isArray(rawStockList) ? rawStockList : []).forEach((s) => {
+        const id = s.id || s.item_id || s.item?.id;
+        const qty = s.quantity_on_hand !== undefined ? s.quantity_on_hand : (s.available_quantity ?? 0);
+        if (id) stockMap.set(id, parseFloat(qty) || 0);
       });
 
       const goods = (data.availableFinishedGoods || []).map((fg) => ({
@@ -198,13 +204,15 @@ export function LoadOrderUploadPage() {
         name: fg.name,
         code: fg.code,
         category: fg.category,
-        unit: fg.unit_symbol || "NOS",
+        unit: fg.unit_symbol || fg.unit || "NOS",
         unit_price: fg.unit_price,
         govt_qty: "",
         actual_qty: "",
-        available_stock: stockMap.get(fg.id) ?? 0,
+        available_stock: stockMap.has(fg.id) ? stockMap.get(fg.id) : (parseFloat(fg.available_stock) || 0),
       }));
-      setBatchItems(goods);
+      setMasterFinishedGoods(goods);
+      // Start with empty batchItems so user manually selects finished goods
+      setBatchItems([]);
     } catch (err) {
       console.error("Load Order Preview Error:", err);
       setPreviewError(
@@ -264,8 +272,11 @@ export function LoadOrderUploadPage() {
       setExcludedProjects(excluded);
 
       const stockMap = new Map();
-      (stockRes.data?.stock || []).forEach((s) => {
-        if (s.item_id) stockMap.set(s.item_id, parseFloat(s.available_quantity) || 0);
+      const rawStockList = stockRes.data?.stock || stockRes.data || [];
+      (Array.isArray(rawStockList) ? rawStockList : []).forEach((s) => {
+        const id = s.id || s.item_id || s.item?.id;
+        const qty = s.quantity_on_hand !== undefined ? s.quantity_on_hand : (s.available_quantity ?? 0);
+        if (id) stockMap.set(id, parseFloat(qty) || 0);
       });
 
       const goods = (data.availableFinishedGoods || []).map((fg) => ({
@@ -273,13 +284,15 @@ export function LoadOrderUploadPage() {
         name: fg.name,
         code: fg.code,
         category: fg.category,
-        unit: fg.unit_symbol || "NOS",
+        unit: fg.unit_symbol || fg.unit || "NOS",
         unit_price: fg.unit_price,
         govt_qty: "",
         actual_qty: "",
-        available_stock: stockMap.get(fg.id) ?? 0,
+        available_stock: stockMap.has(fg.id) ? stockMap.get(fg.id) : (parseFloat(fg.available_stock) || 0),
       }));
-      setBatchItems(goods);
+      setMasterFinishedGoods(goods);
+      // Start with empty batchItems so user manually selects finished goods
+      setBatchItems([]);
     } catch (err) {
       console.error("Load Order Pasted IDs Preview Error:", err);
       setPreviewError(
@@ -340,12 +353,6 @@ export function LoadOrderUploadPage() {
     setProjectsList(updated);
   };
 
-  // Fast helper to apply starting number to all projects
-  const handleApplyStartingInvoiceNo = (startVal) => {
-    if (!startVal) return;
-    handleInvoiceNumberChange(0, startVal);
-  };
-
   // ==========================================
   // Quantity Handlers (Govt vs Actual)
   // ==========================================
@@ -371,16 +378,43 @@ export function LoadOrderUploadPage() {
     );
   };
 
-  // Fast Reset all counts
-  const handleResetCounts = () => {
-    setBatchItems((prev) =>
-      prev.map((it) => ({
-        ...it,
-        govt_qty: "",
-        actual_qty: "",
-      }))
-    );
+  // Clear all items
+  const handleClearAllMaterials = () => {
+    setBatchItems([]);
   };
+
+  const handleRemoveMaterial = (itemId) => {
+    setBatchItems((prev) => prev.filter((it) => it.item_id !== itemId));
+  };
+
+  const handleAddMaterial = (itemId) => {
+    if (!itemId) return;
+    const fg = masterFinishedGoods.find((f) => f.item_id === itemId);
+    if (fg && !batchItems.some((it) => it.item_id === itemId)) {
+      setBatchItems((prev) => [
+        ...prev,
+        {
+          ...fg,
+          govt_qty: "",
+          actual_qty: "",
+        },
+      ]);
+    }
+  };
+
+  const unselectedMaterials = masterFinishedGoods.filter(
+    (fg) => !batchItems.some((b) => b.item_id === fg.item_id)
+  );
+
+  const unselectedMaterialOptions = [
+    { value: "", label: "+ Add Finished Good" },
+    ...unselectedMaterials.map((fg) => ({
+      value: fg.item_id,
+      label: fg.name,
+      subtitle: `Stock: ${fg.available_stock} ${fg.unit}`,
+      badge: fg.category || null,
+    })),
+  ];
 
   // Calculations
   const totalGovtQty = batchItems.reduce((sum, it) => sum + (parseFloat(it.govt_qty) || 0), 0);
@@ -753,34 +787,6 @@ H-DPR-dpr-6428267253-2025-26`}
                         batch.
                       </p>
                     </div>
-
-                    {/* Quick helper input */}
-                    <div className="flex items-center gap-2 bg-[#FAFAF8] p-1.5 rounded-[8px] border border-[#E4E1D8] self-start sm:self-auto">
-                      <span className="text-[11px] font-semibold text-[#52607D] pl-1">
-                        Starting Number:
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="e.g. 300"
-                        id="quickStartNum"
-                        className="w-24 px-2 py-1 text-xs font-mono font-bold bg-white border border-[#CCD5AE] rounded focus:outline-none text-[#14213D]"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            handleApplyStartingInvoiceNo(e.currentTarget.value);
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = document.getElementById("quickStartNum")?.value;
-                          handleApplyStartingInvoiceNo(val);
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-bold bg-[#2F6F5E] text-white rounded cursor-pointer hover:bg-[#275c4e]"
-                      >
-                        Auto-Fill All
-                      </button>
-                    </div>
                   </div>
 
                   {/* Projects Table with full mobile horizontal scroll support */}
@@ -957,7 +963,19 @@ H-DPR-dpr-6428267253-2025-26`}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+                      {unselectedMaterials.length > 0 && (
+                        <div className="w-64 sm:w-80">
+                          <CustomSelect
+                            options={unselectedMaterialOptions}
+                            value=""
+                            onChange={handleAddMaterial}
+                            placeholder="+ Add Finished Good"
+                            size="sm"
+                          />
+                        </div>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleCopyGovtToActual}
@@ -968,114 +986,158 @@ H-DPR-dpr-6428267253-2025-26`}
                         <span>Copy Govt ➔ Actual</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={handleResetCounts}
-                        className="px-2.5 py-1.5 rounded-[8px] text-xs font-medium text-[#52607D] hover:bg-gray-100 border border-[#E4E1D8] cursor-pointer"
-                      >
-                        Reset All
-                      </button>
+                      {batchItems.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearAllMaterials}
+                          className="px-2.5 py-1.5 rounded-[8px] text-xs font-medium text-[#52607D] hover:bg-gray-100 border border-[#E4E1D8] cursor-pointer flex items-center gap-1"
+                          title="Clear all selected items"
+                        >
+                          <RotateCcw size={13} />
+                          <span>Clear All</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {/* Materials Table with full mobile horizontal scroll support */}
-                  <div className="border border-[#EDEAE1] rounded-[10px] overflow-x-auto w-full">
-                    <table className="w-full min-w-[650px] text-left text-xs border-collapse">
-                      <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
-                        <tr>
-                          <th className="py-3 px-4">Finished Good Item</th>
-                          <th className="py-3 px-4">Category</th>
-                          <th className="py-3 px-4 text-center">Unit</th>
-                          <th className="py-3 px-4 text-center">Stock On-Hand</th>
-                          <th className="py-3 px-4 text-right w-44 bg-amber-50/40 border-l border-amber-200">
-                            Govt Count (On-Paper)
-                          </th>
-                          <th className="py-3 px-4 text-right w-48 bg-emerald-50/40 border-l border-emerald-200">
-                            Actual Count (Physical) 🚚
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#EDEAE1]">
-                        {batchItems.map((item) => {
-                          const actQty = parseFloat(item.actual_qty) || 0;
-                          const hasStockWarning = actQty > 0 && actQty > item.available_stock;
+                  {batchItems.length === 0 ? (
+                    <div className="p-8 text-center space-y-3 bg-[#FAFAF8] rounded-[10px] border border-[#EDEAE1]">
+                      <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-[#2F6F5E] flex items-center justify-center">
+                        <Package size={20} />
+                      </div>
+                      <p className="text-xs font-semibold text-[#14213D]">No finished goods added to this batch yet.</p>
+                      <p className="text-[11px] text-[#52607D] max-w-md mx-auto">
+                        Use the <strong>"+ Add Finished Good"</strong> dropdown above to select products and enter Govt and Actual quantities.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="border border-[#EDEAE1] rounded-[10px] overflow-x-auto w-full">
+                      <table className="w-full min-w-[700px] text-left text-xs border-collapse">
+                        <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
+                          <tr>
+                            <th className="py-3 px-4">Finished Good Item</th>
+                            <th className="py-3 px-4">Category</th>
+                            <th className="py-3 px-4 text-center">Unit</th>
+                            <th className="py-3 px-4 text-center">Stock On-Hand</th>
+                            <th className="py-3 px-4 text-right w-40 bg-amber-50/40 border-l border-amber-200">
+                              Govt Count (On-Paper)
+                            </th>
+                            <th className="py-3 px-4 text-right w-44 bg-emerald-50/40 border-l border-emerald-200">
+                              Actual Count (Physical) 🚚
+                            </th>
+                            <th className="py-3 px-3 text-center w-12 shrink-0">Remove</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#EDEAE1]">
+                          {batchItems.map((item) => {
+                            const govtQty = parseFloat(item.govt_qty) || 0;
+                            const actQty = parseFloat(item.actual_qty) || 0;
+                            const isGovtOverStock = govtQty > item.available_stock;
+                            const isActualOverStock = actQty > item.available_stock;
 
-                          return (
-                            <tr
-                              key={item.item_id}
-                              className={`hover:bg-[#F9F8F5] ${
-                                actQty > 0 ? "bg-emerald-50/15" : ""
-                              }`}
-                            >
-                              <td className="py-2.5 px-4 font-bold text-[#14213D]">
-                                <div>{item.name}</div>
-                                <div className="text-[10px] font-mono text-[#8C97AB]">
-                                  {item.code}
-                                </div>
-                              </td>
-
-                              <td className="py-2.5 px-4 text-[#52607D]">{item.category || "—"}</td>
-
-                              <td className="py-2.5 px-4 text-center font-mono font-semibold text-[#52607D]">
-                                {item.unit}
-                              </td>
-
-                              <td className="py-2.5 px-4 text-center">
-                                <span
-                                  className={`font-mono font-bold text-xs px-2 py-0.5 rounded-full ${
-                                    item.available_stock > 0
-                                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                      : "bg-gray-100 text-gray-500"
-                                  }`}
-                                >
-                                  {item.available_stock} {item.unit}
-                                </span>
-                              </td>
-
-                              {/* Govt Count Input */}
-                              <td className="py-2.5 px-4 text-right bg-amber-50/20 border-l border-amber-200">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  placeholder="0"
-                                  value={item.govt_qty}
-                                  onChange={(e) =>
-                                    handleGovtQtyChange(item.item_id, e.target.value)
-                                  }
-                                  className="w-full px-2.5 py-1.5 text-xs text-right font-mono font-bold bg-white border border-amber-300 rounded-[6px] focus:outline-none focus:ring-2 focus:ring-amber-500 text-amber-950"
-                                />
-                              </td>
-
-                              {/* Actual Count Input */}
-                              <td className="py-2.5 px-4 text-right bg-emerald-50/20 border-l border-emerald-200">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  placeholder="0"
-                                  value={item.actual_qty}
-                                  onChange={(e) =>
-                                    handleActualQtyChange(item.item_id, e.target.value)
-                                  }
-                                  className={`w-full px-2.5 py-1.5 text-xs text-right font-mono font-bold bg-white border rounded-[6px] focus:outline-none focus:ring-2 text-emerald-950 ${
-                                    hasStockWarning
-                                      ? "border-rose-400 focus:ring-rose-500 bg-rose-50/40"
-                                      : "border-emerald-400 focus:ring-[#2F6F5E]"
-                                  }`}
-                                />
-                                {hasStockWarning && (
-                                  <div className="text-[10px] text-rose-600 font-semibold mt-0.5 text-right">
-                                    Exceeds on-hand ({item.available_stock})
+                            return (
+                              <tr
+                                key={item.item_id}
+                                className={`hover:bg-[#F9F8F5] ${
+                                  isActualOverStock
+                                    ? "bg-rose-50/20"
+                                    : actQty > 0
+                                    ? "bg-emerald-50/15"
+                                    : ""
+                                }`}
+                              >
+                                <td className="py-2.5 px-4 font-bold text-[#14213D]">
+                                  <div>{item.name}</div>
+                                  <div className="text-[10px] font-mono text-[#8C97AB]">
+                                    {item.code}
                                   </div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-4 text-[#52607D]">{item.category || "—"}</td>
+
+                                <td className="py-2.5 px-4 text-center font-mono font-semibold text-[#52607D]">
+                                  {item.unit}
+                                </td>
+
+                                <td className="py-2.5 px-4 text-center">
+                                  <span
+                                    className={`font-mono font-bold text-xs px-2 py-0.5 rounded-full ${
+                                      item.available_stock > 0
+                                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                        : "bg-rose-50 text-rose-800 border border-rose-200"
+                                    }`}
+                                  >
+                                    {item.available_stock} {item.unit}
+                                  </span>
+                                </td>
+
+                                {/* Govt Count Input */}
+                                <td className="py-2.5 px-4 text-right bg-amber-50/20 border-l border-amber-200">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0"
+                                    value={item.govt_qty}
+                                    onChange={(e) =>
+                                      handleGovtQtyChange(item.item_id, e.target.value)
+                                    }
+                                    className={`w-full px-2.5 py-1.5 text-xs text-right font-mono font-bold bg-white border rounded-[6px] focus:outline-none focus:ring-2 ${
+                                      isGovtOverStock
+                                        ? "border-rose-500 bg-rose-50/80 text-rose-900 focus:ring-rose-500 shadow-xs"
+                                        : "border-amber-300 focus:ring-amber-500 text-amber-950"
+                                    }`}
+                                  />
+                                  {isGovtOverStock && (
+                                    <div className="text-[10px] text-rose-600 font-semibold mt-0.5 text-right whitespace-nowrap">
+                                      Exceeds stock ({item.available_stock} {item.unit})
+                                    </div>
+                                  )}
+                                </td>
+
+                                {/* Actual Count Input */}
+                                <td className="py-2.5 px-4 text-right bg-emerald-50/20 border-l border-emerald-200">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0"
+                                    value={item.actual_qty}
+                                    onChange={(e) =>
+                                      handleActualQtyChange(item.item_id, e.target.value)
+                                    }
+                                    className={`w-full px-2.5 py-1.5 text-xs text-right font-mono font-bold bg-white border rounded-[6px] focus:outline-none focus:ring-2 ${
+                                      isActualOverStock
+                                        ? "border-rose-500 bg-rose-50/80 text-rose-900 focus:ring-rose-500 shadow-xs"
+                                        : "border-emerald-400 focus:ring-[#2F6F5E] text-emerald-950"
+                                    }`}
+                                  />
+                                  {isActualOverStock && (
+                                    <div className="text-[10px] text-rose-600 font-semibold mt-0.5 text-right whitespace-nowrap">
+                                      Exceeds stock ({item.available_stock} {item.unit})
+                                    </div>
+                                  )}
+                                </td>
+
+                                {/* Remove Line Button */}
+                                <td className="py-2.5 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveMaterial(item.item_id)}
+                                    className="p-1 text-[#8C97AB] hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer"
+                                    title="Remove item from batch"
+                                  >
+                                    <X size={15} />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {/* SECTION 3: Summary & Confirmation */}

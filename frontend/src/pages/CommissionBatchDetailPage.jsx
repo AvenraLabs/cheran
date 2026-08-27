@@ -276,8 +276,9 @@ export function CommissionBatchDetailPage() {
         "Now Released (Rs.)",
         "Delay",
         "Commission (Rs.)",
-        ...(hasFittings ? ["Fittings 5% (Rs.)"] : []),
         "Penalty (Rs.)",
+        "Net Comm. (Rs.)",
+        ...(hasFittings ? ["Fittings 5% (Rs.)"] : []),
         "Net Payable (Rs.)",
       ],
     ];
@@ -287,8 +288,9 @@ export function CommissionBatchDetailPage() {
     let totalMat = 0;
     let totalRel = 0;
     let totalComm = 0;
-    let totalFit = 0;
     let totalPen = 0;
+    let totalNetComm = 0;
+    let totalFit = 0;
     let totalNet = 0;
 
     const isFirstFund = batch.fund_percentage_value >= 50.0;
@@ -309,19 +311,21 @@ export function CommissionBatchDetailPage() {
             : p.penalty_amount || 0
         )
       );
-      const netPayable = Math.max(0, commAmt + fitAmt - penalty);
+      const netComm = Math.max(0, commAmt - penalty);
+      const netPayable = Math.max(0, netComm + fitAmt);
 
       totalInv += invAmt;
       totalSub += subAmt;
       totalMat += matCost;
       totalRel += nowRel;
       totalComm += commAmt;
-      totalFit += fitAmt;
       totalPen += penalty;
+      totalNetComm += netComm;
+      totalFit += fitAmt;
       totalNet += netPayable;
 
-      const datesText = `${startLabel}: ${formatDate(p.milestone_start_date)}\n${endLabel}: ${formatDate(p.milestone_end_date)}${
-        p.delay_days > 45 ? `\nDelay: ${p.delay_days}d (${p.penalty_percentage || 0}%)` : ""
+      const datesText = `${startLabel}: ${formatDate(p.milestone_start_date)}\n${endLabel}: ${formatDate(p.milestone_end_date)}\nDelay: ${p.delay_days || 0}d${
+        p.delay_days > 45 ? ` (${p.penalty_percentage || 0}%)` : ""
       }`;
 
       const invNoText = p.invoice_number && p.invoice_number !== "—" ? `\nInv: #${p.invoice_number}` : "";
@@ -338,8 +342,9 @@ export function CommissionBatchDetailPage() {
         nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
         datesText,
         commAmt ? commAmt.toLocaleString("en-IN") : "0",
-        ...(hasFittings ? [fitAmt ? fitAmt.toLocaleString("en-IN") : "0"] : []),
         penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
+        netComm.toLocaleString("en-IN"),
+        ...(hasFittings ? [fitAmt ? fitAmt.toLocaleString("en-IN") : "0"] : []),
         netPayable.toLocaleString("en-IN"),
       ];
     });
@@ -357,41 +362,44 @@ export function CommissionBatchDetailPage() {
         totalRel.toLocaleString("en-IN"),
         "—",
         totalComm.toLocaleString("en-IN"),
-        ...(hasFittings ? [totalFit.toLocaleString("en-IN")] : []),
         totalPen > 0 ? `-${totalPen.toLocaleString("en-IN")}` : "0",
+        totalNetComm.toLocaleString("en-IN"),
+        ...(hasFittings ? [totalFit.toLocaleString("en-IN")] : []),
         totalNet.toLocaleString("en-IN"),
       ],
     ];
 
     const columnStylesConfig = hasFittings
       ? {
+          0: { cellWidth: 18, halign: "center" },
+          1: { cellWidth: 76 },
+          2: { cellWidth: 76 },
+          3: { cellWidth: 62 },
+          4: { cellWidth: 48, halign: "right" },
+          5: { cellWidth: 48, halign: "right" },
+          6: { cellWidth: 48, halign: "right" },
+          7: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          8: { cellWidth: 78 },
+          9: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          10: { cellWidth: 46, halign: "right", textColor: [225, 29, 72] },
+          11: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          12: { cellWidth: 46, halign: "right", textColor: [124, 58, 237] },
+          13: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
+        }
+      : {
           0: { cellWidth: 20, halign: "center" },
-          1: { cellWidth: 85 },
-          2: { cellWidth: 85 },
+          1: { cellWidth: 84 },
+          2: { cellWidth: 84 },
           3: { cellWidth: 68 },
           4: { cellWidth: 52, halign: "right" },
           5: { cellWidth: 52, halign: "right" },
           6: { cellWidth: 52, halign: "right" },
           7: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          8: { cellWidth: 90 },
+          8: { cellWidth: 88 },
           9: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          10: { cellWidth: 52, halign: "right", textColor: [124, 58, 237] },
-          11: { cellWidth: 50, halign: "right", textColor: [225, 29, 72] },
-          12: { cellWidth: 62, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
-        }
-      : {
-          0: { cellWidth: 22, halign: "center" },
-          1: { cellWidth: 92 },
-          2: { cellWidth: 90 },
-          3: { cellWidth: 72 },
-          4: { cellWidth: 55, halign: "right" },
-          5: { cellWidth: 55, halign: "right" },
-          6: { cellWidth: 55, halign: "right" },
-          7: { cellWidth: 55, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          8: { cellWidth: 95 },
-          9: { cellWidth: 60, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          10: { cellWidth: 55, halign: "right", textColor: [225, 29, 72] },
-          11: { cellWidth: 65, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
+          10: { cellWidth: 48, halign: "right", textColor: [225, 29, 72] },
+          11: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          12: { cellWidth: 60, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
         };
 
     autoTable(doc, {
@@ -696,8 +704,9 @@ export function CommissionBatchDetailPage() {
                   <th className="py-2.5 px-3 text-right">Total Material Cost</th>
                   <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Now Released</th>
                   <th className="py-2.5 px-3 text-right">Commission</th>
-                  {hasFittings && <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>}
                   <th className="py-2.5 px-3 text-right">Penalty</th>
+                  <th className="py-2.5 px-3 text-right font-bold text-[#14213D]">Net Comm.</th>
+                  {hasFittings && <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>}
                   <th className="py-2.5 px-3 text-right font-bold text-emerald-800">Total Payout</th>
                   <th className="py-2.5 px-3 text-center">Payout Status</th>
                   <th className="py-2.5 px-3 text-center">Action</th>
@@ -706,85 +715,96 @@ export function CommissionBatchDetailPage() {
               <tbody className="divide-y divide-[#EDEAE1]">
                 {dealerSummaries.length === 0 ? (
                   <tr>
-                    <td colSpan={hasFittings ? 11 : 10} className="py-6 text-center text-xs text-[#8C97AB]">
+                    <td colSpan={hasFittings ? 12 : 11} className="py-6 text-center text-xs text-[#8C97AB]">
                       No dealers found in this batch.
                     </td>
                   </tr>
                 ) : (
-                  dealerSummaries.map((d) => (
-                    <tr key={d.dealer_id || "unassigned"} className="hover:bg-[#FAFAF8]">
-                      <td className="py-3 px-3">
-                        <div className="font-semibold text-[#14213D] text-xs">{d.dealer_name}</div>
-                        {d.dealer_district && d.dealer_district !== "—" && (
-                          <div className="text-[10px] text-[#52607D]">{d.dealer_district}</div>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center font-mono font-bold text-[#14213D]">
-                        {d.projects_count}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono text-[#52607D]">
-                        {formatRupees(d.total_subsidy_amount || d.total_state_restricted)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono text-[#14213D] font-medium">
-                        {formatRupees(d.total_material_cost)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
-                        {formatRupees(d.total_now_to_be_released)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
-                        {formatRupees(d.total_commission_amount)}
-                      </td>
-                      {hasFittings && (
-                        <td className="py-3 px-3 text-right font-mono text-[#7C3AED] font-semibold">
-                          {formatRupees(d.total_fittings_amount)}
+                  dealerSummaries.map((d) => {
+                    const comm = d.total_commission_amount || 0;
+                    const pen = d.total_penalty_amount || 0;
+                    const netComm = Math.max(0, comm - pen);
+
+                    return (
+                      <tr key={d.dealer_id || "unassigned"} className="hover:bg-[#FAFAF8]">
+                        <td className="py-3 px-3">
+                          <div className="font-semibold text-[#14213D] text-xs">{d.dealer_name}</div>
+                          {d.dealer_district && d.dealer_district !== "—" && (
+                            <div className="text-[10px] text-[#52607D]">{d.dealer_district}</div>
+                          )}
                         </td>
-                      )}
-                      <td className="py-3 px-3 text-right font-mono">
-                        {d.total_penalty_amount > 0 ? (
-                          <span className="text-rose-600 font-bold font-mono">
-                            -{formatRupees(d.total_penalty_amount)}
-                          </span>
-                        ) : (
-                          <span className="text-[#8C97AB]">₹0</span>
+                        <td className="py-3 px-3 text-center font-mono font-bold text-[#14213D]">
+                          {d.projects_count}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono text-[#52607D]">
+                          {formatRupees(d.total_subsidy_amount || d.total_state_restricted)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono text-[#14213D] font-medium">
+                          {formatRupees(d.total_material_cost)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                          {formatRupees(d.total_now_to_be_released)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                          {formatRupees(d.total_commission_amount)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono">
+                          {pen > 0 ? (
+                            <span className="text-rose-600 font-bold font-mono">
+                              -{formatRupees(pen)}
+                            </span>
+                          ) : (
+                            <span className="text-[#8C97AB]">₹0</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-bold text-[#14213D]">
+                          {formatRupees(netComm)}
+                        </td>
+                        {hasFittings && (
+                          <td className="py-3 px-3 text-right font-mono text-[#7C3AED] font-semibold">
+                            {formatRupees(d.total_fittings_amount)}
+                          </td>
                         )}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
-                        {formatRupees(d.total_net_payable)}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {d.is_paid ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
-                            ✓ Paid
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-bold">
-                            Pending
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {d.is_paid ? (
-                          <span className="text-[11px] text-emerald-600 font-medium">Completed</span>
-                        ) : (
-                          <Button
-                            variant="primary"
-                            size="xs"
-                            icon={CreditCard}
-                            onClick={() => {
-                              setActiveDealerForPay(d);
-                              setDealerPayDate(new Date().toISOString().split("T")[0]);
-                              setDealerPayRef("Direct Bank Transfer / NEFT");
-                              setDealerPayPenalty(d.total_penalty_amount || 0);
-                              setDealerPayError("");
-                              setDealerPayModalOpen(true);
-                            }}
-                          >
-                            Record Payout
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
+                          {formatRupees(d.total_net_payable)}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {d.is_paid ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                              ✓ Paid
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-bold">
+                              Pending
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {d.is_paid ? (
+                            <div className="text-[10px] text-[#52607D]">
+                              {d.paid_date ? formatDate(d.paid_date) : "Settled"}
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setActiveDealerForPay(d);
+                                setDealerPayDate(new Date().toISOString().split("T")[0]);
+                                setDealerPayRef("Direct Bank Transfer / NEFT");
+                                setDealerPayPenalty(d.total_penalty_amount || 0);
+                                setDealerPayError("");
+                                setDealerPayModalOpen(true);
+                              }}
+                              className="text-[11px] py-1 px-2.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                            >
+                              Record Payout
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -794,29 +814,36 @@ export function CommissionBatchDetailPage() {
         {/* Section 2: Individual Linked Government Projects */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden space-y-3 p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-3">
-            <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
-              <FileText size={16} className="text-[#2F6F5E]" />
-              Proceeding Project Line Items ({filteredProjects.length})
-            </h3>
+            <div>
+              <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
+                <FileText size={16} className="text-[#2F6F5E]" />
+                Proceeding Line Items ({filteredProjects.length})
+              </h3>
+              <p className="text-xs text-[#52607D] mt-0.5">
+                Farmers, subsidy allocations, delay metrics, and exact dealer payout breakdown for this tranche.
+              </p>
+            </div>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto">
-              <div className="relative w-full sm:w-72">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52607D]" />
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8C97AB]" />
                 <input
                   type="text"
-                  placeholder="Search Application ID, Farmer, Dealer, Inv..."
+                  placeholder="Search farmer, ID, inv..."
                   value={projectSearch}
-                  onChange={(e) => setProjectSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                  onChange={(e) => {
+                    setProjectSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-8 pr-3 py-1.5 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[6px] focus:outline-none focus:ring-1 focus:ring-[#2F6F5E] w-48 sm:w-56"
                 />
               </div>
 
               <Button
                 variant="secondary"
-                size="sm"
                 icon={Download}
                 onClick={handleExportPDF}
-                title="Download Project Line Items as PDF"
+                size="sm"
                 className="shrink-0 text-xs font-semibold"
               >
                 Download PDF
@@ -825,7 +852,7 @@ export function CommissionBatchDetailPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[1250px]">
+            <table className="w-full text-left text-xs min-w-[1300px]">
               <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
                 <tr>
                   <th className="py-2.5 px-3">Application ID & Invoice</th>
@@ -837,8 +864,9 @@ export function CommissionBatchDetailPage() {
                   <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Now Released</th>
                   <th className="py-2.5 px-3">Delay</th>
                   <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Commission</th>
-                  {hasFittings && <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>}
                   <th className="py-2.5 px-3 text-right text-rose-600">Penalty</th>
+                  <th className="py-2.5 px-3 text-right font-bold text-[#14213D]">Net Commission</th>
+                  {hasFittings && <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>}
                   <th className="py-2.5 px-3 text-right font-bold text-emerald-800">Net Payable</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
                 </tr>
@@ -846,7 +874,7 @@ export function CommissionBatchDetailPage() {
               <tbody className="divide-y divide-[#EDEAE1]">
                 {paginatedProjects.length === 0 ? (
                   <tr>
-                    <td colSpan={hasFittings ? 13 : 12} className="py-8 text-center text-xs text-[#8C97AB]">
+                    <td colSpan={hasFittings ? 14 : 13} className="py-8 text-center text-xs text-[#8C97AB]">
                       No matching projects found in this batch.
                     </td>
                   </tr>
@@ -861,7 +889,8 @@ export function CommissionBatchDetailPage() {
                     );
                     const comm = Math.floor(parseFloat(p.commission_amount || 0));
                     const fit = Math.floor(parseFloat(p.fittings_amount || 0));
-                    const netPayable = Math.max(0, comm + fit - penalty);
+                    const netComm = Math.max(0, comm - penalty);
+                    const netPayable = Math.max(0, netComm + fit);
 
                     const isFirstFund = batch.fund_percentage_value >= 50.0;
                     const startLabel = isFirstFund ? "Invoice Date" : "1st Fund Credited";
@@ -926,23 +955,19 @@ export function CommissionBatchDetailPage() {
                             </div>
                           )}
                           {p.delay_days > 45 ? (
-                            <div className="text-[10px] font-bold text-amber-700 font-mono">
-                              ⚠️ {p.delay_days} days ({p.penalty_percentage || 0}% penalty)
+                            <div className="text-[10px] font-bold text-rose-600 font-mono">
+                              {p.delay_days}d ({p.penalty_percentage || 0}% penalty)
                             </div>
                           ) : (
-                            <div className="text-[10px] text-emerald-700 font-medium">✓ Within 45d SLA</div>
+                            <div className="text-[10px] font-bold text-emerald-700 font-mono">
+                              {p.delay_days || 0}d
+                            </div>
                           )}
                         </td>
 
                         <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E]">
                           {formatRupees(p.commission_amount)}
                         </td>
-
-                        {hasFittings && (
-                          <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
-                            {formatRupees(p.fittings_amount)}
-                          </td>
-                        )}
 
                         <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap min-w-[110px]">
                           <div className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
@@ -964,6 +989,16 @@ export function CommissionBatchDetailPage() {
                           </div>
                         </td>
 
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#14213D]">
+                          {formatRupees(netComm)}
+                        </td>
+
+                        {hasFittings && (
+                          <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
+                            {formatRupees(p.fittings_amount)}
+                          </td>
+                        )}
+
                         <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
                           {formatRupees(netPayable)}
                         </td>
@@ -976,7 +1011,7 @@ export function CommissionBatchDetailPage() {
                                 : "bg-gray-100 text-gray-700 border border-gray-200"
                             }`}
                           >
-                            {p.is_paid_to_dealer ? "PAID" : "UNPAID"}
+                            {p.is_paid_to_dealer ? "Paid" : "Unpaid"}
                           </span>
                         </td>
                       </tr>

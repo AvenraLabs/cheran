@@ -55,51 +55,54 @@ export function CreateDirectSalePage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [custRes, stockRes] = await Promise.all([
+        const [custRes, stockRes, itemsRes] = await Promise.all([
           api.get("/customers?limit=200"),
           api.get("/inventory/stock"),
+          api.get("/items?item_type=FINISHED_GOOD&limit=200").catch(() => ({ data: { items: [] } })),
         ]);
 
         setCustomers(custRes.data?.customers || []);
 
-        const rawStockList = stockRes.data?.stock || [];
-        let fgList = rawStockList
-          .filter((s) => s.item?.item_type === "FINISHED_GOOD")
-          .map((s) => ({
-            id: s.item.id,
-            name: s.item.name,
-            code: s.item.code,
-            unit: s.item.unit?.symbol || "NOS",
-            unit_price: parseFloat(s.item.unit_price) || 0,
-            available_stock: parseFloat(s.available_quantity) || 0,
-          }));
+        const rawStockList = stockRes.data?.stock || stockRes.data || [];
+        const stockMap = new Map();
+        (Array.isArray(rawStockList) ? rawStockList : []).forEach((s) => {
+          const id = s.id || s.item_id || s.item?.id;
+          const qty = s.quantity_on_hand !== undefined ? s.quantity_on_hand : (s.available_quantity ?? 0);
+          if (id) stockMap.set(id, parseFloat(qty) || 0);
+        });
 
-        if (fgList.length === 0) {
-          const itemsRes = await api.get("/items?item_type=FINISHED_GOOD&limit=200");
-          fgList = (itemsRes.data?.items || []).map((it) => ({
+        const allItems = itemsRes.data?.items || itemsRes.items || [];
+        let fgList = [];
+
+        if (allItems.length > 0) {
+          fgList = allItems.map((it) => ({
             id: it.id,
             name: it.name,
             code: it.code,
+            category: it.category || "",
             unit: it.unit?.symbol || "NOS",
             unit_price: parseFloat(it.unit_price) || 0,
-            available_stock: 0,
+            available_stock: stockMap.has(it.id)
+              ? stockMap.get(it.id)
+              : (it.stock ? parseFloat(it.stock.quantity_on_hand) : 0),
           }));
+        } else {
+          fgList = (Array.isArray(rawStockList) ? rawStockList : [])
+            .filter((s) => (s.item_type || s.item?.item_type) === "FINISHED_GOOD")
+            .map((s) => ({
+              id: s.id || s.item?.id,
+              name: s.name || s.item?.name,
+              code: s.code || s.item?.code,
+              category: s.category || s.item?.category || "",
+              unit: s.unit || s.item?.unit?.symbol || "NOS",
+              unit_price: parseFloat(s.unit_price || s.item?.unit_price || 0),
+              available_stock: parseFloat(s.quantity_on_hand ?? s.available_quantity ?? 0),
+            }));
         }
 
         setAllFinishedGoods(fgList);
-
-        // Auto-fill ALL finished goods items by default for fast UX
-        const initialLines = fgList.map((fg) => ({
-          item_id: fg.id,
-          name: fg.name,
-          code: fg.code,
-          unit: fg.unit,
-          unit_price: fg.unit_price,
-          available_stock: fg.available_stock,
-          quantity: "",
-        }));
-
-        setItems(initialLines);
+        // Start empty by default so user manually adds items
+        setItems([]);
       } catch (err) {
         console.error("Failed to load finished goods data:", err);
         setErrorMsg("Failed to load catalog and customer list.");
@@ -130,17 +133,8 @@ export function CreateDirectSalePage() {
     setItems((prev) => prev.filter((it) => it.item_id !== itemId));
   };
 
-  const handleResetAllItems = () => {
-    const resetLines = allFinishedGoods.map((fg) => ({
-      item_id: fg.id,
-      name: fg.name,
-      code: fg.code,
-      unit: fg.unit,
-      unit_price: fg.unit_price,
-      available_stock: fg.available_stock,
-      quantity: "",
-    }));
-    setItems(resetLines);
+  const handleClearAllItems = () => {
+    setItems([]);
   };
 
   const handleAddBackItem = (itemId) => {
@@ -153,6 +147,7 @@ export function CreateDirectSalePage() {
           item_id: fg.id,
           name: fg.name,
           code: fg.code,
+          category: fg.category,
           unit: fg.unit,
           unit_price: fg.unit_price,
           available_stock: fg.available_stock,
@@ -161,6 +156,20 @@ export function CreateDirectSalePage() {
       ]);
     }
   };
+
+  const unselectedItems = allFinishedGoods.filter(
+    (fg) => !items.some((it) => it.item_id === fg.id)
+  );
+
+  const unselectedOptions = [
+    { value: "", label: "+ Add Finished Good" },
+    ...unselectedItems.map((fg) => ({
+      value: fg.id,
+      label: fg.name,
+      subtitle: `Stock: ${fg.available_stock} ${fg.unit}`,
+      badge: fg.category || null,
+    })),
+  ];
 
   // ==========================================
   // Real-Time Commercial Calculations
@@ -179,11 +188,6 @@ export function CreateDirectSalePage() {
   const taxableAmount = netItemsTotal;
   const gstAmount = gstRate > 0 ? Math.round(((taxableAmount * gstRate) / 100.0) * 100) / 100 : 0;
   const grandTotal = Math.round((taxableAmount + gstAmount) * 100) / 100;
-
-  // Unselected items that can be added back
-  const unselectedItems = allFinishedGoods.filter(
-    (fg) => !items.some((it) => it.item_id === fg.id)
-  );
 
   // ==========================================
   // Form Submission
@@ -400,38 +404,41 @@ export function CreateDirectSalePage() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   {unselectedItems.length > 0 && (
-                    <div className="w-48">
+                    <div className="w-64 sm:w-80">
                       <CustomSelect
-                        options={[
-                          { value: "", label: "+ Add Removed Item" },
-                          ...unselectedItems.map((fg) => ({ value: fg.id, label: fg.name })),
-                        ]}
+                        options={unselectedOptions}
                         value=""
                         onChange={handleAddBackItem}
-                        placeholder="+ Add Item"
+                        placeholder="+ Add Finished Good"
+                        size="sm"
                       />
                     </div>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={handleResetAllItems}
-                    className="p-1.5 px-2.5 text-xs text-[#52607D] hover:text-[#14213D] hover:bg-white border border-[#E4E1D8] rounded-[8px] flex items-center gap-1 font-semibold transition-colors cursor-pointer"
-                    title="Reload all finished goods"
-                  >
-                    <RotateCcw size={13} /> Reset All
-                  </button>
+                  {items.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllItems}
+                      className="p-1.5 px-2.5 text-xs text-[#52607D] hover:text-[#14213D] hover:bg-white border border-[#E4E1D8] rounded-[8px] flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+                      title="Clear all selected items"
+                    >
+                      <RotateCcw size={13} /> Clear All
+                    </button>
+                  )}
                 </div>
               </div>
 
               {items.length === 0 ? (
                 <div className="p-8 text-center space-y-3">
-                  <p className="text-xs text-[#52607D]">All items were removed.</p>
-                  <Button variant="secondary" icon={RotateCcw} onClick={handleResetAllItems}>
-                    Reload All Finished Goods
-                  </Button>
+                  <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-[#2F6F5E] flex items-center justify-center">
+                    <Package size={20} />
+                  </div>
+                  <p className="text-xs font-semibold text-[#14213D]">No finished goods added to this sale yet.</p>
+                  <p className="text-[11px] text-[#52607D] max-w-md mx-auto">
+                    Use the <strong>"+ Add Finished Good"</strong> dropdown above to select products and enter sales quantities.
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -453,12 +460,17 @@ export function CreateDirectSalePage() {
                         const price = parseFloat(item.unit_price) || 0;
                         const lineTotal = Math.round(qty * price * 100) / 100;
                         const isEntered = qty > 0;
+                        const isOverStock = qty > item.available_stock;
 
                         return (
                           <tr
                             key={item.item_id}
                             className={`hover:bg-[#FAF9F5] transition-colors ${
-                              isEntered ? "bg-[#EAF3F0]/40 font-medium" : ""
+                              isOverStock
+                                ? "bg-rose-50/20"
+                                : isEntered
+                                ? "bg-[#EAF3F0]/40 font-medium"
+                                : ""
                             }`}
                           >
                             <td className="py-3 px-4 text-center font-mono text-[#8C97AB]">
@@ -508,12 +520,19 @@ export function CreateDirectSalePage() {
                                 placeholder="0"
                                 value={item.quantity}
                                 onChange={(e) => handleQuantityChange(item.item_id, e.target.value)}
-                                className={`w-28 px-3 py-1.5 text-right text-xs sm:text-sm border rounded-[8px] font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] transition-all ${
-                                  isEntered
-                                    ? "bg-emerald-50 border-emerald-500 text-emerald-900 shadow-xs"
-                                    : "bg-[#FAFAF8] border-[#E4E1D8] text-[#14213D]"
+                                className={`w-28 px-3 py-1.5 text-right text-xs sm:text-sm border rounded-[8px] font-mono font-bold focus:outline-none focus:ring-2 transition-all ${
+                                  isOverStock
+                                    ? "bg-rose-50 border-rose-500 text-rose-900 focus:ring-rose-500 shadow-xs"
+                                    : isEntered
+                                    ? "bg-emerald-50 border-emerald-500 text-emerald-900 shadow-xs focus:ring-[#2F6F5E]"
+                                    : "bg-[#FAFAF8] border-[#E4E1D8] text-[#14213D] focus:ring-[#2F6F5E]"
                                 }`}
                               />
+                              {isOverStock && (
+                                <div className="text-[10px] text-rose-600 font-semibold mt-0.5 text-right whitespace-nowrap">
+                                  Exceeds stock ({item.available_stock} {item.unit})
+                                </div>
+                              )}
                             </td>
 
                             <td className="py-3 px-4 text-right font-mono font-bold text-xs sm:text-sm text-[#14213D]">
