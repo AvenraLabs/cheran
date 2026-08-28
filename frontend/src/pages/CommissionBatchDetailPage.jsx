@@ -267,19 +267,19 @@ export function CommissionBatchDetailPage() {
     const headers = [
       [
         "#",
-        "Application ID & Inv",
-        "Farmer & Location",
-        "Dealer",
+        "Application ID",
+        "Invoice No & Date",
+        "Farmer Name",
         "Inv Amt (Rs.)",
         "Subsidy (Rs.)",
         "Material Cost (Rs.)",
         "Now Released (Rs.)",
-        "Delay",
         "Commission (Rs.)",
         "Penalty (Rs.)",
         "Net Comm. (Rs.)",
         ...(hasFittings ? ["Fittings 5% (Rs.)"] : []),
         "Net Payable (Rs.)",
+        "Dealer",
       ],
     ];
 
@@ -292,10 +292,6 @@ export function CommissionBatchDetailPage() {
     let totalNetComm = 0;
     let totalFit = 0;
     let totalNet = 0;
-
-    const isFirstFund = batch.fund_percentage_value >= 50.0;
-    const startLabel = isFirstFund ? "Inv Date" : "1st Fund";
-    const endLabel = isFirstFund ? "Work Comp" : "Joint Verif";
 
     const rows = filteredProjects.map((p, index) => {
       const invAmt = Math.floor(parseFloat(p.invoice_amount || 0));
@@ -324,28 +320,23 @@ export function CommissionBatchDetailPage() {
       totalFit += fitAmt;
       totalNet += netPayable;
 
-      const datesText = `${startLabel}: ${formatDate(p.milestone_start_date)}\n${endLabel}: ${formatDate(p.milestone_end_date)}\nDelay: ${p.delay_days || 0}d${
-        p.delay_days > 45 ? ` (${p.penalty_percentage || 0}%)` : ""
-      }`;
-
-      const invNoText = p.invoice_number && p.invoice_number !== "—" ? `\nInv: #${p.invoice_number}` : "";
-      const locText = [p.village, p.district].filter(Boolean).join(", ") || "";
+      const invNoDateText = `${p.invoice_number && p.invoice_number !== "—" ? `#${p.invoice_number}` : "—"}\n${formatDate(p.invoice_date)}`;
 
       return [
         String(index + 1),
-        `${p.application_id}${invNoText}`,
-        `${p.farmer_name || "—"}\n${locText}`,
-        p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned"),
+        p.application_id || "—",
+        invNoDateText,
+        p.farmer_name || "—",
         invAmt ? invAmt.toLocaleString("en-IN") : "—",
         subAmt ? subAmt.toLocaleString("en-IN") : "—",
         matCost ? `${matCost.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
         nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
-        datesText,
         commAmt ? commAmt.toLocaleString("en-IN") : "0",
         penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
         netComm.toLocaleString("en-IN"),
         ...(hasFittings ? [fitAmt ? fitAmt.toLocaleString("en-IN") : "0"] : []),
         netPayable.toLocaleString("en-IN"),
+        p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned"),
       ];
     });
 
@@ -360,46 +351,46 @@ export function CommissionBatchDetailPage() {
         totalSub.toLocaleString("en-IN"),
         totalMat.toLocaleString("en-IN"),
         totalRel.toLocaleString("en-IN"),
-        "—",
         totalComm.toLocaleString("en-IN"),
         totalPen > 0 ? `-${totalPen.toLocaleString("en-IN")}` : "0",
         totalNetComm.toLocaleString("en-IN"),
         ...(hasFittings ? [totalFit.toLocaleString("en-IN")] : []),
         totalNet.toLocaleString("en-IN"),
+        "—",
       ],
     ];
 
     const columnStylesConfig = hasFittings
       ? {
           0: { cellWidth: 18, halign: "center" },
-          1: { cellWidth: 76 },
-          2: { cellWidth: 76 },
-          3: { cellWidth: 62 },
-          4: { cellWidth: 48, halign: "right" },
-          5: { cellWidth: 48, halign: "right" },
-          6: { cellWidth: 48, halign: "right" },
-          7: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          8: { cellWidth: 78 },
-          9: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          10: { cellWidth: 46, halign: "right", textColor: [225, 29, 72] },
-          11: { cellWidth: 48, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
-          12: { cellWidth: 46, halign: "right", textColor: [124, 58, 237] },
-          13: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
-        }
-      : {
-          0: { cellWidth: 20, halign: "center" },
-          1: { cellWidth: 84 },
-          2: { cellWidth: 84 },
-          3: { cellWidth: 68 },
-          4: { cellWidth: 52, halign: "right" },
-          5: { cellWidth: 52, halign: "right" },
+          1: { cellWidth: 95 },
+          2: { cellWidth: 65 },
+          3: { cellWidth: 80 },
+          4: { cellWidth: 50, halign: "right" },
+          5: { cellWidth: 50, halign: "right" },
           6: { cellWidth: 52, halign: "right" },
           7: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          8: { cellWidth: 88 },
-          9: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          10: { cellWidth: 48, halign: "right", textColor: [225, 29, 72] },
-          11: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
-          12: { cellWidth: 60, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
+          8: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          9: { cellWidth: 45, halign: "right", textColor: [225, 29, 72] },
+          10: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          11: { cellWidth: 48, halign: "right", textColor: [124, 58, 237] },
+          12: { cellWidth: 56, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
+          13: { cellWidth: 80 },
+        }
+      : {
+          0: { cellWidth: 18, halign: "center" },
+          1: { cellWidth: 105 },
+          2: { cellWidth: 70 },
+          3: { cellWidth: 90 },
+          4: { cellWidth: 54, halign: "right" },
+          5: { cellWidth: 54, halign: "right" },
+          6: { cellWidth: 55, halign: "right" },
+          7: { cellWidth: 55, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          8: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          9: { cellWidth: 48, halign: "right", textColor: [225, 29, 72] },
+          10: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          11: { cellWidth: 60, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
+          12: { cellWidth: 85 },
         };
 
     autoTable(doc, {

@@ -1,0 +1,85 @@
+<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><META http-equiv="Content-Type" content="text/html; charset=utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Report Data</x:Name><x:WorksheetOptions><x:Print><x:ValidPrinterInfo/></x:Print></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--> </head><body lang=EN-US style='mso-element:header' id=h1><span style='mso--code:DATE'></span><div  style='font-size:12px;'><table class="table table-bordered" id="dvGrid">
+            <thead>
+                <tr class="rpt_header">
+                    <td id="report_column">District</td>
+                    <td>Registered (Nos)</td>
+                    <td>Registered (Ha)</td>
+                    <td>Application Approved (Nos)</td>
+                    <td>Application Approved (Ha)</td>
+                    <td>Quotation Prepared (Nos)</td>
+                    <td>Quotation Prepared (Ha)</td>
+                    <td>Quotation Prepared (Lakhs)</td>
+                    <td>Pre Inspection (Nos)</td>
+                    <td>Pre Inspection (Ha)</td>
+                    <td>Pre Inspection (Lakhs)</td>
+                    <td>Farmer Acceptance / DD Upload (Nos)</td>
+                    <td>Farmer Acceptance / DD Upload (Ha)</td>
+                    <td>Farmer Acceptance / DD Upload (Lakhs)</td>
+                    <td>Work Order Issued (Nos)</td>
+                    <td>Work Order Issued (Ha)</td>
+                    <td>Work Order Issued (Lakhs)</td>
+                    <td>Invoice (Nos)</td>
+                    <td>Invoice (Ha)</td>
+                    <td>Invoice (Lakhs)</td>
+                    <td>Block Recommend (Nos)</td>
+                    <td>Block Recommend (Lakhs)</td>
+                    <td>District Recommend (Nos)</td>
+                    <td>District Recommend (Lakhs)</td>
+
+                    <td>State recommend (Nos)</td>
+                    <td>State recommend (Ha)</td>
+                    <td>State recommend (Lakhs)</td>
+
+                    <td>First Fund (Nos)</td>
+                    <td>First Fund (Ha)</td>
+                    <td>First Fund Released (Lakhs)</td>
+                    <td>Measurement (Nos)</td>
+                    <td>Measurement (Ha)</td>
+                    <td>Measurement (Lakhs)</td>
+                    <td>Second Fund (Nos)</td>
+                    <td>Second Fund (Ha)</td>
+                    <td>Second Fund Released (Lakhs)</td>
+                </tr>
+            </thead>
+            <tbody><tr><td>Coimbatore</td><td> 1</td> <td class="text-right">1.19</td> <td>1</td> <td>1.19</td> <td>1</td> <td>1.19</td> <td>1.58</td> <td>1</td> <td>1.19</td> <td>1.58</td> <td>1</td><td>1.19</td> <td>1.58</td> <td>1</td> <td>1.19</td> <td>1.58</td> <td>1</td> <td>1.19</td> <td>1.58</td> <td>1</td> <td>1.58</td> <td>1</td> <td>1.58</td> <td>1</td> <td>1.19</td> <td>1.58</td> <td>1</td> <td>1.19</td> <td>0.77</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> </tr><tr><td>Dharmapuri</td><td> 1468</td> <td class="text-right">1337.43</td> <td>1406</td> <td>1285.83</td> <td>1358</td> <td>1231.48</td> <td>1559.68</td> <td>1337</td> <td>1216.47</td> <td>1542.11</td> <td>1331</td><td>1210.38</td> <td>1535.96</td> <td>1331</td> <td>1210.38</td> <td>1535.96</td> <td>1220</td> <td>1104.94</td> <td>1404.88</td> <td>1158</td> <td>1338.32</td> <td>1128</td> <td>1301.53</td> <td>1115</td> <td>1007.94</td> <td>1279.97</td> <td>1035</td> <td>934.6</td> <td>623.62</td> <td>928</td> <td>845.89</td> <td>1080.37</td> <td>833</td> <td>755.1</td> <td>457.05</td> </tr><tr><td>Erode</td><td> 594</td> <td class="text-right">614.41</td> <td>593</td> <td>614.14</td> <td>591</td> <td>611.32</td> <td>756.6</td> <td>591</td> <td>611.32</td> <td>756.6</td> <td>590</td><td>609.36</td> <td>754.82</td> <td>590</td> <td>609.36</td> <td>754.82</td> <td>553</td> <td>576.87</td> <td>713.94</td> <td>541</td> <td>696.73</td> <td>541</td> <td>696.73</td> <td>541</td> <td>562.82</td> <td>694.27</td> <td>522</td> <td>545.32</td> <td>373.2</td> <td>485</td> <td>509.66</td> <td>633.54</td> <td>473</td> <td>498.95</td> <td>272.21</td> </tr><tr><td>Krishnagiri</td><td> 2629</td> <td class="text-right">2443.37</td> <td>2582</td> <td>2404.46</td> <td>2557</td> <td>2387.26</td> <td>3061.33</td> <td>2556</td> <td>2384.66</td> <td>3058.92</td> <td>2543</td><td>2370.1</td> <td>3043.16</td> <td>2541</td> <td>2368.3</td> <td>3040.94</td> <td>2412</td> <td>2266.84</td> <td>2911.2</td> <td>2340</td> <td>2835.05</td> <td>2340</td> <td>2835.05</td> <td>2311</td> <td>2178.49</td> <td>2796.42</td> <td>2286</td> <td>2158.18</td> <td>1527.71</td> <td>2179</td> <td>2061.2</td> <td>2654.64</td> <td>2040</td> <td>1931.19</td> <td>1111.6</td> </tr><tr><td>Namakkal</td><td> 2</td> <td class="text-right">2.2</td> <td>2</td> <td>2.2</td> <td>2</td> <td>2.2</td> <td>2.64</td> <td>2</td> <td>2.2</td> <td>2.64</td> <td>2</td><td>2.2</td> <td>2.64</td> <td>2</td> <td>2.2</td> <td>2.64</td> <td>2</td> <td>2.2</td> <td>2.64</td> <td>2</td> <td>2.64</td> <td>2</td> <td>2.64</td> <td>2</td> <td>2.2</td> <td>2.64</td> <td>2</td> <td>2.2</td> <td>1.58</td> <td>2</td> <td>2.2</td> <td>2.64</td> <td>2</td> <td>2.2</td> <td>1.05</td> </tr><tr><td>Ranipet</td><td> 94</td> <td class="text-right">64.6</td> <td>94</td> <td>64.6</td> <td>94</td> <td>64.6</td> <td>48.16</td> <td>94</td> <td>64.6</td> <td>48.16</td> <td>94</td><td>64.6</td> <td>48.16</td> <td>94</td> <td>64.6</td> <td>48.16</td> <td>81</td> <td>52.99</td> <td>32.68</td> <td>78</td> <td>30.46</td> <td>78</td> <td>30.46</td> <td>78</td> <td>51.26</td> <td>17.7</td> <td>78</td> <td>51.26</td> <td>10.62</td> <td>78</td> <td>51.26</td> <td>29.55</td> <td>15</td> <td>13.69</td> <td>6.7</td> </tr><tr><td>Salem</td><td> 15</td> <td class="text-right">14.11</td> <td>15</td> <td>14.11</td> <td>15</td> <td>14.11</td> <td>16.42</td> <td>15</td> <td>14.11</td> <td>16.42</td> <td>15</td><td>14.11</td> <td>16.42</td> <td>15</td> <td>14.11</td> <td>16.42</td> <td>15</td> <td>14.11</td> <td>16.42</td> <td>15</td> <td>16.42</td> <td>15</td> <td>16.42</td> <td>15</td> <td>14.11</td> <td>16.42</td> <td>15</td> <td>14.11</td> <td>9.33</td> <td>15</td> <td>14.11</td> <td>16.41</td> <td>15</td> <td>14.11</td> <td>7.08</td> </tr><tr><td>Thirupathur</td><td> 123</td> <td class="text-right">109.77</td> <td>123</td> <td>109.77</td> <td>123</td> <td>109.77</td> <td>139.2</td> <td>123</td> <td>109.77</td> <td>139.2</td> <td>123</td><td>109.77</td> <td>139.2</td> <td>123</td> <td>109.77</td> <td>139.2</td> <td>107</td> <td>96.74</td> <td>123.5</td> <td>101</td> <td>118.04</td> <td>101</td> <td>118.04</td> <td>101</td> <td>92.57</td> <td>117.4</td> <td>101</td> <td>92.57</td> <td>70.44</td> <td>93</td> <td>85.52</td> <td>108.66</td> <td>89</td> <td>83.99</td> <td>43.18</td> </tr><tr><td>Tiruppur</td><td> 14</td> <td class="text-right">10.96</td> <td>14</td> <td>10.96</td> <td>13</td> <td>9.86</td> <td>11.21</td> <td>13</td> <td>9.86</td> <td>11.21</td> <td>13</td><td>9.86</td> <td>11.21</td> <td>13</td> <td>9.86</td> <td>11.21</td> <td>12</td> <td>9.06</td> <td>11</td> <td>12</td> <td>11</td> <td>12</td> <td>11</td> <td>12</td> <td>9.06</td> <td>11</td> <td>10</td> <td>8</td> <td>5.58</td> <td>9</td> <td>6.91</td> <td>8.38</td> <td>9</td> <td>6.91</td> <td>3.66</td> </tr><tr><td>Tiruvannamalai</td><td> 127</td> <td class="text-right">102.85</td> <td>71</td> <td>51.91</td> <td>65</td> <td>48.52</td> <td>62.19</td> <td>65</td> <td>48.52</td> <td>62.19</td> <td>65</td><td>48.52</td> <td>62.19</td> <td>65</td> <td>48.52</td> <td>62.19</td> <td>53</td> <td>39.43</td> <td>50.65</td> <td>49</td> <td>46.42</td> <td>49</td> <td>46.42</td> <td>45</td> <td>32.98</td> <td>42.75</td> <td>41</td> <td>30.51</td> <td>21.55</td> <td>31</td> <td>24.45</td> <td>32.01</td> <td>29</td> <td>22.89</td> <td>13.72</td> </tr><tr><td>Vellore</td><td> 1</td> <td class="text-right">1.22</td> <td>1</td> <td>1.22</td> <td>1</td> <td>1.22</td> <td>1.26</td> <td>1</td> <td>1.22</td> <td>1.26</td> <td>1</td><td>1.22</td> <td>1.26</td> <td>1</td> <td>1.22</td> <td>1.26</td> <td>1</td> <td>1.22</td> <td>1.26</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> <td>0</td> </tr></tbody>
+            <tfoot>
+                <tr>
+                    <th>Total</th>
+                    <th>5068.00</th>
+                    <th class="text-right">4702.11</th>
+                    <th>4902.00</th>
+                    <th>4560.39</th>
+                    <th>4820.00</th>
+                    <th>4481.53</th>
+                    <th>5660.27</th>
+                    <th>4798.00</th>
+                    <th>4463.92</th>
+                    <th>5640.29</th>
+                    <th>4778.00</th>
+                    <th>4441.31</th>
+                    <th>5616.60</th>
+                    <th>4776.00</th>
+                    <th>4439.51</th>
+                    <th>5614.38</th>
+                    <th>4457.00</th>
+                    <th>4165.59</th>
+                    <th>5269.75</th>
+                    <th>4297.00</th>
+                    <th>5096.66</th>
+                    <th>4267.00</th>
+                    <th>5059.87</th>
+                    <th>4221.00</th>
+                    <th>3952.62</th>
+                    <th>4980.15</th>
+                    <th>4091.00</th>
+                    <th>3837.94</th>
+                    <th>2644.40</th>
+                    <th>3820.00</th>
+                    <th>3601.20</th>
+                    <th>4566.20</th>
+                    <th>3505.00</th>
+                    <th>3329.03</th>
+                    <th>1916.25</th>
+                </tr>
+            </tfoot>
+        </table></div></body></html>

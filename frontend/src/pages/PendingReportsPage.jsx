@@ -22,7 +22,11 @@ import {
   Apple,
   Boxes,
   HelpCircle,
+  X,
+  FileText,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import MetricCard from "../components/common/MetricCard.jsx";
@@ -41,16 +45,6 @@ const CATEGORY_OPTIONS = [
   { value: "Others", label: "Others" },
 ];
 
-const MIN_DAYS_OPTIONS = [
-  { value: "", label: "Any Days Pending" },
-  { value: "15", label: "> 15 Days Elapsed" },
-  { value: "30", label: "> 30 Days Elapsed (1 Month)" },
-  { value: "60", label: "> 60 Days Elapsed (2 Months)" },
-  { value: "90", label: "> 90 Days Elapsed (3 Months)" },
-  { value: "180", label: "> 180 Days Elapsed (6 Months)" },
-  { value: "365", label: "> 365 Days Elapsed (1 Year)" },
-];
-
 export function PendingReportsPage() {
   // Funnel & Master Data States
   const [funnelData, setFunnelData] = useState(null);
@@ -66,7 +60,7 @@ export function PendingReportsPage() {
   const [selectedDistrict, setSelectedDistrict] = useState("ALL");
 
   // Drill-Down States
-  const [pendencyType, setPendencyType] = useState("PENDING_WORK_COMPLETION"); // 'PENDING_WORK_COMPLETION' | 'PENDING_MATERIAL_SUPPLY' | 'ALL_PENDING'
+  const [pendencyType, setPendencyType] = useState("PENDING_WORK_COMPLETION"); // 'PENDING_WORK_COMPLETION' | 'PENDING_MATERIAL_SUPPLY' | 'PENDING_JVR_COMPLETION' | 'ALL_PENDING'
   const [drillCategory, setDrillCategory] = useState("Agriculture");
   const [drillYear, setDrillYear] = useState("ALL");
   const [minDaysPending, setMinDaysPending] = useState("");
@@ -77,19 +71,11 @@ export function PendingReportsPage() {
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 25, totalPages: 1 });
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
-  // Dynamically compute Financial Year options from backend available_years + automatic future years
+  // Dynamically compute Financial Year options strictly from backend available_years
   const yearOptions = useMemo(() => {
-    const yearsList = funnelData?.available_years || [
-      "2028-2029",
-      "2027-2028",
-      "2026-2027",
-      "2025-2026",
-      "2024-2025",
-      "2023-2024",
-      "2022-2023",
-      "2021-2022",
-    ];
+    const yearsList = funnelData?.available_years || [];
     return [
       { value: "ALL", label: "All Financial Years" },
       ...yearsList.map((y) => ({ value: y, label: y })),
@@ -234,7 +220,7 @@ export function PendingReportsPage() {
       const params = {
         pendency_type: pendencyType,
         page: 1,
-        limit: 2000, // Export up to 2000 records
+        limit: 10000,
       };
       if (drillCategory !== "ALL") params.category = drillCategory;
       if (drillYear !== "ALL") params.year = drillYear;
@@ -252,26 +238,17 @@ export function PendingReportsPage() {
       }
 
       // Format CSV rows
+      const isJvrView = pendencyType === "PENDING_JVR_COMPLETION";
+
       const headers = [
         "Application ID",
-        "Category",
-        "Financial Year",
         "Farmer Name",
-        "Mobile",
-        "District",
-        "Block",
-        "Village",
-        "Survey No",
-        "Applied Area (Ha)",
-        "Work Order No",
-        "Work Order Date",
-        "Invoice No",
+        "Dealer Assigned",
+        isJvrView ? "1st Fund Date" : "WO Date",
+        "Invoice Number",
         "Invoice Date",
-        "Invoice Amount (Rs)",
-        "Dealer Name",
         "Current Status",
-        "Days Elapsed",
-        "Pendency Stage",
+        "Days Pending",
       ];
 
       const csvRows = [
@@ -279,24 +256,15 @@ export function PendingReportsPage() {
         ...exportList.map((p) =>
           [
             `"${p.application_id || ""}"`,
-            `"${p.category || ""}"`,
-            `"${p.year || ""}"`,
             `"${(p.farmer_name || "").replace(/"/g, '""')}"`,
-            `"${p.mobile || ""}"`,
-            `"${p.district || ""}"`,
-            `"${p.block || ""}"`,
-            `"${p.village || ""}"`,
-            `"${(p.survey_no_subdivision_no || "").replace(/"/g, '""')}"`,
-            p.applied_area_ha || 0,
-            `"${p.work_order_no || ""}"`,
-            `"${p.work_order_date || ""}"`,
+            `"${(p.dealer_name || "Unassigned").replace(/"/g, '""')}"`,
+            isJvrView
+              ? `"${p.first_fund_utr_date || ""}"`
+              : `"${p.work_order_date || ""}"`,
             `"${p.invoice_number || ""}"`,
             `"${p.invoice_date || ""}"`,
-            p.invoice_amount || 0,
-            `"${(p.dealer_name || "Unassigned").replace(/"/g, '""')}"`,
             `"${p.current_status || ""}"`,
             p.days_pending || 0,
-            `"${p.pendency_stage || ""}"`,
           ].join(",")
         ),
       ];
@@ -321,6 +289,155 @@ export function PendingReportsPage() {
     }
   };
 
+  // PDF Export for pending projects
+  const handleExportPDF = async () => {
+    try {
+      setExportingPdf(true);
+      toast.info("Generating PDF report...");
+
+      const params = {
+        pendency_type: pendencyType,
+        page: 1,
+        limit: 10000,
+      };
+      if (drillCategory !== "ALL") params.category = drillCategory;
+      if (drillYear !== "ALL") params.year = drillYear;
+      if (selectedDealer !== "ALL") params.dealer_id = selectedDealer;
+      if (selectedDistrict !== "ALL") params.district = selectedDistrict;
+      if (minDaysPending) params.min_days_pending = minDaysPending;
+      if (debouncedSearch) params.search = debouncedSearch;
+
+      const res = await api.get("/reports/pending-projects", { params });
+      const exportList = res?.data?.projects || res?.projects || [];
+
+      if (exportList.length === 0) {
+        toast.warning("No records found to export to PDF");
+        return;
+      }
+
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      const stageTitle =
+        pendencyType === "PENDING_WORK_COMPLETION"
+          ? "Pending Dealer Work Completion (Post-Invoicing)"
+          : pendencyType === "PENDING_MATERIAL_SUPPLY"
+          ? "Pending Material Supply (Awaiting Invoicing)"
+          : pendencyType === "PENDING_JVR_COMPLETION"
+          ? "Pending Joint Verification (Post-1st Fund Credited)"
+          : "All Government Project Pendencies";
+
+      // Brand Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(20, 33, 61);
+      doc.text("CHERAN PLAST & IRRIGATION", 30, 36);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(82, 96, 125);
+      doc.text(`Government Scheme Pendency Report — ${stageTitle}`, 30, 50);
+
+      // Meta Info
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(20, 33, 61);
+      doc.text(`Category: ${drillCategory}`, 30, 68);
+      doc.text(`Financial Year: ${drillYear}`, 160, 68);
+      const curDealerName = dealers.find((d) => d.id === selectedDealer)?.name || "All Dealers";
+      doc.text(`Dealer: ${curDealerName}`, 320, 68);
+      doc.text(`Min Days: ${minDaysPending ? `>= ${minDaysPending}d` : "All"}`, 500, 68);
+      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 660, 68);
+
+      const isJvrView = pendencyType === "PENDING_JVR_COMPLETION";
+
+      const tableData = exportList.map((p, idx) => [
+        idx + 1,
+        p.application_id,
+        p.farmer_name || "—",
+        p.dealer_name || "Unassigned",
+        isJvrView
+          ? (p.first_fund_utr_date ? formatDate(p.first_fund_utr_date) : "—")
+          : (p.work_order_date ? formatDate(p.work_order_date) : "—"),
+        p.invoice_date ? `${p.invoice_number ? `#${p.invoice_number} ` : ""}${formatDate(p.invoice_date)}` : "Not Invoiced",
+        p.current_status || "—",
+        `${p.days_pending || 0}d`,
+      ]);
+
+      autoTable(doc, {
+        head: [
+          [
+            "#",
+            "Application ID",
+            "Farmer Name",
+            "Dealer Assigned",
+            isJvrView ? "1st Fund Date" : "WO Date",
+            "Invoice Details",
+            "Current Status",
+            "Days Pending",
+          ],
+        ],
+        body: tableData,
+        startY: 78,
+        styles: {
+          fontSize: 7.5,
+          font: "helvetica",
+          cellPadding: 4,
+          textColor: [20, 33, 61],
+          lineColor: [228, 225, 216],
+          lineWidth: 0.5,
+          valign: "middle",
+        },
+        headStyles: {
+          fillColor: [20, 33, 61],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+          halign: "left",
+        },
+        alternateRowStyles: {
+          fillColor: [250, 250, 248],
+        },
+        columnStyles: {
+          0: { cellWidth: 25, halign: "center" },
+          1: { cellWidth: 130, fontStyle: "bold" },
+          2: { cellWidth: 140 },
+          3: { cellWidth: 110 },
+          4: { cellWidth: 65, halign: "center" },
+          5: { cellWidth: 95 },
+          6: { cellWidth: 130 },
+          7: { cellWidth: 65, halign: "center", fontStyle: "bold" },
+        },
+        didDrawPage: (data) => {
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(140, 151, 171);
+          doc.text(
+            `Total Records: ${exportList.length}  |  Page ${data.pageNumber} of ${doc.internal.getNumberOfPages()}`,
+            pageWidth - 30,
+            doc.internal.pageSize.getHeight() - 15,
+            { align: "right" }
+          );
+        },
+      });
+
+      doc.save(
+        `cheran_pending_${pendencyType.toLowerCase()}_${drillCategory.toLowerCase()}_${new Date().toISOString().split("T")[0]}.pdf`
+      );
+      toast.success(`PDF exported successfully (${exportList.length} records)`);
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to generate PDF export");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const grand = funnelData?.grandTotals || {};
   const categories = funnelData?.categories || {};
 
@@ -332,6 +449,62 @@ export function PendingReportsPage() {
     }
     return funnelData.categories[selectedCategoryTab] || null;
   }, [funnelData, selectedCategoryTab]);
+
+  // Consolidated year rows across all categories for "ALL" tab (single combined row per financial year)
+  const consolidatedAllYears = useMemo(() => {
+    if (!funnelData?.categories) return [];
+    const yearMap = new Map();
+
+    Object.entries(funnelData.categories).forEach(([catName, catData]) => {
+      (catData.years || []).forEach((row) => {
+        const yKey = row.year || "Unknown";
+        if (!yearMap.has(yKey)) {
+          yearMap.set(yKey, {
+            year: yKey,
+            wo_count: 0,
+            wo_ha: 0,
+            invoiced_count: 0,
+            invoiced_ha: 0,
+            mat_pendency_count: 0,
+            mat_pendency_ha: 0,
+            wc_count: 0,
+            wc_ha: 0,
+            wc_pendency_count: 0,
+            wc_pendency_ha: 0,
+            fund1_count: 0,
+            fund1_ha: 0,
+            jv_count: 0,
+            jv_ha: 0,
+            jvr_pendency_count: 0,
+            jvr_pendency_ha: 0,
+          });
+        }
+        const cur = yearMap.get(yKey);
+        cur.wo_count += row.wo_count || 0;
+        cur.wo_ha += row.wo_ha || 0;
+        cur.invoiced_count += row.invoiced_count || 0;
+        cur.invoiced_ha += row.invoiced_ha || 0;
+        cur.mat_pendency_count += row.mat_pendency_count || 0;
+        cur.mat_pendency_ha += row.mat_pendency_ha || 0;
+        cur.wc_count += row.wc_count || 0;
+        cur.wc_ha += row.wc_ha || 0;
+        cur.wc_pendency_count += row.wc_pendency_count || 0;
+        cur.wc_pendency_ha += row.wc_pendency_ha || 0;
+        cur.fund1_count += row.fund1_count || 0;
+        cur.fund1_ha += row.fund1_ha || 0;
+        cur.jv_count += row.jv_count || 0;
+        cur.jv_ha += row.jv_ha || 0;
+        cur.jvr_pendency_count += row.jvr_pendency_count || 0;
+        cur.jvr_pendency_ha += row.jvr_pendency_ha || 0;
+      });
+    });
+
+    return Array.from(yearMap.values()).sort((a, b) => {
+      if (a.year === "Unknown") return 1;
+      if (b.year === "Unknown") return -1;
+      return a.year.localeCompare(b.year);
+    });
+  }, [funnelData]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8] overflow-y-auto">
@@ -351,21 +524,13 @@ export function PendingReportsPage() {
             >
               Refresh Data
             </Button>
-            <Button
-              variant="primary"
-              icon={Download}
-              onClick={handleExportCsv}
-              loading={exportingCsv}
-            >
-              Export CSV
-            </Button>
           </div>
         }
       />
 
       <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
         {/* Executive Summary Metrics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
           <MetricCard
             title="Work Orders Issued"
             value={`${(grand.wo_ha || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Ha`}
@@ -378,21 +543,21 @@ export function PendingReportsPage() {
             subtitle={`${(grand.invoiced_count || 0).toLocaleString("en-IN")} Invoiced Projects`}
             icon={Boxes}
           />
-          <div className="bg-[#FFFDF7] border border-[#E9DCA3] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col justify-between">
+          <div className="bg-[#FFFDF7] border border-[#E9DCA3] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#8A6D1C]">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8A6D1C]">
                 Material Supply Pendency
               </span>
-              <div className="w-8 h-8 rounded-[8px] bg-[#FEF3C7] text-[#D97706] flex items-center justify-center">
-                <Clock size={16} />
+              <div className="w-7 h-7 rounded-[6px] bg-[#FEF3C7] text-[#D97706] flex items-center justify-center">
+                <Clock size={14} />
               </div>
             </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold font-display text-[#B45309]">
+            <div className="mt-2.5">
+              <div className="text-xl font-bold font-display text-[#B45309]">
                 {(grand.mat_pendency_ha || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Ha
               </div>
-              <div className="mt-1 text-xs text-[#92400E] font-medium">
-                {grand.mat_pendency_count || 0} Projects awaiting Invoicing
+              <div className="mt-0.5 text-[11px] text-[#92400E] font-medium">
+                {grand.mat_pendency_count || 0} Projects awaiting Inv
               </div>
             </div>
           </div>
@@ -400,25 +565,44 @@ export function PendingReportsPage() {
           <MetricCard
             title="Work Completed"
             value={`${(grand.wc_ha || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Ha`}
-            subtitle={`${(grand.wc_count || 0).toLocaleString("en-IN")} Field Work Completed`}
+            subtitle={`${(grand.wc_count || 0).toLocaleString("en-IN")} Field Work Done`}
             icon={CheckCircle2}
           />
 
-          <div className="bg-[#FEF2F2] border border-[#FCA5A5] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col justify-between">
+          <div className="bg-[#FEF2F2] border border-[#FCA5A5] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[#991B1B]">
-                Dealer Work Completion Pendency
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#991B1B]">
+                Dealer Work Pendency
               </span>
-              <div className="w-8 h-8 rounded-[8px] bg-[#FEE2E2] text-[#DC2626] flex items-center justify-center">
-                <AlertTriangle size={16} />
+              <div className="w-7 h-7 rounded-[6px] bg-[#FEE2E2] text-[#DC2626] flex items-center justify-center">
+                <AlertTriangle size={14} />
               </div>
             </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold font-display text-[#B91C1C]">
+            <div className="mt-2.5">
+              <div className="text-xl font-bold font-display text-[#B91C1C]">
                 {(grand.wc_pendency_ha || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Ha
               </div>
-              <div className="mt-1 text-xs text-[#991B1B] font-semibold">
-                {grand.wc_pendency_count || 0} Invoiced Projects Pending Dealer Work
+              <div className="mt-0.5 text-[11px] text-[#991B1B] font-semibold">
+                {grand.wc_pendency_count || 0} Invoiced Pending Work
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#EEF2FF] border border-[#C7D2FE] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#3730A3]">
+                Joint Verification (JVR) Pendency
+              </span>
+              <div className="w-7 h-7 rounded-[6px] bg-[#E0E7FF] text-[#4F46E5] flex items-center justify-center">
+                <ClipboardCheck size={14} />
+              </div>
+            </div>
+            <div className="mt-2.5">
+              <div className="text-xl font-bold font-display text-[#3730A3]">
+                {(grand.jvr_pendency_ha || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Ha
+              </div>
+              <div className="mt-0.5 text-[11px] text-[#4338CA] font-semibold">
+                {grand.jvr_pendency_count || 0} 1st Fund Pending JV
               </div>
             </div>
           </div>
@@ -611,9 +795,6 @@ export function PendingReportsPage() {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-[#F8F7F4] text-[#52607D] font-bold text-[11px] uppercase tracking-wider border-b border-[#E4E1D8]">
-                      {selectedCategoryTab === "ALL" && (
-                        <th className="py-3 px-4">Category</th>
-                      )}
                       <th className="py-3 px-4">Financial Year</th>
                       <th className="py-3 px-4 text-right">
                         Work Order Issued
@@ -792,76 +973,100 @@ export function PendingReportsPage() {
                         )}
                       </>
                     ) : (
-                      // All Categories Consolidated Rows
+                      // All Categories Consolidated (Combined by Financial Year)
                       <>
-                        {Object.keys(categories).map((catName) => {
-                          const cat = categories[catName];
-                          return (
-                            <React.Fragment key={catName}>
-                              {cat.years.map((row, idx) => (
-                                <tr
-                                  key={`${catName}-${idx}`}
-                                  className="hover:bg-[#F4F8F6] transition-colors cursor-pointer"
-                                  onClick={() => handleQuickFilterDrillDown(catName, row.year)}
+                        {consolidatedAllYears.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-xs text-[#8C97AB]">
+                              No project data found with current filters.
+                            </td>
+                          </tr>
+                        ) : (
+                          consolidatedAllYears.map((row, idx) => (
+                            <tr
+                              key={idx}
+                              className="hover:bg-[#F4F8F6] transition-colors group cursor-pointer"
+                              onClick={() => handleQuickFilterDrillDown("ALL", row.year)}
+                            >
+                              <td className="py-3 px-4 font-bold font-mono text-[#14213D]">
+                                {row.year === "Unknown" ? "Unspecified Year" : row.year}
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                <span className="font-bold text-[#14213D]">
+                                  {row.wo_ha.toFixed(2)} Ha
+                                </span>
+                                <span className="ml-1.5 text-[10px] text-[#52607D] font-mono bg-[#EAE8E1]/60 px-1.5 py-0.5 rounded">
+                                  {row.wo_count}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                <span className="font-bold text-[#2F6F5E]">
+                                  {row.invoiced_ha.toFixed(2)} Ha
+                                </span>
+                                <span className="ml-1.5 text-[10px] text-[#2F6F5E] font-mono bg-[#EAF3F0] px-1.5 py-0.5 rounded">
+                                  {row.invoiced_count}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right bg-[#FFFDF7]">
+                                <span
+                                  className={`font-bold font-mono ${
+                                    row.mat_pendency_ha > 0 ? "text-[#D97706]" : "text-[#8C97AB]"
+                                  }`}
                                 >
-                                  <td className="py-2.5 px-4 font-bold text-xs text-[#14213D]">
-                                    {catName}
-                                  </td>
-                                  <td className="py-2.5 px-4 font-mono text-[#52607D]">
-                                    {row.year}
-                                  </td>
-                                  <td className="py-2.5 px-4 text-right">
-                                    <span className="font-semibold text-[#14213D]">
-                                      {row.wo_ha.toFixed(2)} Ha
-                                    </span>
-                                    <span className="ml-1.5 text-[10px] text-[#8C97AB]">
-                                      ({row.wo_count})
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-4 text-right">
-                                    <span className="font-semibold text-[#2F6F5E]">
-                                      {row.invoiced_ha.toFixed(2)} Ha
-                                    </span>
-                                    <span className="ml-1.5 text-[10px] text-[#2F6F5E]">
-                                      ({row.invoiced_count})
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-4 text-right bg-[#FFFDF7]">
-                                    <span className="font-semibold text-[#D97706]">
-                                      {row.mat_pendency_ha.toFixed(2)} Ha
-                                    </span>
-                                    <span className="ml-1.5 text-[10px] text-[#D97706]">
-                                      ({row.mat_pendency_count})
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-4 text-right">
-                                    <span className="font-semibold text-[#14213D]">
-                                      {row.wc_ha.toFixed(2)} Ha
-                                    </span>
-                                    <span className="ml-1.5 text-[10px] text-[#8C97AB]">
-                                      ({row.wc_count})
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-4 text-right bg-[#FEF2F2]">
-                                    <span className="font-semibold text-[#DC2626]">
-                                      {row.wc_pendency_ha.toFixed(2)} Ha
-                                    </span>
-                                    <span className="ml-1.5 text-[10px] text-[#DC2626]">
-                                      ({row.wc_pendency_count})
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3 text-center">
-                                    <ChevronRight size={14} className="text-[#8C97AB]" />
-                                  </td>
-                                </tr>
-                              ))}
-                            </React.Fragment>
-                          );
-                        })}
+                                  {row.mat_pendency_ha.toFixed(2)} Ha
+                                </span>
+                                <span
+                                  className={`ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                    row.mat_pendency_count > 0
+                                      ? "bg-[#FEF3C7] text-[#92400E] font-bold"
+                                      : "bg-gray-100 text-gray-400"
+                                  }`}
+                                >
+                                  {row.mat_pendency_count}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                <span className="font-bold text-[#14213D]">
+                                  {row.wc_ha.toFixed(2)} Ha
+                                </span>
+                                <span className="ml-1.5 text-[10px] text-[#52607D] font-mono bg-[#EAE8E1]/60 px-1.5 py-0.5 rounded">
+                                  {row.wc_count}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right bg-[#FEF2F2]">
+                                <span
+                                  className={`font-bold font-mono ${
+                                    row.wc_pendency_ha > 0 ? "text-[#DC2626]" : "text-[#8C97AB]"
+                                  }`}
+                                >
+                                  {row.wc_pendency_ha.toFixed(2)} Ha
+                                </span>
+                                <span
+                                  className={`ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                    row.wc_pendency_count > 0
+                                      ? "bg-[#FEE2E2] text-[#991B1B] font-bold"
+                                      : "bg-gray-100 text-gray-400"
+                                  }`}
+                                >
+                                  {row.wc_pendency_count}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <button
+                                  type="button"
+                                  title="View drill down"
+                                  className="p-1 rounded text-[#52607D] hover:text-[#2F6F5E] hover:bg-[#EAF3F0] transition-colors"
+                                >
+                                  <ChevronRight size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
 
                         {/* Grand Total Row */}
                         <tr className="bg-[#EAE8E1]/60 font-bold border-t-2 border-[#DCD7CA]">
-                          <td colSpan={2} className="py-4 px-4 font-bold text-[#14213D] uppercase text-xs">
+                          <td className="py-4 px-4 font-bold text-[#14213D] uppercase text-xs">
                             Company Grand Total
                           </td>
                           <td className="py-4 px-4 text-right">
@@ -915,20 +1120,40 @@ export function PendingReportsPage() {
           </div>
         </div>
 
-        {/* Detailed Projects Drill-Down Section */}
+        {/* Detailed Pending Reports Section */}
         <div id="drill-down-section" className="space-y-4 pt-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <h2 className="text-base font-bold text-[#14213D] flex items-center gap-2">
-                <span>Detailed Pending Projects Drill-Down</span>
+                <span>Detailed Pending Reports</span>
                 <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-[#2F6F5E]/10 text-[#2F6F5E]">
                   {pagination.total} Records
                 </span>
               </h2>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  icon={FileText}
+                  onClick={handleExportPDF}
+                  loading={exportingPdf}
+                >
+                  Export PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  icon={Download}
+                  onClick={handleExportCsv}
+                  loading={exportingCsv}
+                >
+                  Export CSV
+                </Button>
+              </div>
             </div>
 
             {/* Pendency Stage Switcher Tabs */}
-            <div className="inline-flex rounded-[8px] bg-[#EAE8E1]/50 p-1 border border-[#E4E1D8] text-xs font-semibold">
+            <div className="inline-flex flex-wrap rounded-[8px] bg-[#EAE8E1]/50 p-1 border border-[#E4E1D8] text-xs font-semibold gap-1">
               <button
                 type="button"
                 onClick={() => {
@@ -942,7 +1167,7 @@ export function PendingReportsPage() {
                 }`}
               >
                 <AlertTriangle size={13} className="text-[#DC2626]" />
-                <span>Pending Dealer Work Completion</span>
+                <span>Pending Work Completion</span>
               </button>
               <button
                 type="button"
@@ -957,7 +1182,22 @@ export function PendingReportsPage() {
                 }`}
               >
                 <Clock size={13} className="text-[#D97706]" />
-                <span>Pending Material Supply (Invoicing)</span>
+                <span>Pending Material Supply</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendencyType("PENDING_JVR_COMPLETION");
+                  setPagination((p) => ({ ...p, page: 1 }));
+                }}
+                className={`px-3 py-1.5 rounded-[6px] transition-all cursor-pointer flex items-center gap-1.5 ${
+                  pendencyType === "PENDING_JVR_COMPLETION"
+                    ? "bg-white text-[#3730A3] font-bold shadow-xs"
+                    : "text-[#52607D] hover:text-[#14213D]"
+                }`}
+              >
+                <ClipboardCheck size={13} className="text-[#4F46E5]" />
+                <span>Pending JVR</span>
               </button>
               <button
                 type="button"
@@ -971,7 +1211,7 @@ export function PendingReportsPage() {
                     : "text-[#52607D] hover:text-[#14213D]"
                 }`}
               >
-                All Pendencies
+                All
               </button>
             </div>
           </div>
@@ -1022,18 +1262,43 @@ export function PendingReportsPage() {
                 />
               </div>
 
-              {/* Min Days Pending */}
-              <div>
-                <CustomSelect
-                  options={MIN_DAYS_OPTIONS}
-                  value={minDaysPending}
-                  onChange={(val) => {
-                    setMinDaysPending(val || "");
-                    setPagination((p) => ({ ...p, page: 1 }));
-                  }}
-                  size="sm"
-                  searchable={false}
-                />
+              {/* Min Days Pending Text Input */}
+              <div className="relative">
+                <div className="relative flex items-center">
+                  <Clock
+                    size={14}
+                    className="absolute left-3 text-[#8C97AB] pointer-events-none"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Min Days (e.g. 10)"
+                    value={minDaysPending}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "" || parseInt(val, 10) >= 0) {
+                        setMinDaysPending(val);
+                        setPagination((p) => ({ ...p, page: 1 }));
+                      }
+                    }}
+                    className="w-full bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] pl-9 pr-7 py-2 text-xs font-mono text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
+                    title="Minimum days pending (leave blank for all records)"
+                  />
+                  {minDaysPending !== "" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMinDaysPending("");
+                        setPagination((p) => ({ ...p, page: 1 }));
+                      }}
+                      className="absolute right-2 text-[#8C97AB] hover:text-[#14213D] p-0.5 cursor-pointer"
+                      title="Clear min days filter"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1057,14 +1322,14 @@ export function PendingReportsPage() {
                   <thead>
                     <tr className="bg-[#F8F7F4] text-[#52607D] font-bold text-[11px] uppercase tracking-wider border-b border-[#E4E1D8]">
                       <th className="py-3 px-4">Application ID</th>
-                      <th className="py-3 px-4">Farmer Details</th>
+                      <th className="py-3 px-4">Farmer Name</th>
                       <th className="py-3 px-4">Dealer Assigned</th>
-                      <th className="py-3 px-4 text-right">Applied Area</th>
-                      <th className="py-3 px-4">Work Order Details</th>
+                      <th className="py-3 px-4">
+                        {pendencyType === "PENDING_JVR_COMPLETION" ? "1st Fund Date" : "WO Date"}
+                      </th>
                       <th className="py-3 px-4">Invoice Details</th>
                       <th className="py-3 px-4">Current Status</th>
-                      <th className="py-3 px-4 text-center">Days Elapsed</th>
-                      <th className="py-3 px-3 text-center">Action</th>
+                      <th className="py-3 px-4 text-center">Days Pending</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EDEAE1]">
@@ -1112,17 +1377,9 @@ export function PendingReportsPage() {
                           </td>
 
                           <td className="py-3 px-4">
-                            <div className="font-bold text-[#14213D] truncate max-w-[180px]">
+                            <span className="font-bold text-[#14213D] truncate block max-w-[200px]">
                               {p.farmer_name || <span className="text-[#8C97AB] italic font-normal">No farmer record</span>}
-                            </div>
-                            <div className="text-[11px] text-[#52607D] truncate max-w-[200px]">
-                              {[p.village, p.block, p.district].filter(Boolean).join(", ") || "—"}
-                            </div>
-                            {p.mobile && (
-                              <div className="text-[10px] text-[#8C97AB] font-mono">
-                                📞 {p.mobile}
-                              </div>
-                            )}
+                            </span>
                           </td>
 
                           <td className="py-3 px-4">
@@ -1137,25 +1394,21 @@ export function PendingReportsPage() {
                             )}
                           </td>
 
-                          <td className="py-3 px-4 text-right font-mono">
-                            <span className="font-bold text-[#14213D]">
-                              {parseFloat(p.applied_area_ha || 0).toFixed(2)}
-                            </span>
-                            <span className="text-[10px] text-[#8C97AB] ml-1">Ha</span>
-                          </td>
-
                           <td className="py-3 px-4 text-[11px]">
-                            {p.work_order_date ? (
-                              <>
-                                <div className="font-mono text-[#14213D]">
-                                  📅 {formatDate(p.work_order_date)}
-                                </div>
-                                <div className="text-[10px] text-[#8C97AB] font-mono truncate max-w-[130px]">
-                                  #{p.work_order_no || "No WO Number"}
-                                </div>
-                              </>
+                            {pendencyType === "PENDING_JVR_COMPLETION" ? (
+                              p.first_fund_utr_date ? (
+                                <span className="font-mono text-[#14213D] whitespace-nowrap">
+                                  📅 {formatDate(p.first_fund_utr_date)}
+                                </span>
+                              ) : (
+                                <span className="text-[#8C97AB] italic text-[11px]">—</span>
+                              )
+                            ) : p.work_order_date ? (
+                              <span className="font-mono text-[#14213D] whitespace-nowrap">
+                                📅 {formatDate(p.work_order_date)}
+                              </span>
                             ) : (
-                              <span className="text-[#8C97AB] italic text-[11px]">No Work Order Date</span>
+                              <span className="text-[#8C97AB] italic text-[11px]">No WO Date</span>
                             )}
                           </td>
 
@@ -1183,26 +1436,18 @@ export function PendingReportsPage() {
                           </td>
 
                           <td className="py-3 px-4 text-center">
-                            <div
-                              className={`inline-flex flex-col items-center justify-center px-2.5 py-1 rounded-[6px] border ${daysBadgeStyle}`}
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded-[6px] font-mono text-xs font-bold border ${daysBadgeStyle}`}
+                              title={
+                                p.pendency_stage === "PENDING_JVR_COMPLETION"
+                                  ? `${days} days since 1st Fund Credited on ${formatDate(p.first_fund_utr_date || p.current_status_date)}`
+                                  : p.pendency_stage === "PENDING_WORK_COMPLETION"
+                                  ? `${days} days since Invoiced on ${formatDate(p.invoice_date)}`
+                                  : `${days} days since Work Order on ${formatDate(p.work_order_date)}`
+                              }
                             >
-                              <span className="font-mono text-xs font-bold leading-tight">
-                                {days} Days
-                              </span>
-                              <span className="text-[9px] font-sans uppercase tracking-tight">
-                                {p.pendency_stage === "PENDING_WORK_COMPLETION" ? "Post-Invoice" : "Post-WO"}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td className="py-3 px-3 text-center whitespace-nowrap">
-                            <Link
-                              to={`/projects/${p.id}`}
-                              className="p-1.5 rounded-[6px] text-[#52607D] hover:text-[#2F6F5E] hover:bg-[#EAF3F0] transition-colors inline-block"
-                              title="Open Project"
-                            >
-                              <ExternalLink size={15} />
-                            </Link>
+                              {days}d
+                            </span>
                           </td>
                         </tr>
                       );
@@ -1212,20 +1457,16 @@ export function PendingReportsPage() {
               </div>
             )}
 
-            {/* Pagination Controls */}
-            {pagination.totalPages > 1 && (
-              <div className="p-4 border-t border-[#EDEAE1] flex items-center justify-between">
-                <Pagination
-                  currentPage={pagination.page}
-                  totalPages={pagination.totalPages}
-                  onPageChange={(p) => setPagination((prev) => ({ ...prev, page: p }))}
-                />
-                <div className="text-xs text-[#52607D]">
-                  Showing Page <strong className="text-[#14213D]">{pagination.page}</strong> of{" "}
-                  <strong className="text-[#14213D]">{pagination.totalPages}</strong> ({pagination.total} Total)
-                </div>
-              </div>
-            )}
+            {/* Reusable Pagination Component */}
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.total}
+              limit={pagination.limit}
+              onPageChange={(p) => setPagination((prev) => ({ ...prev, page: p }))}
+              onLimitChange={(l) => setPagination((prev) => ({ ...prev, page: 1, limit: l }))}
+              limitOptions={[25, 50, 100, 200]}
+            />
           </div>
         </div>
       </div>

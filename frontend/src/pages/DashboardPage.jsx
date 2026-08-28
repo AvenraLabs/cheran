@@ -28,7 +28,6 @@ export function DashboardPage() {
 
   // Filter state
   const [selectedYear, setSelectedYear] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [selectedDealer, setSelectedDealer] = useState("");
 
@@ -45,22 +44,6 @@ export function DashboardPage() {
   const [stageDurationsData, setStageDurationsData] = useState([]);
   const [financialOverview, setFinancialOverview] = useState(null);
 
-  const monthsList = [
-    { value: "", label: "All Months" },
-    { value: "1", label: "January (01)" },
-    { value: "2", label: "February (02)" },
-    { value: "3", label: "March (03)" },
-    { value: "4", label: "April (04)" },
-    { value: "5", label: "May (05)" },
-    { value: "6", label: "June (06)" },
-    { value: "7", label: "July (07)" },
-    { value: "8", label: "August (08)" },
-    { value: "9", label: "September (09)" },
-    { value: "10", label: "October (10)" },
-    { value: "11", label: "November (11)" },
-    { value: "12", label: "December (12)" },
-  ];
-
   const fetchDashboardData = async (isManualRefresh = false) => {
     try {
       if (isManualRefresh) setRefreshing(true);
@@ -68,7 +51,6 @@ export function DashboardPage() {
 
       const params = {
         ...(selectedYear ? { year: selectedYear } : {}),
-        ...(selectedMonth ? { month: selectedMonth } : {}),
         ...(selectedDistrict ? { district: selectedDistrict } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
       };
@@ -105,18 +87,11 @@ export function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedYear, selectedMonth, selectedDistrict, selectedDealer]);
+  }, [selectedYear, selectedDistrict, selectedDealer]);
 
   const availableYearOptions = [
-    { value: "", label: "All Years" },
-    ...(yearsList.length > 0
-      ? yearsList.map((y) => ({ value: y, label: y }))
-      : [
-          { value: "2026", label: "2026" },
-          { value: "2025", label: "2025" },
-          { value: "2024", label: "2024" },
-          { value: "2023", label: "2023" },
-        ]),
+    { value: "", label: "All Financial Years" },
+    ...yearsList.map((y) => ({ value: y, label: y })),
   ];
 
   const totalExtentArea =
@@ -162,27 +137,15 @@ export function DashboardPage() {
         {/* Dynamic Filter Strip */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-            <span className="text-xs font-semibold text-[#52607D]">Filter (Invoice Date):</span>
+            <span className="text-xs font-semibold text-[#52607D]">Filter:</span>
 
             {/* Year Selector */}
-            <div className="w-36">
+            <div className="w-44">
               <CustomSelect
                 options={availableYearOptions}
                 value={selectedYear}
                 onChange={(val) => setSelectedYear(val)}
-                placeholder="All Years"
-                size="sm"
-                searchable={true}
-              />
-            </div>
-
-            {/* Month Selector */}
-            <div className="w-40">
-              <CustomSelect
-                options={monthsList}
-                value={selectedMonth}
-                onChange={(val) => setSelectedMonth(val)}
-                placeholder="All Months"
+                placeholder="All Financial Years"
                 size="sm"
                 searchable={true}
               />
@@ -218,11 +181,10 @@ export function DashboardPage() {
               />
             </div>
 
-            {(selectedYear || selectedMonth || selectedDistrict || selectedDealer) && (
+            {(selectedYear || selectedDistrict || selectedDealer) && (
               <button
                 onClick={() => {
                   setSelectedYear("");
-                  setSelectedMonth("");
                   setSelectedDistrict("");
                   setSelectedDealer("");
                 }}
@@ -398,49 +360,56 @@ export function DashboardPage() {
                 )}
               </div>
 
-              {/* Observed Stage Durations (1 col) */}
+              {/* Core Milestone Stage Durations (1 col) */}
               <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-6 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
                 <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-3">
                   <Clock size={18} className="text-[#2F6F5E]" />
-                  <h2 className="text-base font-bold font-display text-[#14213D]">
-                    Stage Transition Speeds
-                  </h2>
+                  <div>
+                    <h2 className="text-base font-bold font-display text-[#14213D]">
+                      Stage Transition Speeds
+                    </h2>
+                    <p className="text-[11px] text-[#52607D]">Core Company & Dealer Performance Milestones</p>
+                  </div>
                 </div>
 
                 {stageDurationsData.length === 0 ? (
                   <div className="p-4 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] text-xs text-[#52607D] text-center space-y-2">
                     <AlertCircle size={24} className="text-[#B8860B] mx-auto opacity-70" />
-                    <p>
-                      Transition duration metrics populate automatically as consecutive monthly Excel exports are uploaded.
-                    </p>
+                    <p>No transition records observed for the selected filter.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                  <div className="space-y-3.5">
                     {stageDurationsData.map((t, idx) => (
                       <div
                         key={idx}
-                        className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] space-y-2"
+                        className="p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[10px] space-y-2 hover:border-[#2F6F5E]/40 transition-colors"
                       >
-                        <div className="text-[11px] font-semibold text-[#14213D] flex items-center justify-between gap-1">
-                          <span className="truncate max-w-[130px]" title={t.from_status}>
-                            {t.from_status}
-                          </span>
-                          <span className="text-[#2F6F5E] font-bold shrink-0">→</span>
-                          <span className="truncate max-w-[130px]" title={t.to_status}>
-                            {t.to_status}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="text-xs font-bold text-[#14213D] leading-snug">
+                              {t.stage_label || `${t.from_status} → ${t.to_status}`}
+                            </div>
+                            {t.sub_label && (
+                              <div className="text-[10px] text-[#52607D] font-medium mt-0.5">
+                                {t.sub_label}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0 font-mono">
+                            M{idx + 1}
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between text-xs pt-1.5 border-t border-[#EDEAE1]">
-                          <span className="text-[11px] text-[#52607D]">
-                            {t.count} observed transition{t.count > 1 ? "s" : ""}
+                        <div className="flex items-center justify-between text-xs pt-2 border-t border-[#EDEAE1]">
+                          <span className="text-[11px] font-mono text-[#52607D]">
+                            <strong className="text-[#14213D]">{t.count}</strong> projects
                           </span>
                           <div className="text-right">
-                            <span className="font-bold text-xs text-[#2F6F5E]">
+                            <span className="font-bold text-xs font-mono text-[#2F6F5E]">
                               Avg: {t.averageDays} days
                             </span>
-                            <div className="text-[10px] text-[#8C97AB]">
-                              (Min: {t.minDays}d / Max: {t.maxDays}d)
+                            <div className="text-[10px] font-mono text-[#8C97AB]">
+                              (Min: {t.minDays}d · Max: {t.maxDays}d)
                             </div>
                           </div>
                         </div>

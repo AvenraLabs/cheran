@@ -72,6 +72,7 @@ export async function listProjects(filters = {}) {
   if (search) {
     where[Op.or] = [
       { application_id: { [Op.iLike]: `%${search}%` } },
+      { invoice_number: { [Op.iLike]: `%${search}%` } },
       { farmer_name: { [Op.iLike]: `%${search}%` } },
       { mobile: { [Op.iLike]: `%${search}%` } },
       { village: { [Op.iLike]: `%${search}%` } },

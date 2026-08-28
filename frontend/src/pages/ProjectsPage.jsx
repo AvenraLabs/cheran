@@ -15,8 +15,6 @@ import {
   Phone,
   GitMerge,
   Edit3,
-  FileQuestion,
-  Layers,
   Trash2,
   AlertTriangle,
 } from "lucide-react";
@@ -43,11 +41,9 @@ export function ProjectsPage() {
   // Filter state
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
-  const [selectedFundType, setSelectedFundType] = useState("");
   const [selectedDealer, setSelectedDealer] = useState("");
   const [district, setDistrict] = useState("");
   const [minStatusDays, setMinStatusDays] = useState("");
-  const [orphanOnly, setOrphanOnly] = useState(false);
 
   // History modal state
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -94,10 +90,8 @@ export function ProjectsPage() {
         limit,
         ...(search ? { search: search.trim() } : {}),
         ...(selectedStatus ? { status: selectedStatus } : {}),
-        ...(selectedFundType ? { fund_type: selectedFundType } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
         ...(district ? { district: district.trim() } : {}),
-        ...(orphanOnly ? { orphan_only: true } : {}),
         ...(minStatusDays !== "" && !isNaN(parseInt(minStatusDays, 10))
           ? { min_status_days: parseInt(minStatusDays, 10) }
           : {}),
@@ -145,26 +139,41 @@ export function ProjectsPage() {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [search, selectedStatus, selectedFundType, selectedDealer, district, minStatusDays, orphanOnly]);
+  }, [search, selectedStatus, selectedDealer, district, minStatusDays]);
 
   const hasActiveFilters = Boolean(
-    search || selectedStatus || selectedFundType || selectedDealer || district || minStatusDays !== "" || orphanOnly
+    search || selectedStatus || selectedDealer || district || minStatusDays !== ""
   );
 
   const handleResetFilters = () => {
     setSearch("");
     setSelectedStatus("");
-    setSelectedFundType("");
     setSelectedDealer("");
     setDistrict("");
     setMinStatusDays("");
-    setOrphanOnly(false);
   };
 
-  // Calculate days elapsed from current status date to today
-  const calculateDaysSinceStatus = (statusDate) => {
-    if (!statusDate) return null;
-    const sDate = new Date(statusDate);
+  // Calculate days elapsed for project in current status
+  const calculateDaysForProject = (proj) => {
+    if (!proj?.current_status_date) return null;
+
+    const isWOStage =
+      proj.current_status === "Issued Work Order" ||
+      proj.current_status === "Issue Work Order (Auto Quotation)" ||
+      proj.current_status === "Quotation Prepared by Block (Auto Quotation)" ||
+      proj.current_status === "Auto Quotation Prepared";
+
+    // If in Work Order stage and project has been invoiced, show exact days from Work Order date to Invoice date
+    if (isWOStage && proj.invoice_date) {
+      const woDate = new Date(proj.current_status_date);
+      const invDate = new Date(proj.invoice_date);
+      const diffTime = invDate.setHours(0, 0, 0, 0) - woDate.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 ? diffDays : 0;
+    }
+
+    // Otherwise calculate days from current status date to today
+    const sDate = new Date(proj.current_status_date);
     const today = new Date();
     const diffTime = today.setHours(0, 0, 0, 0) - sDate.setHours(0, 0, 0, 0);
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -186,17 +195,11 @@ export function ProjectsPage() {
     }
   };
 
+  const hasInvoicedInStatuses = statuses.some((s) => s.name === "INVOICED");
   const statusOptions = [
     { value: "", label: "All Statuses" },
+    ...(hasInvoicedInStatuses ? [] : [{ value: "INVOICED", label: "INVOICED" }]),
     ...statuses.map((s) => ({ value: s.name, label: s.name })),
-  ];
-
-  const fundTypeOptions = [
-    { value: "", label: "All Fund Types" },
-    { value: "40%-SPARSH", label: "40%-SPARSH (60/40 Split)" },
-    { value: "SPARSH", label: "SPARSH (60/40 Split)" },
-    { value: "Regular", label: "Regular (55/45 Split)" },
-    { value: "First Fund SNA SPARSH", label: "First Fund SNA SPARSH" },
   ];
 
   const dealerOptions = [
@@ -222,42 +225,15 @@ export function ProjectsPage() {
       />
 
       <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
-        {/* Quick View Toggle Tabs */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setOrphanOnly(false)}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all cursor-pointer ${
-              !orphanOnly
-                ? "bg-[#14213D] text-white shadow-2xs"
-                : "bg-white border border-[#E4E1D8] text-[#52607D] hover:text-[#14213D]"
-            }`}
-          >
-            <Layers size={14} />
-            <span>All Government Projects</span>
-          </button>
-
-          <button
-            onClick={() => setOrphanOnly(true)}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all cursor-pointer ${
-              orphanOnly
-                ? "bg-amber-800 text-white shadow-2xs"
-                : "bg-white border border-[#E4E1D8] text-[#52607D] hover:text-amber-800"
-            }`}
-          >
-            <FileQuestion size={14} className={orphanOnly ? "text-white" : "text-amber-600"} />
-            <span>Orphan Invoices Only (Needs Merge)</span>
-          </button>
-        </div>
-
         {/* Dynamic Live Filter Bar */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
             {/* Search Input */}
-            <div className="relative lg:col-span-3">
+            <div className="relative lg:col-span-4">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52607D]" />
               <input
                 type="text"
-                placeholder="Search App ID, Farmer..."
+                placeholder="Search App ID, Invoice, Farmer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] placeholder:text-[#8C97AB]"
@@ -273,24 +249,12 @@ export function ProjectsPage() {
             </div>
 
             {/* Custom Status Dropdown */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-3">
               <CustomSelect
                 options={statusOptions}
                 value={selectedStatus}
                 onChange={(val) => setSelectedStatus(val)}
                 placeholder="All Statuses"
-                searchable={true}
-                size="sm"
-              />
-            </div>
-
-            {/* Custom Fund Type Dropdown */}
-            <div className="lg:col-span-2">
-              <CustomSelect
-                options={fundTypeOptions}
-                value={selectedFundType}
-                onChange={(val) => setSelectedFundType(val)}
-                placeholder="All Fund Types"
                 searchable={true}
                 size="sm"
               />
@@ -413,23 +377,52 @@ export function ProjectsPage() {
                   <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
                     <tr>
                       <th className="py-3 px-4">Application ID</th>
+                      <th className="py-3 px-4">Invoice</th>
                       <th className="py-3 px-4">Farmer Details</th>
                       <th className="py-3 px-4">Location</th>
                       <th className="py-3 px-4">Current Status</th>
                       <th className="py-3 px-4">Status Date</th>
-                      <th className="py-3 px-4">Invoice Date</th>
-                      <th className="py-3 px-4">Fund Type</th>
                       <th className="py-3 px-4">Dealer</th>
                       <th className="py-3 px-4 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EDEAE1]">
                     {projects.map((proj) => {
-                      const daysInStatus = calculateDaysSinceStatus(proj.current_status_date);
+                      const isInvoiced = Boolean(proj.invoice_number || proj.invoice_date);
+                      const isWOStage =
+                        proj.current_status === "Issued Work Order" ||
+                        proj.current_status === "Issue Work Order (Auto Quotation)" ||
+                        proj.current_status === "Quotation Prepared by Block (Auto Quotation)" ||
+                        proj.current_status === "Auto Quotation Prepared";
+                      const daysInStatus = calculateDaysForProject(proj);
+                      const isCompletedTransition = isWOStage && Boolean(proj.invoice_date);
+
                       return (
                         <tr key={proj.id} className="hover:bg-[#FAFAF8] transition-colors">
-                          <td className="py-3 px-4 font-mono font-medium text-[#14213D]">
-                            {proj.application_id}
+                          <td className="py-3 px-4 font-mono font-medium text-[#14213D] whitespace-nowrap">
+                            <Link
+                              to={`/projects/${proj.id}`}
+                              className="text-[#2F6F5E] hover:underline font-bold"
+                              title="View Project Details"
+                            >
+                              {proj.application_id}
+                            </Link>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {isInvoiced ? (
+                              <div>
+                                <div className="font-mono font-bold text-[#2F6F5E] text-xs">
+                                  {proj.invoice_number ? `#${proj.invoice_number}` : "Invoiced"}
+                                </div>
+                                {proj.invoice_date && (
+                                  <div className="text-[11px] font-mono text-[#52607D]">
+                                    {formatDate(proj.invoice_date)}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[#8C97AB] italic text-[11px]">Not Invoiced</span>
+                            )}
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-semibold text-[#14213D]">{proj.farmer_name || "—"}</div>
@@ -456,59 +449,55 @@ export function ProjectsPage() {
                                       ? "bg-amber-50 text-amber-800 border border-amber-200"
                                       : "bg-[#EAF3F0] text-[#2F6F5E]"
                                   }`}
-                                  title={`${daysInStatus} days since current status date`}
+                                  title={
+                                    isCompletedTransition
+                                      ? `${daysInStatus} days from Work Order (${formatDate(proj.current_status_date)}) to Invoiced (${formatDate(proj.invoice_date)})`
+                                      : `${daysInStatus} days in current status`
+                                  }
                                 >
                                   {daysInStatus}d
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-[#14213D] font-medium font-mono">
-                            {proj.invoice_date ? formatDate(proj.invoice_date) : "—"}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-[#FAFAF8] border border-[#E4E1D8] text-[#14213D]">
-                              {proj.fund_type || "Regular"}
-                            </span>
-                          </td>
                           <td className="py-3 px-4 text-[#52607D]">
                             {proj.dealer?.name || "—"}
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1.5">
-                              <Button
-                                variant="secondary"
-                                size="xs"
-                                icon={GitMerge}
+                              <button
+                                type="button"
                                 onClick={() => {
                                   setMergeSourceProject(proj);
                                   setMergeModalOpen(true);
                                 }}
-                                title="Correct mistyped ID or Merge with existing Government Project"
+                                className="w-7 h-7 rounded-[6px] bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white border border-slate-300 flex items-center justify-center transition-all shadow-2xs cursor-pointer"
+                                title="Edit / Correct ID"
                               >
-                                Edit ID
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="xs"
-                                icon={Eye}
+                                <Edit3 size={13} strokeWidth={2.2} />
+                              </button>
+
+                              <button
+                                type="button"
                                 onClick={() => handleViewProject(proj)}
+                                className="w-7 h-7 rounded-[6px] bg-emerald-100 hover:bg-[#2F6F5E] text-[#2F6F5E] hover:text-white border border-emerald-300 flex items-center justify-center transition-all shadow-2xs cursor-pointer"
+                                title="View Status History"
                               >
-                                View
-                              </Button>
+                                <Eye size={13} strokeWidth={2.2} />
+                              </button>
+
                               {isAdmin && (
-                                <Button
-                                  variant="danger"
-                                  size="xs"
-                                  icon={Trash2}
+                                <button
+                                  type="button"
                                   onClick={() => {
                                     setProjectToDelete(proj);
                                     setDeleteModalOpen(true);
                                   }}
-                                  title="Permanently Delete Project & Associated Data"
+                                  className="w-7 h-7 rounded-[6px] bg-rose-100 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-300 flex items-center justify-center transition-all shadow-2xs cursor-pointer"
+                                  title="Delete Project & Associated Data"
                                 >
-                                  Delete
-                                </Button>
+                                  <Trash2 size={13} strokeWidth={2.2} />
+                                </button>
                               )}
                             </div>
                           </td>

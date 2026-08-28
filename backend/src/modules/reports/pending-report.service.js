@@ -28,50 +28,53 @@ export const CATEGORY_SQL_EXPRESSION = `
  * The only source of truth is the Application ID.
  */
 export const FINANCIAL_YEAR_SQL_EXPRESSION = `
-  CASE
-    -- 1. application_id ends with -YYYY-YY (e.g. -2026-27 or -2022-23)
-    WHEN gp.application_id ~ '-(20[0-9]{2})-([0-9]{2})$' THEN 
-      CASE 
-        WHEN (2000 + ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[2])::INTEGER) <= ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1])::INTEGER THEN
-          CONCAT(
-            (regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1],
-            '-',
-            (((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1])::INTEGER + 1)::TEXT
-          )
-        ELSE
-          CONCAT(
-            (regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1],
-            '-',
-            (2000 + ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[2])::INTEGER)::TEXT
-          )
-      END
+  COALESCE(
+    gp.year,
+    CASE
+      -- 1. application_id ends with -YYYY-YY (e.g. -2026-27 or -2022-23)
+      WHEN gp.application_id ~ '-(20[0-9]{2})-([0-9]{2})$' THEN 
+        CASE 
+          WHEN (2000 + ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[2])::INTEGER) <= ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1])::INTEGER THEN
+            CONCAT(
+              (regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1],
+              '-',
+              (((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1])::INTEGER + 1)::TEXT
+            )
+          ELSE
+            CONCAT(
+              (regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1],
+              '-',
+              (2000 + ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[2])::INTEGER)::TEXT
+            )
+        END
 
-    -- 2. application_id ends with -YYYY-YYYY (e.g. -2026-2027)
-    WHEN gp.application_id ~ '-(20[0-9]{2})-(20[0-9]{2})$' THEN 
-      CONCAT(
-        (regexp_match(gp.application_id, '-(20[0-9]{2})-(20[0-9]{2})$'))[1],
-        '-',
-        (regexp_match(gp.application_id, '-(20[0-9]{2})-(20[0-9]{2})$'))[2]
-      )
+      -- 2. application_id ends with -YYYY-YYYY (e.g. -2026-2027)
+      WHEN gp.application_id ~ '-(20[0-9]{2})-(20[0-9]{2})$' THEN 
+        CONCAT(
+          (regexp_match(gp.application_id, '-(20[0-9]{2})-(20[0-9]{2})$'))[1],
+          '-',
+          (regexp_match(gp.application_id, '-(20[0-9]{2})-(20[0-9]{2})$'))[2]
+        )
 
-    -- 3. Any -YYYY-YY anywhere in ID
-    WHEN gp.application_id ~ '(20[0-9]{2})-([0-9]{2})' THEN
-      CONCAT(
-        (regexp_match(gp.application_id, '(20[0-9]{2})-([0-9]{2})'))[1],
-        '-',
-        (2000 + ((regexp_match(gp.application_id, '(20[0-9]{2})-([0-9]{2})'))[2])::INTEGER)::TEXT
-      )
+      -- 3. Any -YYYY-YY anywhere in ID
+      WHEN gp.application_id ~ '(20[0-9]{2})-([0-9]{2})' THEN
+        CONCAT(
+          (regexp_match(gp.application_id, '(20[0-9]{2})-([0-9]{2})'))[1],
+          '-',
+          (2000 + ((regexp_match(gp.application_id, '(20[0-9]{2})-([0-9]{2})'))[2])::INTEGER)::TEXT
+        )
 
-    -- 4. Any -YYYY-YYYY anywhere in ID
-    WHEN gp.application_id ~ '(20[0-9]{2})-(20[0-9]{2})' THEN
-      CONCAT(
-        (regexp_match(gp.application_id, '(20[0-9]{2})-(20[0-9]{2})'))[1],
-        '-',
-        (regexp_match(gp.application_id, '(20[0-9]{2})-(20[0-9]{2})'))[2]
-      )
+      -- 4. Any -YYYY-YYYY anywhere in ID
+      WHEN gp.application_id ~ '(20[0-9]{2})-(20[0-9]{2})' THEN
+        CONCAT(
+          (regexp_match(gp.application_id, '(20[0-9]{2})-(20[0-9]{2})'))[1],
+          '-',
+          (regexp_match(gp.application_id, '(20[0-9]{2})-(20[0-9]{2})'))[2]
+        )
 
-    ELSE 'Unknown'
-  END
+      ELSE 'Unknown'
+    END
+  )
 `;
 
 /**
@@ -121,7 +124,15 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
         CASE 
           WHEN COALESCE(gs.sequence_order, 0) >= 26 
           THEN 1 ELSE 0 
-        END as is_work_completed
+        END as is_work_completed,
+        CASE 
+          WHEN gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')
+          THEN 1 ELSE 0 
+        END as is_fund1_credited,
+        CASE 
+          WHEN COALESCE(gs.sequence_order, 0) >= 52 OR gp.current_status IN ('Joint Verification Completed', 'Earlier JV Completed')
+          THEN 1 ELSE 0 
+        END as is_jv_completed
       FROM government_projects gp
       LEFT JOIN government_statuses gs ON gp.current_status = gs.name
       ${whereSql}
@@ -142,7 +153,15 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
       
       -- Work Completed
       SUM(CASE WHEN is_work_completed = 1 THEN 1 ELSE 0 END)::integer as wc_count,
-      COALESCE(SUM(CASE WHEN is_work_completed = 1 THEN applied_area_ha ELSE 0 END), 0)::float as wc_ha
+      COALESCE(SUM(CASE WHEN is_work_completed = 1 THEN applied_area_ha ELSE 0 END), 0)::float as wc_ha,
+
+      -- First Fund Credited
+      SUM(CASE WHEN is_fund1_credited = 1 THEN 1 ELSE 0 END)::integer as fund1_count,
+      COALESCE(SUM(CASE WHEN is_fund1_credited = 1 THEN applied_area_ha ELSE 0 END), 0)::float as fund1_ha,
+
+      -- Joint Verification Completed
+      SUM(CASE WHEN is_jv_completed = 1 THEN 1 ELSE 0 END)::integer as jv_count,
+      COALESCE(SUM(CASE WHEN is_jv_completed = 1 THEN applied_area_ha ELSE 0 END), 0)::float as jv_ha
       
     FROM categorized
     GROUP BY category, year
@@ -154,30 +173,20 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     type: QueryTypes.SELECT,
   });
 
-  // Query all available distinct financial years from database
+  // Query all available distinct financial years strictly from actual Application IDs in database
   const distinctYearsRows = await db.query(
     `
       SELECT DISTINCT (${FINANCIAL_YEAR_SQL_EXPRESSION}) as year
       FROM government_projects gp
       WHERE gp.application_id IS NOT NULL
-      ORDER BY year ASC
+      ORDER BY year DESC
     `,
     { type: QueryTypes.SELECT }
   );
 
-  const dbYears = distinctYearsRows.map((r) => r.year).filter((y) => y && y !== "Unknown");
-
-  // Dynamically generate standard fiscal years (Apr 1 to Mar 31) from 2021 up to Current Fiscal Year + 2
-  const now = new Date();
-  const currentCalYear = now.getFullYear();
-  const currentFiscalStart = now.getMonth() + 1 >= 4 ? currentCalYear : currentCalYear - 1;
-  const standardYears = [];
-  for (let y = 2021; y <= currentFiscalStart + 2; y++) {
-    standardYears.push(`${y}-${y + 1}`);
-  }
-
-  // Combined sorted list of all available years (descending for dropdowns)
-  const availableYears = Array.from(new Set([...standardYears, ...dbYears])).sort().reverse();
+  const availableYears = distinctYearsRows
+    .map((r) => r.year)
+    .filter((y) => y && y !== "Unknown");
 
   // Calculate pendencies and build Category structure
   const categoriesMap = {
@@ -200,6 +209,12 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     wc_ha: 0,
     wc_pendency_count: 0,
     wc_pendency_ha: 0,
+    fund1_count: 0,
+    fund1_ha: 0,
+    jv_count: 0,
+    jv_ha: 0,
+    jvr_pendency_count: 0,
+    jvr_pendency_ha: 0,
   };
 
   // Helper to init empty total accumulator
@@ -216,6 +231,12 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     wc_ha: 0,
     wc_pendency_count: 0,
     wc_pendency_ha: 0,
+    fund1_count: 0,
+    fund1_ha: 0,
+    jv_count: 0,
+    jv_ha: 0,
+    jvr_pendency_count: 0,
+    jvr_pendency_ha: 0,
   });
 
   Object.keys(categoriesMap).forEach((catKey) => {
@@ -231,6 +252,10 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     const invHa = parseFloat(row.invoiced_ha) || 0;
     const wcCount = parseInt(row.wc_count, 10) || 0;
     const wcHa = parseFloat(row.wc_ha) || 0;
+    const fund1Count = parseInt(row.fund1_count, 10) || 0;
+    const fund1Ha = parseFloat(row.fund1_ha) || 0;
+    const jvCount = parseInt(row.jv_count, 10) || 0;
+    const jvHa = parseFloat(row.jv_ha) || 0;
 
     // Material supply pendency = WO - Invoiced
     const matPendCount = Math.max(0, woCount - invCount);
@@ -239,6 +264,10 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     // Work completion pendency = Invoiced - Work Completed
     const wcPendCount = Math.max(0, invCount - wcCount);
     const wcPendHa = Math.max(0, parseFloat((invHa - wcHa).toFixed(4)));
+
+    // Joint verification pendency = Fund1 Credited - JV Completed
+    const jvrPendCount = Math.max(0, fund1Count - jvCount);
+    const jvrPendHa = Math.max(0, parseFloat((fund1Ha - jvHa).toFixed(4)));
 
     const yearSummary = {
       year: row.year,
@@ -254,6 +283,12 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
       wc_ha: parseFloat(wcHa.toFixed(2)),
       wc_pendency_count: wcPendCount,
       wc_pendency_ha: parseFloat(wcPendHa.toFixed(2)),
+      fund1_count: fund1Count,
+      fund1_ha: parseFloat(fund1Ha.toFixed(2)),
+      jv_count: jvCount,
+      jv_ha: parseFloat(jvHa.toFixed(2)),
+      jvr_pendency_count: jvrPendCount,
+      jvr_pendency_ha: parseFloat(jvrPendHa.toFixed(2)),
     };
 
     categoriesMap[catKey].years.push(yearSummary);
@@ -272,6 +307,12 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     catTot.wc_ha += yearSummary.wc_ha;
     catTot.wc_pendency_count += yearSummary.wc_pendency_count;
     catTot.wc_pendency_ha += yearSummary.wc_pendency_ha;
+    catTot.fund1_count += yearSummary.fund1_count;
+    catTot.fund1_ha += yearSummary.fund1_ha;
+    catTot.jv_count += yearSummary.jv_count;
+    catTot.jv_ha += yearSummary.jv_ha;
+    catTot.jvr_pendency_count += yearSummary.jvr_pendency_count;
+    catTot.jvr_pendency_ha += yearSummary.jvr_pendency_ha;
 
     // Accumulate Grand Totals
     grandTotals.total_projects += yearSummary.total_projects;
@@ -286,6 +327,12 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     grandTotals.wc_ha += yearSummary.wc_ha;
     grandTotals.wc_pendency_count += yearSummary.wc_pendency_count;
     grandTotals.wc_pendency_ha += yearSummary.wc_pendency_ha;
+    grandTotals.fund1_count += yearSummary.fund1_count;
+    grandTotals.fund1_ha += yearSummary.fund1_ha;
+    grandTotals.jv_count += yearSummary.jv_count;
+    grandTotals.jv_ha += yearSummary.jv_ha;
+    grandTotals.jvr_pendency_count += yearSummary.jvr_pendency_count;
+    grandTotals.jvr_pendency_ha += yearSummary.jvr_pendency_ha;
   }
 
   // Format category subtotals
@@ -297,6 +344,9 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     t.mat_pendency_ha = parseFloat(t.mat_pendency_ha.toFixed(2));
     t.wc_ha = parseFloat(t.wc_ha.toFixed(2));
     t.wc_pendency_ha = parseFloat(t.wc_pendency_ha.toFixed(2));
+    t.fund1_ha = parseFloat(t.fund1_ha.toFixed(2));
+    t.jv_ha = parseFloat(t.jv_ha.toFixed(2));
+    t.jvr_pendency_ha = parseFloat(t.jvr_pendency_ha.toFixed(2));
   });
 
   // Format grand totals
@@ -306,6 +356,9 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
   grandTotals.mat_pendency_ha = parseFloat(grandTotals.mat_pendency_ha.toFixed(2));
   grandTotals.wc_ha = parseFloat(grandTotals.wc_ha.toFixed(2));
   grandTotals.wc_pendency_ha = parseFloat(grandTotals.wc_pendency_ha.toFixed(2));
+  grandTotals.fund1_ha = parseFloat(grandTotals.fund1_ha.toFixed(2));
+  grandTotals.jv_ha = parseFloat(grandTotals.jv_ha.toFixed(2));
+  grandTotals.jvr_pendency_ha = parseFloat(grandTotals.jvr_pendency_ha.toFixed(2));
 
   return {
     grandTotals,
@@ -399,26 +452,39 @@ export async function getPendingProjectsList(filters = {}) {
       (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21)
       AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23
     )`);
+  } else if (pendency_type === "PENDING_JVR_COMPLETION") {
+    // First Fund Credited but Dealer has NOT completed Joint Verification (sequence < 52)
+    whereConditions.push(`(
+      (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed'))
+      AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
+    )`);
   } else if (pendency_type === "ALL_PENDING") {
     whereConditions.push(`(
       ((gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26)
       OR
       ((gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23)
+      OR
+      ((gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed')))
     )`);
   }
 
   // Days Pending filter
-  if (min_days_pending && !isNaN(parseInt(min_days_pending, 10))) {
+  if (min_days_pending !== undefined && min_days_pending !== null && min_days_pending !== "" && !isNaN(parseInt(min_days_pending, 10))) {
     const minDays = parseInt(min_days_pending, 10);
-    whereConditions.push(`(
-      COALESCE(
-        CURRENT_DATE - gp.invoice_date,
-        CURRENT_DATE - gp.work_order_date,
-        CURRENT_DATE - gp.current_status_date,
-        0
-      ) >= :minDays
-    )`);
-    replacements.minDays = minDays;
+    if (minDays >= 0) {
+      whereConditions.push(`(
+        CASE 
+          WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
+            THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
+          WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 
+            THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
+          WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) 
+            THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
+          ELSE (CURRENT_DATE - gp.current_status_date)
+        END
+      ) >= :minDays`);
+      replacements.minDays = minDays;
+    }
   }
 
   const whereSql = whereConditions.length > 0 ? "WHERE " + whereConditions.join(" AND ") : "";
@@ -451,7 +517,7 @@ export async function getPendingProjectsList(filters = {}) {
 
   // Pagination
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.max(1, Math.min(200, parseInt(limit, 10) || 25));
+  const limitNum = Math.max(1, Math.min(50000, parseInt(limit, 10) || 25));
   const offsetNum = (pageNum - 1) * limitNum;
   replacements.limit = limitNum;
   replacements.offset = offsetNum;
@@ -479,20 +545,29 @@ export async function getPendingProjectsList(filters = {}) {
       gp.invoice_number,
       gp.invoice_date,
       COALESCE(gp.invoice_amount, 0)::float as invoice_amount,
+      gp.first_fund_utr_date,
+      gp.first_fund_amount,
       gp.current_status,
       gp.current_status_date,
       gp.current_status_remarks,
       d.id as dealer_id,
       d.name as dealer_name,
-      COALESCE(
-        CURRENT_DATE - gp.invoice_date,
-        CURRENT_DATE - gp.work_order_date,
-        CURRENT_DATE - gp.current_status_date,
-        0
-      )::integer as days_pending,
       CASE 
-        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 THEN 'PENDING_WORK_COMPLETION'
-        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23 THEN 'PENDING_MATERIAL_SUPPLY'
+        WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
+          THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
+        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 
+          THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
+        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) 
+          THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
+        ELSE (CURRENT_DATE - gp.current_status_date)
+      END::integer as days_pending,
+      CASE 
+        WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
+          THEN 'PENDING_JVR_COMPLETION'
+        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 
+          THEN 'PENDING_WORK_COMPLETION'
+        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23 
+          THEN 'PENDING_MATERIAL_SUPPLY'
         ELSE 'OTHER'
       END as pendency_stage
     FROM government_projects gp

@@ -288,21 +288,19 @@ export function CommissionProceedingsPage() {
     const headers = [
       [
         "#",
-        "Proceeding & Date",
-        "Application ID & Inv",
-        "Farmer & Location",
-        "Dealer",
+        "Application ID",
+        "Invoice No & Date",
+        "Farmer Name",
         "Inv Amt (Rs.)",
         "Subsidy (Rs.)",
         "Material Cost (Rs.)",
         "Now Released (Rs.)",
-        "Delay",
         "Commission (Rs.)",
         "Penalty (Rs.)",
         "Net Comm. (Rs.)",
         "Fittings 5% (Rs.)",
         "Net Payout (Rs.)",
-        "Payout Status",
+        "Dealer",
       ],
     ];
 
@@ -343,38 +341,23 @@ export function CommissionProceedingsPage() {
       totalFit += fitAmt;
       totalNet += netPayable;
 
-      const isFirstFund = (p.batch?.fund_percentage_value || 55) >= 50.0;
-      const startLabel = isFirstFund ? "Inv Date" : "1st Fund";
-      const endLabel = isFirstFund ? "Work Comp" : "Joint Verif";
-
-      const datesText = `${startLabel}: ${formatDate(p.milestone_start_date)}\n${endLabel}: ${formatDate(p.milestone_end_date)}\nDelay: ${p.delay_days || 0}d${
-        p.delay_days > 45 ? ` (${p.penalty_percentage || 0}%)` : ""
-      }`;
-
-      const invNoText = p.invoice_number && p.invoice_number !== "—" ? `\nInv: #${p.invoice_number}` : "";
-      const locText = [p.village, p.district].filter(Boolean).join(", ") || "";
-      const procInfo = `#${p.batch?.proceeding_no || "—"}\n${formatDate(p.batch?.proceeding_date)} (${p.batch?.fund_percentage_value || "—"}%)`;
-      const payoutStatusText = p.is_paid_to_dealer
-        ? `Paid (${formatDate(p.dealer_paid_date)})`
-        : "Pending";
+      const invNoDateText = `${p.invoice_number && p.invoice_number !== "—" ? `#${p.invoice_number}` : "—"}\n${formatDate(p.invoice_date)}`;
 
       return [
         String(index + 1),
-        procInfo,
-        `${p.application_id}${invNoText}`,
-        `${p.farmer_name || "—"}\n${locText}`,
-        p.dealer?.name || "Unassigned",
+        p.application_id || "—",
+        invNoDateText,
+        p.farmer_name || "—",
         invAmt ? invAmt.toLocaleString("en-IN") : "—",
         subAmt ? subAmt.toLocaleString("en-IN") : "—",
         matCost ? `${matCost.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
         nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
-        datesText,
         commAmt ? commAmt.toLocaleString("en-IN") : "0",
         penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
         netComm.toLocaleString("en-IN"),
         fitAmt ? fitAmt.toLocaleString("en-IN") : "0",
         netPayable.toLocaleString("en-IN"),
-        payoutStatusText,
+        p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned"),
       ];
     });
 
@@ -385,12 +368,10 @@ export function CommissionProceedingsPage() {
         `${statementProjects.length} Items`,
         "—",
         "—",
-        "—",
         totalInv.toLocaleString("en-IN"),
         totalSub.toLocaleString("en-IN"),
         totalMat.toLocaleString("en-IN"),
         totalRel.toLocaleString("en-IN"),
-        "—",
         totalComm.toLocaleString("en-IN"),
         totalPen > 0 ? `-${totalPen.toLocaleString("en-IN")}` : "0",
         totalNetComm.toLocaleString("en-IN"),
@@ -428,22 +409,20 @@ export function CommissionProceedingsPage() {
         fontSize: 6.8,
       },
       columnStyles: {
-        0: { cellWidth: 15, halign: "center" },
-        1: { cellWidth: 65 },
-        2: { cellWidth: 70 },
-        3: { cellWidth: 70 },
-        4: { cellWidth: 55 },
-        5: { cellWidth: 44, halign: "right" },
-        6: { cellWidth: 44, halign: "right" },
-        7: { cellWidth: 44, halign: "right" },
-        8: { cellWidth: 44, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-        9: { cellWidth: 70 },
-        10: { cellWidth: 44, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-        11: { cellWidth: 42, halign: "right", textColor: [225, 29, 72] },
-        12: { cellWidth: 44, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
-        13: { cellWidth: 42, halign: "right", textColor: [124, 58, 237] },
-        14: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
-        15: { cellWidth: 46, halign: "center" },
+        0: { cellWidth: 18, halign: "center" },
+        1: { cellWidth: 95 },
+        2: { cellWidth: 65 },
+        3: { cellWidth: 80 },
+        4: { cellWidth: 50, halign: "right" },
+        5: { cellWidth: 50, halign: "right" },
+        6: { cellWidth: 52, halign: "right" },
+        7: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+        8: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+        9: { cellWidth: 45, halign: "right", textColor: [225, 29, 72] },
+        10: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+        11: { cellWidth: 48, halign: "right", textColor: [124, 58, 237] },
+        12: { cellWidth: 56, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
+        13: { cellWidth: 80 },
       },
       didDrawPage: (data) => {
         const pageCount = doc.internal.getNumberOfPages();

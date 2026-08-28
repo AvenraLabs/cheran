@@ -834,19 +834,39 @@ export function ProjectDetailPage() {
                   return (a.sequence || 0) - (b.sequence || 0);
                 });
 
-          // Calculate elapsed days strictly between consecutive chronological milestones
-          let lastMilestoneDate = null;
-          const displayList = sortedStages.map((step) => {
+          // Calculate elapsed days for each milestone:
+          // - If a subsequent recorded milestone exists: diff between this milestone and next milestone
+          // - If no subsequent recorded milestone exists (current active stage): diff between this milestone date and today (or invoice date if WO stage)
+          const displayList = sortedStages.map((step, idx) => {
             let daysElapsed = null;
             if (step.status_date) {
               const currentDate = new Date(step.status_date);
-              if (lastMilestoneDate) {
-                const diffTime = currentDate.getTime() - lastMilestoneDate.getTime();
+
+              // Find the next recorded stage with a status date
+              const nextStage = sortedStages.slice(idx + 1).find((s) => s.status_date);
+
+              if (nextStage && nextStage.status_date) {
+                const nextDate = new Date(nextStage.status_date);
+                const diffTime = nextDate.getTime() - currentDate.getTime();
                 daysElapsed = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)));
               } else {
-                daysElapsed = 0;
+                // Latest recorded stage / current active stage
+                const isWOStage =
+                  step.name === "Issued Work Order" ||
+                  step.name === "Issue Work Order (Auto Quotation)" ||
+                  step.name === "Quotation Prepared by Block (Auto Quotation)" ||
+                  step.name === "Auto Quotation Prepared";
+
+                if (isWOStage && project?.invoice_date) {
+                  const invDate = new Date(project.invoice_date);
+                  const diffTime = invDate.getTime() - currentDate.getTime();
+                  daysElapsed = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+                } else {
+                  const today = new Date();
+                  const diffTime = today.getTime() - currentDate.getTime();
+                  daysElapsed = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+                }
               }
-              lastMilestoneDate = currentDate;
             }
             return {
               ...step,
@@ -948,9 +968,15 @@ export function ProjectDetailPage() {
                                 </span>
                               )}
 
-                              {isPassed && step.days_since_previous !== null && (
-                                <span className="text-[10px] font-semibold text-[#52607D] bg-white border border-[#E4E1D8] px-2 py-0.5 rounded-full">
-                                  +{step.days_since_previous} days
+                              {(isPassed || isCurrent) && step.days_since_previous !== null && (
+                                <span
+                                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                    isCurrent
+                                      ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                      : "text-[#52607D] bg-white border border-[#E4E1D8]"
+                                  }`}
+                                >
+                                  {isCurrent ? `${step.days_since_previous} days active` : `+${step.days_since_previous} days`}
                                 </span>
                               )}
                             </div>
