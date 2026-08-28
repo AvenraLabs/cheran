@@ -77,3 +77,13 @@ export const renameOrMergeProject = asyncHandler(async (req, res) => {
   });
 });
 
+export const deleteProject = asyncHandler(async (req, res) => {
+  const result = await projectService.deleteProject(req.params.id);
+  res.status(200).json({
+    status: "success",
+    message: result.message,
+    data: result,
+  });
+});
+
+

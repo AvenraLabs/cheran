@@ -1,0 +1,520 @@
+import { Op, QueryTypes } from "sequelize";
+import db from "../../config/db.js";
+import GovernmentProject from "../projects/project.model.js";
+import Dealer from "../dealers/dealer.model.js";
+import GovernmentStatus from "../statuses/status.model.js";
+
+/**
+ * Categorize application ID according to Tamil Nadu government scheme conventions:
+ * - Agriculture: Starts with 'A-' or 'A' (e.g., A-KGI-SGI-6131930738-2026-27)
+ * - Cluster: Starts with 'AK' or 'HK'
+ * - Horticulture: Starts with 'H' (and not 'HK')
+ * - Others: Any other format
+ */
+export const CATEGORY_SQL_EXPRESSION = `
+  CASE 
+    WHEN gp.application_id ILIKE 'AK%' OR gp.application_id ILIKE 'HK%' THEN 'Cluster'
+    WHEN gp.application_id ILIKE 'A-%' OR (gp.application_id ILIKE 'A%' AND NOT gp.application_id ILIKE 'AK%') THEN 'Agriculture'
+    WHEN gp.application_id ILIKE 'H%' THEN 'Horticulture'
+    ELSE 'Others'
+  END
+`;
+
+/**
+ * Extract Financial Year STRICTLY from Application ID:
+ * Primary examples:
+ * - A-DPR-KRM-5360643095-2026-27 -> 2026-2027
+ * - H-KGI-BGR-5549687254-2022-23 -> 2022-2023
+ * The only source of truth is the Application ID.
+ */
+export const FINANCIAL_YEAR_SQL_EXPRESSION = `
+  CASE
+    -- 1. application_id ends with -YYYY-YY (e.g. -2026-27 or -2022-23)
+    WHEN gp.application_id ~ '-(20[0-9]{2})-([0-9]{2})$' THEN 
+      CASE 
+        WHEN (2000 + ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[2])::INTEGER) <= ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1])::INTEGER THEN
+          CONCAT(
+            (regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1],
+            '-',
+            (((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1])::INTEGER + 1)::TEXT
+          )
+        ELSE
+          CONCAT(
+            (regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[1],
+            '-',
+            (2000 + ((regexp_match(gp.application_id, '-(20[0-9]{2})-([0-9]{2})$'))[2])::INTEGER)::TEXT
+          )
+      END
+
+    -- 2. application_id ends with -YYYY-YYYY (e.g. -2026-2027)
+    WHEN gp.application_id ~ '-(20[0-9]{2})-(20[0-9]{2})$' THEN 
+      CONCAT(
+        (regexp_match(gp.application_id, '-(20[0-9]{2})-(20[0-9]{2})$'))[1],
+        '-',
+        (regexp_match(gp.application_id, '-(20[0-9]{2})-(20[0-9]{2})$'))[2]
+      )
+
+    -- 3. Any -YYYY-YY anywhere in ID
+    WHEN gp.application_id ~ '(20[0-9]{2})-([0-9]{2})' THEN
+      CONCAT(
+        (regexp_match(gp.application_id, '(20[0-9]{2})-([0-9]{2})'))[1],
+        '-',
+        (2000 + ((regexp_match(gp.application_id, '(20[0-9]{2})-([0-9]{2})'))[2])::INTEGER)::TEXT
+      )
+
+    -- 4. Any -YYYY-YYYY anywhere in ID
+    WHEN gp.application_id ~ '(20[0-9]{2})-(20[0-9]{2})' THEN
+      CONCAT(
+        (regexp_match(gp.application_id, '(20[0-9]{2})-(20[0-9]{2})'))[1],
+        '-',
+        (regexp_match(gp.application_id, '(20[0-9]{2})-(20[0-9]{2})'))[2]
+      )
+
+    ELSE 'Unknown'
+  END
+`;
+
+/**
+ * 1. Get Pending Funnel Summary aggregated by Category and Financial Year
+ */
+export async function getPendingFunnelSummary({ year, dealer_id, district } = {}) {
+  let whereClauses = [];
+  const replacements = {};
+
+  if (year && year !== "ALL") {
+    whereClauses.push(`(${FINANCIAL_YEAR_SQL_EXPRESSION}) = :year`);
+    replacements.year = year;
+  }
+  if (dealer_id && dealer_id !== "ALL") {
+    if (dealer_id === "UNASSIGNED") {
+      whereClauses.push("gp.dealer_id IS NULL");
+    } else {
+      whereClauses.push("gp.dealer_id = :dealer_id");
+      replacements.dealer_id = dealer_id;
+    }
+  }
+  if (district && district !== "ALL") {
+    whereClauses.push("gp.district ILIKE :district");
+    replacements.district = `%${district}%`;
+  }
+
+  const whereSql = whereClauses.length > 0 ? "WHERE " + whereClauses.join(" AND ") : "";
+
+  const query = `
+    WITH categorized AS (
+      SELECT 
+        gp.id,
+        gp.application_id,
+        (${FINANCIAL_YEAR_SQL_EXPRESSION}) as year,
+        ${CATEGORY_SQL_EXPRESSION} as category,
+        COALESCE(gp.applied_area_ha, 0)::float as applied_area_ha,
+        gp.current_status,
+        COALESCE(gs.sequence_order, 999) as seq,
+        CASE 
+          WHEN gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21 
+          THEN 1 ELSE 0 
+        END as is_wo_issued,
+        CASE 
+          WHEN gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23 
+          THEN 1 ELSE 0 
+        END as is_invoiced,
+        CASE 
+          WHEN COALESCE(gs.sequence_order, 0) >= 26 
+          THEN 1 ELSE 0 
+        END as is_work_completed
+      FROM government_projects gp
+      LEFT JOIN government_statuses gs ON gp.current_status = gs.name
+      ${whereSql}
+    )
+    SELECT 
+      category,
+      year,
+      COUNT(*)::integer as total_projects,
+      COALESCE(SUM(applied_area_ha), 0)::float as total_ha,
+      
+      -- Work Order Issued
+      SUM(CASE WHEN is_wo_issued = 1 THEN 1 ELSE 0 END)::integer as wo_count,
+      COALESCE(SUM(CASE WHEN is_wo_issued = 1 THEN applied_area_ha ELSE 0 END), 0)::float as wo_ha,
+      
+      -- Material Supplied (Invoiced)
+      SUM(CASE WHEN is_invoiced = 1 THEN 1 ELSE 0 END)::integer as invoiced_count,
+      COALESCE(SUM(CASE WHEN is_invoiced = 1 THEN applied_area_ha ELSE 0 END), 0)::float as invoiced_ha,
+      
+      -- Work Completed
+      SUM(CASE WHEN is_work_completed = 1 THEN 1 ELSE 0 END)::integer as wc_count,
+      COALESCE(SUM(CASE WHEN is_work_completed = 1 THEN applied_area_ha ELSE 0 END), 0)::float as wc_ha
+      
+    FROM categorized
+    GROUP BY category, year
+    ORDER BY category, year
+  `;
+
+  const rows = await db.query(query, {
+    replacements,
+    type: QueryTypes.SELECT,
+  });
+
+  // Query all available distinct financial years from database
+  const distinctYearsRows = await db.query(
+    `
+      SELECT DISTINCT (${FINANCIAL_YEAR_SQL_EXPRESSION}) as year
+      FROM government_projects gp
+      WHERE gp.application_id IS NOT NULL
+      ORDER BY year ASC
+    `,
+    { type: QueryTypes.SELECT }
+  );
+
+  const dbYears = distinctYearsRows.map((r) => r.year).filter((y) => y && y !== "Unknown");
+
+  // Dynamically generate standard fiscal years (Apr 1 to Mar 31) from 2021 up to Current Fiscal Year + 2
+  const now = new Date();
+  const currentCalYear = now.getFullYear();
+  const currentFiscalStart = now.getMonth() + 1 >= 4 ? currentCalYear : currentCalYear - 1;
+  const standardYears = [];
+  for (let y = 2021; y <= currentFiscalStart + 2; y++) {
+    standardYears.push(`${y}-${y + 1}`);
+  }
+
+  // Combined sorted list of all available years (descending for dropdowns)
+  const availableYears = Array.from(new Set([...standardYears, ...dbYears])).sort().reverse();
+
+  // Calculate pendencies and build Category structure
+  const categoriesMap = {
+    Agriculture: { name: "Agriculture", prefix: "A", years: [], totals: null },
+    Horticulture: { name: "Horticulture", prefix: "H", years: [], totals: null },
+    Cluster: { name: "Cluster", prefix: "AK / HK", years: [], totals: null },
+    Others: { name: "Others", prefix: "Other Prefixes", years: [], totals: null },
+  };
+
+  const grandTotals = {
+    total_projects: 0,
+    total_ha: 0,
+    wo_count: 0,
+    wo_ha: 0,
+    invoiced_count: 0,
+    invoiced_ha: 0,
+    mat_pendency_count: 0,
+    mat_pendency_ha: 0,
+    wc_count: 0,
+    wc_ha: 0,
+    wc_pendency_count: 0,
+    wc_pendency_ha: 0,
+  };
+
+  // Helper to init empty total accumulator
+  const createEmptyTotal = () => ({
+    total_projects: 0,
+    total_ha: 0,
+    wo_count: 0,
+    wo_ha: 0,
+    invoiced_count: 0,
+    invoiced_ha: 0,
+    mat_pendency_count: 0,
+    mat_pendency_ha: 0,
+    wc_count: 0,
+    wc_ha: 0,
+    wc_pendency_count: 0,
+    wc_pendency_ha: 0,
+  });
+
+  Object.keys(categoriesMap).forEach((catKey) => {
+    categoriesMap[catKey].totals = createEmptyTotal();
+  });
+
+  for (const row of rows) {
+    const catKey = categoriesMap[row.category] ? row.category : "Others";
+
+    const woCount = parseInt(row.wo_count, 10) || 0;
+    const woHa = parseFloat(row.wo_ha) || 0;
+    const invCount = parseInt(row.invoiced_count, 10) || 0;
+    const invHa = parseFloat(row.invoiced_ha) || 0;
+    const wcCount = parseInt(row.wc_count, 10) || 0;
+    const wcHa = parseFloat(row.wc_ha) || 0;
+
+    // Material supply pendency = WO - Invoiced
+    const matPendCount = Math.max(0, woCount - invCount);
+    const matPendHa = Math.max(0, parseFloat((woHa - invHa).toFixed(4)));
+
+    // Work completion pendency = Invoiced - Work Completed
+    const wcPendCount = Math.max(0, invCount - wcCount);
+    const wcPendHa = Math.max(0, parseFloat((invHa - wcHa).toFixed(4)));
+
+    const yearSummary = {
+      year: row.year,
+      total_projects: parseInt(row.total_projects, 10) || 0,
+      total_ha: parseFloat(parseFloat(row.total_ha).toFixed(2)),
+      wo_count: woCount,
+      wo_ha: parseFloat(woHa.toFixed(2)),
+      invoiced_count: invCount,
+      invoiced_ha: parseFloat(invHa.toFixed(2)),
+      mat_pendency_count: matPendCount,
+      mat_pendency_ha: parseFloat(matPendHa.toFixed(2)),
+      wc_count: wcCount,
+      wc_ha: parseFloat(wcHa.toFixed(2)),
+      wc_pendency_count: wcPendCount,
+      wc_pendency_ha: parseFloat(wcPendHa.toFixed(2)),
+    };
+
+    categoriesMap[catKey].years.push(yearSummary);
+
+    // Accumulate Category Subtotals
+    const catTot = categoriesMap[catKey].totals;
+    catTot.total_projects += yearSummary.total_projects;
+    catTot.total_ha += yearSummary.total_ha;
+    catTot.wo_count += yearSummary.wo_count;
+    catTot.wo_ha += yearSummary.wo_ha;
+    catTot.invoiced_count += yearSummary.invoiced_count;
+    catTot.invoiced_ha += yearSummary.invoiced_ha;
+    catTot.mat_pendency_count += yearSummary.mat_pendency_count;
+    catTot.mat_pendency_ha += yearSummary.mat_pendency_ha;
+    catTot.wc_count += yearSummary.wc_count;
+    catTot.wc_ha += yearSummary.wc_ha;
+    catTot.wc_pendency_count += yearSummary.wc_pendency_count;
+    catTot.wc_pendency_ha += yearSummary.wc_pendency_ha;
+
+    // Accumulate Grand Totals
+    grandTotals.total_projects += yearSummary.total_projects;
+    grandTotals.total_ha += yearSummary.total_ha;
+    grandTotals.wo_count += yearSummary.wo_count;
+    grandTotals.wo_ha += yearSummary.wo_ha;
+    grandTotals.invoiced_count += yearSummary.invoiced_count;
+    grandTotals.invoiced_ha += yearSummary.invoiced_ha;
+    grandTotals.mat_pendency_count += yearSummary.mat_pendency_count;
+    grandTotals.mat_pendency_ha += yearSummary.mat_pendency_ha;
+    grandTotals.wc_count += yearSummary.wc_count;
+    grandTotals.wc_ha += yearSummary.wc_ha;
+    grandTotals.wc_pendency_count += yearSummary.wc_pendency_count;
+    grandTotals.wc_pendency_ha += yearSummary.wc_pendency_ha;
+  }
+
+  // Format category subtotals
+  Object.keys(categoriesMap).forEach((k) => {
+    const t = categoriesMap[k].totals;
+    t.total_ha = parseFloat(t.total_ha.toFixed(2));
+    t.wo_ha = parseFloat(t.wo_ha.toFixed(2));
+    t.invoiced_ha = parseFloat(t.invoiced_ha.toFixed(2));
+    t.mat_pendency_ha = parseFloat(t.mat_pendency_ha.toFixed(2));
+    t.wc_ha = parseFloat(t.wc_ha.toFixed(2));
+    t.wc_pendency_ha = parseFloat(t.wc_pendency_ha.toFixed(2));
+  });
+
+  // Format grand totals
+  grandTotals.total_ha = parseFloat(grandTotals.total_ha.toFixed(2));
+  grandTotals.wo_ha = parseFloat(grandTotals.wo_ha.toFixed(2));
+  grandTotals.invoiced_ha = parseFloat(grandTotals.invoiced_ha.toFixed(2));
+  grandTotals.mat_pendency_ha = parseFloat(grandTotals.mat_pendency_ha.toFixed(2));
+  grandTotals.wc_ha = parseFloat(grandTotals.wc_ha.toFixed(2));
+  grandTotals.wc_pendency_ha = parseFloat(grandTotals.wc_pendency_ha.toFixed(2));
+
+  return {
+    grandTotals,
+    categories: categoriesMap,
+    available_years: availableYears,
+  };
+}
+
+/**
+ * 2. Get Detailed List of Pending Projects (with search, pagination, filter by category/year/days pending)
+ */
+export async function getPendingProjectsList(filters = {}) {
+  const {
+    category,
+    year,
+    dealer_id,
+    district,
+    pendency_type = "PENDING_WORK_COMPLETION", // 'PENDING_WORK_COMPLETION' | 'PENDING_MATERIAL_SUPPLY' | 'ALL_PENDING'
+    min_days_pending,
+    search,
+    page = 1,
+    limit = 25,
+    sort_by = "days_pending",
+    sort_order = "DESC",
+  } = filters;
+
+  const whereConditions = [];
+  const replacements = {};
+
+  // Category filter
+  if (category && category !== "ALL") {
+    if (category === "Agriculture") {
+      whereConditions.push("(gp.application_id ILIKE 'A-%' OR (gp.application_id ILIKE 'A%' AND NOT gp.application_id ILIKE 'AK%'))");
+    } else if (category === "Cluster") {
+      whereConditions.push("(gp.application_id ILIKE 'AK%' OR gp.application_id ILIKE 'HK%')");
+    } else if (category === "Horticulture") {
+      whereConditions.push("(gp.application_id ILIKE 'H%' AND NOT gp.application_id ILIKE 'HK%')");
+    } else if (category === "Others") {
+      whereConditions.push("(NOT gp.application_id ILIKE 'A%' AND NOT gp.application_id ILIKE 'AK%' AND NOT gp.application_id ILIKE 'HK%' AND NOT gp.application_id ILIKE 'H%')");
+    }
+  }
+
+  // Financial Year filter (using calculated year expression)
+  if (year && year !== "ALL") {
+    whereConditions.push(`(${FINANCIAL_YEAR_SQL_EXPRESSION}) = :year`);
+    replacements.year = year;
+  }
+
+  // Dealer filter
+  if (dealer_id && dealer_id !== "ALL") {
+    if (dealer_id === "UNASSIGNED") {
+      whereConditions.push("gp.dealer_id IS NULL");
+    } else {
+      whereConditions.push("gp.dealer_id = :dealer_id");
+      replacements.dealer_id = dealer_id;
+    }
+  }
+
+  // District filter
+  if (district && district !== "ALL") {
+    whereConditions.push("gp.district ILIKE :district");
+    replacements.district = `%${district}%`;
+  }
+
+  // Search filter
+  if (search && search.trim()) {
+    const q = `%${search.trim()}%`;
+    whereConditions.push(`(
+      gp.application_id ILIKE :search OR
+      gp.farmer_name ILIKE :search OR
+      gp.mobile ILIKE :search OR
+      gp.village ILIKE :search OR
+      gp.block ILIKE :search OR
+      gp.district ILIKE :search OR
+      gp.invoice_number ILIKE :search OR
+      gp.work_order_no ILIKE :search
+    )`);
+    replacements.search = q;
+  }
+
+  // Pendency Type Logic
+  if (pendency_type === "PENDING_WORK_COMPLETION") {
+    // Invoiced (Material Supplied) but Dealer has NOT completed work (sequence < 26)
+    whereConditions.push(`(
+      (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23)
+      AND COALESCE(gs.sequence_order, 0) < 26
+    )`);
+  } else if (pendency_type === "PENDING_MATERIAL_SUPPLY") {
+    // Work Order Issued but NOT Invoiced
+    whereConditions.push(`(
+      (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21)
+      AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23
+    )`);
+  } else if (pendency_type === "ALL_PENDING") {
+    whereConditions.push(`(
+      ((gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26)
+      OR
+      ((gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23)
+    )`);
+  }
+
+  // Days Pending filter
+  if (min_days_pending && !isNaN(parseInt(min_days_pending, 10))) {
+    const minDays = parseInt(min_days_pending, 10);
+    whereConditions.push(`(
+      COALESCE(
+        CURRENT_DATE - gp.invoice_date,
+        CURRENT_DATE - gp.work_order_date,
+        CURRENT_DATE - gp.current_status_date,
+        0
+      ) >= :minDays
+    )`);
+    replacements.minDays = minDays;
+  }
+
+  const whereSql = whereConditions.length > 0 ? "WHERE " + whereConditions.join(" AND ") : "";
+
+  // Count Query
+  const countQuery = `
+    SELECT COUNT(*)::integer as total
+    FROM government_projects gp
+    LEFT JOIN government_statuses gs ON gp.current_status = gs.name
+    ${whereSql}
+  `;
+  const [countRes] = await db.query(countQuery, { replacements, type: QueryTypes.SELECT });
+  const totalRecords = countRes?.total || 0;
+
+  // Sorting
+  let orderClause = "ORDER BY days_pending DESC";
+  const validSortMap = {
+    days_pending: "days_pending",
+    applied_area_ha: "gp.applied_area_ha",
+    invoice_date: "gp.invoice_date",
+    work_order_date: "gp.work_order_date",
+    farmer_name: "gp.farmer_name",
+    application_id: "gp.application_id",
+    current_status: "gp.current_status",
+  };
+
+  const safeOrderField = validSortMap[sort_by] || "days_pending";
+  const safeDirection = sort_order?.toUpperCase() === "ASC" ? "ASC" : "DESC";
+  orderClause = `ORDER BY ${safeOrderField} ${safeDirection}`;
+
+  // Pagination
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.max(1, Math.min(200, parseInt(limit, 10) || 25));
+  const offsetNum = (pageNum - 1) * limitNum;
+  replacements.limit = limitNum;
+  replacements.offset = offsetNum;
+
+  // Main Data Query
+  const dataQuery = `
+    SELECT 
+      gp.id,
+      gp.application_id,
+      (${FINANCIAL_YEAR_SQL_EXPRESSION}) as financial_year,
+      gp.year as stored_year,
+      ${CATEGORY_SQL_EXPRESSION} as category,
+      gp.farmer_name,
+      gp.father_name,
+      gp.mobile,
+      gp.district,
+      gp.block,
+      gp.village,
+      gp.survey_no_subdivision_no,
+      COALESCE(gp.applied_area_ha, 0)::float as applied_area_ha,
+      COALESCE(gp.total_area_ha, 0)::float as total_area_ha,
+      gp.crop,
+      gp.work_order_no,
+      gp.work_order_date,
+      gp.invoice_number,
+      gp.invoice_date,
+      COALESCE(gp.invoice_amount, 0)::float as invoice_amount,
+      gp.current_status,
+      gp.current_status_date,
+      gp.current_status_remarks,
+      d.id as dealer_id,
+      d.name as dealer_name,
+      COALESCE(
+        CURRENT_DATE - gp.invoice_date,
+        CURRENT_DATE - gp.work_order_date,
+        CURRENT_DATE - gp.current_status_date,
+        0
+      )::integer as days_pending,
+      CASE 
+        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 THEN 'PENDING_WORK_COMPLETION'
+        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23 THEN 'PENDING_MATERIAL_SUPPLY'
+        ELSE 'OTHER'
+      END as pendency_stage
+    FROM government_projects gp
+    LEFT JOIN government_statuses gs ON gp.current_status = gs.name
+    LEFT JOIN dealers d ON gp.dealer_id = d.id
+    ${whereSql}
+    ${orderClause}
+    LIMIT :limit OFFSET :offset
+  `;
+
+  const projects = await db.query(dataQuery, {
+    replacements,
+    type: QueryTypes.SELECT,
+  });
+
+  return {
+    projects,
+    pagination: {
+      total: totalRecords,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(totalRecords / limitNum),
+    },
+  };
+}

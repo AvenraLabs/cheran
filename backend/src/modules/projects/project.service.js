@@ -488,3 +488,105 @@ export async function renameOrMergeProject(projectId, targetApplicationId) {
     throw err;
   }
 }
+
+/**
+ * Permanently delete a government project and its associated data (invoices, commissions, status history, etc.)
+ */
+export async function deleteProject(projectId) {
+  if (!projectId) {
+    throw new AppError("Project ID is required", 400);
+  }
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId);
+  const where = isUuid ? { id: projectId } : { application_id: projectId };
+
+  const project = await GovernmentProject.findOne({ where });
+  if (!project) {
+    throw new AppError("Government project not found", 404);
+  }
+
+  const targetId = project.id;
+  const appId = project.application_id;
+
+  const transaction = await db.transaction();
+  try {
+    // 1. Unlink or clean matched_project_id in government_import_rows
+    await db.query(
+      "UPDATE government_import_rows SET matched_project_id = NULL WHERE matched_project_id = :targetId",
+      { replacements: { targetId }, transaction }
+    );
+
+    // 2. Delete dealer commissions
+    await db.query(
+      "DELETE FROM dealer_commissions WHERE project_id = :targetId",
+      { replacements: { targetId }, transaction }
+    );
+
+    // 3. Delete proceeding batch projects
+    await db.query(
+      "DELETE FROM proceeding_batch_projects WHERE project_id = :targetId",
+      { replacements: { targetId }, transaction }
+    );
+
+    // 4. Delete invoice items & invoices linked to this project
+    const [linkedInvoices] = await db.query(
+      "SELECT id FROM invoices WHERE government_project_id = :targetId",
+      { replacements: { targetId }, transaction }
+    );
+
+    if (linkedInvoices && linkedInvoices.length > 0) {
+      const invoiceIds = linkedInvoices.map((i) => i.id);
+      await db.query(
+        "DELETE FROM invoice_items WHERE invoice_id IN (:invoiceIds)",
+        { replacements: { invoiceIds }, transaction }
+      );
+      await db.query(
+        "DELETE FROM payments WHERE invoice_id IN (:invoiceIds)",
+        { replacements: { invoiceIds }, transaction }
+      );
+      await db.query(
+        "DELETE FROM invoices WHERE id IN (:invoiceIds)",
+        { replacements: { invoiceIds }, transaction }
+      );
+    }
+
+    // 5. Delete direct sales if linked
+    const [linkedSales] = await db.query(
+      "SELECT id FROM sales WHERE project_id = :targetId",
+      { replacements: { targetId }, transaction }
+    );
+    if (linkedSales && linkedSales.length > 0) {
+      const saleIds = linkedSales.map((s) => s.id);
+      await db.query(
+        "DELETE FROM sale_items WHERE sale_id IN (:saleIds)",
+        { replacements: { saleIds }, transaction }
+      );
+      await db.query(
+        "DELETE FROM sales WHERE id IN (:saleIds)",
+        { replacements: { saleIds }, transaction }
+      );
+    }
+
+    // 6. Delete status history
+    await GovernmentProjectStatusHistory.destroy({
+      where: { project_id: targetId },
+      transaction,
+    });
+
+    // 7. Delete the project record
+    await project.destroy({ transaction });
+
+    await transaction.commit();
+
+    return {
+      success: true,
+      projectId: targetId,
+      applicationId: appId,
+      message: `Project ${appId} and all associated data were permanently deleted.`,
+    };
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+}
+

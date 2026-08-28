@@ -9,5 +9,8 @@ router.get("/govt-funds", reportController.getGovernmentFundsReport);
 router.get("/dealers", reportController.getDealerReport);
 router.get("/expenses", reportController.getExpenseReport);
 router.get("/employees", reportController.getEmployeeReport);
+router.get("/pending-funnel", reportController.getPendingFunnelSummary);
+router.get("/pending-projects", reportController.getPendingProjectsList);
 
 export default router;
+

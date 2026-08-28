@@ -1,5 +1,6 @@
 import { Router } from "express";
 import validate from "../../shared/middlewares/validate.js";
+import { authorize } from "../../shared/middlewares/authMiddleware.js";
 import { listProjectsSchema, getProjectSchema } from "./project.schema.js";
 import * as projectController from "./project.controller.js";
 
@@ -12,7 +13,10 @@ router.get("/search", projectController.searchProjects);
 
 router.route("/").get(validate(listProjectsSchema), projectController.listProjects);
 
-router.route("/:id").get(validate(getProjectSchema), projectController.getProject);
+router
+  .route("/:id")
+  .get(validate(getProjectSchema), projectController.getProject)
+  .delete(authorize("ADMIN"), validate(getProjectSchema), projectController.deleteProject);
 
 router
   .route("/:id/status-history")

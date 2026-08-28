@@ -24,6 +24,7 @@ import {
   ShoppingCart,
   Settings,
   Menu,
+  ClipboardCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -42,6 +43,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
         items: [
           { label: "Dashboard", path: "/", icon: LayoutDashboard },
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+          { label: "Pendency Report", path: "/pending-reports", icon: ClipboardCheck },
           { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
           { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
           { label: "Excel Imports", path: "/imports", icon: FileText },
@@ -90,18 +92,20 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
         title: "Operations & Govt",
         items: [
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+          { label: "Pendency Report", path: "/pending-reports", icon: ClipboardCheck },
           { label: "Excel Imports", path: "/imports", icon: FileText },
           { label: "Dealers Directory", path: "/dealers", icon: Users },
         ],
       },
     ];
   } else {
-    // 'USER' role: 6 pages in Operations & Govt group (Dashboard excluded)
+    // 'USER' role: Operations & Govt group
     navigationSections = [
       {
         title: "Operations & Govt",
         items: [
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
+          { label: "Pendency Report", path: "/pending-reports", icon: ClipboardCheck },
           { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
           { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
           { label: "Excel Imports", path: "/imports", icon: FileText },

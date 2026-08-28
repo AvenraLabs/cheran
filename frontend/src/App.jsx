@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage.jsx";
 import ProjectDetailPage from "./pages/ProjectDetailPage.jsx";
+import PendingReportsPage from "./pages/PendingReportsPage.jsx";
 import ImportsPage from "./pages/ImportsPage.jsx";
 import InvoiceBulkUploadPage from "./pages/InvoiceBulkUploadPage.jsx";
 import LoadOrderUploadPage from "./pages/LoadOrderUploadPage.jsx";
@@ -113,6 +114,7 @@ export function App() {
           {/* Common Routes for All 3 Roles (ADMIN, USER, DEALER) */}
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
+          <Route path="pending-reports" element={<PendingReportsPage />} />
           <Route path="imports" element={<ImportsPage />} />
           <Route path="dealers" element={<DealersPage />} />
 

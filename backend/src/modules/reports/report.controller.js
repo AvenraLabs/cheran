@@ -1,5 +1,6 @@
 import asyncHandler from "../../shared/asyncHandler.js";
 import * as reportService from "./report.service.js";
+import * as pendingReportService from "./pending-report.service.js";
 
 export const getFinancialOverviewReport = asyncHandler(async (req, res) => {
   const result = await reportService.getFinancialOverviewReport(req.query);
@@ -48,3 +49,20 @@ export const getEmployeeReport = asyncHandler(async (req, res) => {
     data: { employees: result },
   });
 });
+
+export const getPendingFunnelSummary = asyncHandler(async (req, res) => {
+  const result = await pendingReportService.getPendingFunnelSummary(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+export const getPendingProjectsList = asyncHandler(async (req, res) => {
+  const result = await pendingReportService.getPendingProjectsList(req.query);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+

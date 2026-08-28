@@ -17,8 +17,12 @@ import {
   Edit3,
   FileQuestion,
   Layers,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import api from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { toast } from "sonner";
 import Navbar from "../components/layout/Navbar.jsx";
 import StatusBadge from "../components/common/StatusBadge.jsx";
 import Button from "../components/common/Button.jsx";
@@ -55,7 +59,32 @@ export function ProjectsPage() {
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeSourceProject, setMergeSourceProject] = useState(null);
 
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const { user } = useAuth();
+  const isAdmin = (user?.role || "USER").toUpperCase() === "ADMIN";
+
   const debounceTimerRef = useRef(null);
+
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return;
+    try {
+      setDeleting(true);
+      await api.delete(`/government/projects/${projectToDelete.id}`);
+      toast.success(`Project ${projectToDelete.application_id} and all associated data were deleted successfully`);
+      setDeleteModalOpen(false);
+      setProjectToDelete(null);
+      fetchProjects(pagination.page);
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+      toast.error(err?.message || "Failed to delete project");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const fetchProjects = async (page = 1, limit = pagination.limit) => {
     try {
@@ -467,6 +496,20 @@ export function ProjectsPage() {
                               >
                                 View
                               </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="danger"
+                                  size="xs"
+                                  icon={Trash2}
+                                  onClick={() => {
+                                    setProjectToDelete(proj);
+                                    setDeleteModalOpen(true);
+                                  }}
+                                  title="Permanently Delete Project & Associated Data"
+                                >
+                                  Delete
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -617,8 +660,65 @@ export function ProjectsPage() {
           fetchProjects(pagination.page, pagination.limit);
         }}
       />
+
+      {/* Delete Project Confirmation Modal */}
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          if (!deleting) {
+            setDeleteModalOpen(false);
+            setProjectToDelete(null);
+          }
+        }}
+        title="Delete Government Project"
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 bg-red-50 border border-red-200 rounded-[8px] flex items-start gap-3">
+            <AlertTriangle size={20} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-red-800 space-y-1">
+              <p className="font-bold text-red-900">Permanent Deletion Warning</p>
+              <p>
+                This will permanently delete project{" "}
+                <strong className="font-mono text-red-950">{projectToDelete?.application_id}</strong>
+                {projectToDelete?.farmer_name && (
+                  <span> ({projectToDelete.farmer_name})</span>
+                )}
+                , along with all associated data including invoices, invoice line items, payments, status milestones history, dealer commissions, and proceeding references.
+              </p>
+            </div>
+          </div>
+
+          <p className="text-xs text-[#52607D]">
+            Are you sure you want to delete this entire project? This action cannot be undone.
+          </p>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDeleteModalOpen(false);
+                setProjectToDelete(null);
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              icon={Trash2}
+              onClick={handleDeleteProject}
+              loading={deleting}
+            >
+              Delete Entire Project
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 export default ProjectsPage;
+
