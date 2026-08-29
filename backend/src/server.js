@@ -22,6 +22,18 @@ async function startServer() {
         ADD COLUMN IF NOT EXISTS fittings_paid_date DATE,
         ADD COLUMN IF NOT EXISTS fittings_paid_ref VARCHAR(255),
         ADD COLUMN IF NOT EXISTS fittings_notes TEXT;
+
+      CREATE TABLE IF NOT EXISTS material_supplied_overrides (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        category VARCHAR(50) NOT NULL,
+        financial_year VARCHAR(20) NOT NULL,
+        supplied_ha DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        supplied_count INTEGER NOT NULL DEFAULT 0,
+        remarks TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT unique_material_supplied_cat_year UNIQUE (category, financial_year)
+      );
     `);
 
     console.log("✅ Database schema synchronized.");

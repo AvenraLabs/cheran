@@ -3,20 +3,20 @@ import db from "../../config/db.js";
 import GovernmentProject from "../projects/project.model.js";
 import Dealer from "../dealers/dealer.model.js";
 import GovernmentStatus from "../statuses/status.model.js";
+import MaterialSuppliedOverride from "./material-supplied-override.model.js";
 
 /**
  * Categorize application ID according to Tamil Nadu government scheme conventions:
- * - Agriculture: Starts with 'A-' or 'A' (e.g., A-KGI-SGI-6131930738-2026-27)
- * - Cluster: Starts with 'AK' or 'HK'
- * - Horticulture: Starts with 'H' (and not 'HK')
- * - Others: Any other format
+ * - Agriculture: Starts with 'A' (includes 'A-...', 'AK...')
+ * - Horticulture: Starts with 'H' (includes 'H-...', 'HK...')
+ * - Sugarcane: Starts with 'S' (e.g., 'S-...')
  */
 export const CATEGORY_SQL_EXPRESSION = `
   CASE 
-    WHEN gp.application_id ILIKE 'AK%' OR gp.application_id ILIKE 'HK%' THEN 'Cluster'
-    WHEN gp.application_id ILIKE 'A-%' OR (gp.application_id ILIKE 'A%' AND NOT gp.application_id ILIKE 'AK%') THEN 'Agriculture'
+    WHEN gp.application_id ILIKE 'A%' THEN 'Agriculture'
     WHEN gp.application_id ILIKE 'H%' THEN 'Horticulture'
-    ELSE 'Others'
+    WHEN gp.application_id ILIKE 'S%' THEN 'Sugarcane'
+    ELSE 'Sugarcane'
   END
 `;
 
@@ -114,11 +114,11 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
         gp.current_status,
         COALESCE(gs.sequence_order, 999) as seq,
         CASE 
-          WHEN gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21 
+          WHEN gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21 
           THEN 1 ELSE 0 
         END as is_wo_issued,
         CASE 
-          WHEN gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23 
+          WHEN COALESCE(gs.sequence_order, 0) >= 26 
           THEN 1 ELSE 0 
         END as is_invoiced,
         CASE 
@@ -190,11 +190,17 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
 
   // Calculate pendencies and build Category structure
   const categoriesMap = {
-    Agriculture: { name: "Agriculture", prefix: "A", years: [], totals: null },
-    Horticulture: { name: "Horticulture", prefix: "H", years: [], totals: null },
-    Cluster: { name: "Cluster", prefix: "AK / HK", years: [], totals: null },
-    Others: { name: "Others", prefix: "Other Prefixes", years: [], totals: null },
+    Agriculture: { name: "Agriculture", prefix: "A / AK", years: [], totals: null },
+    Horticulture: { name: "Horticulture", prefix: "H / HK", years: [], totals: null },
+    Sugarcane: { name: "Sugarcane", prefix: "S", years: [], totals: null },
   };
+
+  // Load manual Material Supplied user inputs
+  const overrides = await MaterialSuppliedOverride.findAll({ raw: true });
+  const overridesMap = {};
+  for (const o of overrides) {
+    overridesMap[`${o.category}_${o.financial_year}`] = o;
+  }
 
   const grandTotals = {
     total_projects: 0,
@@ -244,12 +250,18 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
   });
 
   for (const row of rows) {
-    const catKey = categoriesMap[row.category] ? row.category : "Others";
+    const catKey = categoriesMap[row.category] ? row.category : "Sugarcane";
 
     const woCount = parseInt(row.wo_count, 10) || 0;
     const woHa = parseFloat(row.wo_ha) || 0;
-    const invCount = parseInt(row.invoiced_count, 10) || 0;
-    const invHa = parseFloat(row.invoiced_ha) || 0;
+
+    // Look up manual Material Supplied input for this category and financial year
+    const overrideKey = `${catKey}_${row.year}`;
+    const manualOverride = overridesMap[overrideKey];
+
+    const invCount = manualOverride ? parseInt(manualOverride.supplied_count, 10) || 0 : 0;
+    const invHa = manualOverride ? parseFloat(manualOverride.supplied_ha) || 0 : 0.0;
+
     const wcCount = parseInt(row.wc_count, 10) || 0;
     const wcHa = parseFloat(row.wc_ha) || 0;
     const fund1Count = parseInt(row.fund1_count, 10) || 0;
@@ -257,11 +269,11 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     const jvCount = parseInt(row.jv_count, 10) || 0;
     const jvHa = parseFloat(row.jv_ha) || 0;
 
-    // Material supply pendency = WO - Invoiced
+    // Material supply pendency = Work Orders Issued - Material Supplied
     const matPendCount = Math.max(0, woCount - invCount);
     const matPendHa = Math.max(0, parseFloat((woHa - invHa).toFixed(4)));
 
-    // Work completion pendency = Invoiced - Work Completed
+    // Work completion pendency = Material Supplied - Work Completed
     const wcPendCount = Math.max(0, invCount - wcCount);
     const wcPendHa = Math.max(0, parseFloat((invHa - wcHa).toFixed(4)));
 
@@ -289,6 +301,8 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
       jv_ha: parseFloat(jvHa.toFixed(2)),
       jvr_pendency_count: jvrPendCount,
       jvr_pendency_ha: parseFloat(jvrPendHa.toFixed(2)),
+      has_manual_override: !!manualOverride,
+      manual_override_remarks: manualOverride?.remarks || null,
     };
 
     categoriesMap[catKey].years.push(yearSummary);
@@ -335,36 +349,99 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     grandTotals.jvr_pendency_ha += yearSummary.jvr_pendency_ha;
   }
 
-  // Format category subtotals
-  Object.keys(categoriesMap).forEach((k) => {
-    const t = categoriesMap[k].totals;
+  // Format category totals and pendencies
+  Object.keys(categoriesMap).forEach((catKey) => {
+    const t = categoriesMap[catKey].totals;
     t.total_ha = parseFloat(t.total_ha.toFixed(2));
     t.wo_ha = parseFloat(t.wo_ha.toFixed(2));
     t.invoiced_ha = parseFloat(t.invoiced_ha.toFixed(2));
-    t.mat_pendency_ha = parseFloat(t.mat_pendency_ha.toFixed(2));
+    t.mat_pendency_ha = Math.max(0, parseFloat((t.wo_ha - t.invoiced_ha).toFixed(2)));
+    t.mat_pendency_count = Math.max(0, t.wo_count - t.invoiced_count);
     t.wc_ha = parseFloat(t.wc_ha.toFixed(2));
-    t.wc_pendency_ha = parseFloat(t.wc_pendency_ha.toFixed(2));
+    t.wc_pendency_ha = Math.max(0, parseFloat((t.invoiced_ha - t.wc_ha).toFixed(2)));
+    t.wc_pendency_count = Math.max(0, t.invoiced_count - t.wc_count);
     t.fund1_ha = parseFloat(t.fund1_ha.toFixed(2));
     t.jv_ha = parseFloat(t.jv_ha.toFixed(2));
     t.jvr_pendency_ha = parseFloat(t.jvr_pendency_ha.toFixed(2));
   });
 
-  // Format grand totals
+  // Format grand totals and pendencies
   grandTotals.total_ha = parseFloat(grandTotals.total_ha.toFixed(2));
   grandTotals.wo_ha = parseFloat(grandTotals.wo_ha.toFixed(2));
   grandTotals.invoiced_ha = parseFloat(grandTotals.invoiced_ha.toFixed(2));
-  grandTotals.mat_pendency_ha = parseFloat(grandTotals.mat_pendency_ha.toFixed(2));
+  grandTotals.mat_pendency_ha = Math.max(0, parseFloat((grandTotals.wo_ha - grandTotals.invoiced_ha).toFixed(2)));
+  grandTotals.mat_pendency_count = Math.max(0, grandTotals.wo_count - grandTotals.invoiced_count);
   grandTotals.wc_ha = parseFloat(grandTotals.wc_ha.toFixed(2));
-  grandTotals.wc_pendency_ha = parseFloat(grandTotals.wc_pendency_ha.toFixed(2));
+  grandTotals.wc_pendency_ha = Math.max(0, parseFloat((grandTotals.invoiced_ha - grandTotals.wc_ha).toFixed(2)));
+  grandTotals.wc_pendency_count = Math.max(0, grandTotals.invoiced_count - grandTotals.wc_count);
   grandTotals.fund1_ha = parseFloat(grandTotals.fund1_ha.toFixed(2));
   grandTotals.jv_ha = parseFloat(grandTotals.jv_ha.toFixed(2));
   grandTotals.jvr_pendency_ha = parseFloat(grandTotals.jvr_pendency_ha.toFixed(2));
+
+  // Extract all-categories direct overrides if any
+  const allOverrides = {};
+  for (const o of overrides) {
+    if (o.category === "ALL") {
+      allOverrides[o.financial_year] = o;
+    }
+  }
 
   return {
     grandTotals,
     categories: categoriesMap,
     available_years: availableYears,
+    all_overrides: allOverrides,
   };
+}
+
+/**
+ * Upsert manual Material Supplied user input for a specific Category and Financial Year
+ */
+export async function upsertMaterialSuppliedOverride({
+  category,
+  financial_year,
+  supplied_ha,
+  supplied_count,
+  remarks,
+}) {
+  if (!category || !financial_year) {
+    throw new Error("Category and financial_year are required");
+  }
+
+  const cleanHa = Math.max(0, parseFloat(supplied_ha) || 0);
+  const cleanCount = Math.max(0, parseInt(supplied_count, 10) || 0);
+
+  const [record, created] = await MaterialSuppliedOverride.findOrCreate({
+    where: { category, financial_year },
+    defaults: {
+      category,
+      financial_year,
+      supplied_ha: cleanHa,
+      supplied_count: cleanCount,
+      remarks: remarks || null,
+    },
+  });
+
+  if (!created) {
+    record.supplied_ha = cleanHa;
+    record.supplied_count = cleanCount;
+    if (remarks !== undefined) record.remarks = remarks;
+    await record.save();
+  }
+
+  return record;
+}
+
+/**
+ * Get all manual Material Supplied user inputs
+ */
+export async function getMaterialSuppliedOverrides() {
+  return MaterialSuppliedOverride.findAll({
+    order: [
+      ["category", "ASC"],
+      ["financial_year", "DESC"],
+    ],
+  });
 }
 
 /**
@@ -391,13 +468,11 @@ export async function getPendingProjectsList(filters = {}) {
   // Category filter
   if (category && category !== "ALL") {
     if (category === "Agriculture") {
-      whereConditions.push("(gp.application_id ILIKE 'A-%' OR (gp.application_id ILIKE 'A%' AND NOT gp.application_id ILIKE 'AK%'))");
-    } else if (category === "Cluster") {
-      whereConditions.push("(gp.application_id ILIKE 'AK%' OR gp.application_id ILIKE 'HK%')");
+      whereConditions.push("gp.application_id ILIKE 'A%'");
     } else if (category === "Horticulture") {
-      whereConditions.push("(gp.application_id ILIKE 'H%' AND NOT gp.application_id ILIKE 'HK%')");
-    } else if (category === "Others") {
-      whereConditions.push("(NOT gp.application_id ILIKE 'A%' AND NOT gp.application_id ILIKE 'AK%' AND NOT gp.application_id ILIKE 'HK%' AND NOT gp.application_id ILIKE 'H%')");
+      whereConditions.push("gp.application_id ILIKE 'H%'");
+    } else if (category === "Sugarcane" || category === "Others") {
+      whereConditions.push("(gp.application_id ILIKE 'S%' OR (NOT gp.application_id ILIKE 'A%' AND NOT gp.application_id ILIKE 'H%'))");
     }
   }
 
@@ -443,14 +518,14 @@ export async function getPendingProjectsList(filters = {}) {
   if (pendency_type === "PENDING_WORK_COMPLETION") {
     // Invoiced (Material Supplied) but Dealer has NOT completed work (sequence < 26)
     whereConditions.push(`(
-      (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23)
+      (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED')
       AND COALESCE(gs.sequence_order, 0) < 26
     )`);
   } else if (pendency_type === "PENDING_MATERIAL_SUPPLY") {
-    // Work Order Issued but NOT Invoiced
+    // Work Order Issued but Material NOT supplied (sequence < 26)
     whereConditions.push(`(
-      (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21)
-      AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23
+      (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21)
+      AND COALESCE(gs.sequence_order, 0) < 26
     )`);
   } else if (pendency_type === "PENDING_JVR_COMPLETION") {
     // First Fund Credited but Dealer has NOT completed Joint Verification (sequence < 52)
@@ -460,9 +535,7 @@ export async function getPendingProjectsList(filters = {}) {
     )`);
   } else if (pendency_type === "ALL_PENDING") {
     whereConditions.push(`(
-      ((gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26)
-      OR
-      ((gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23)
+      ((gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26)
       OR
       ((gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed')))
     )`);
@@ -476,9 +549,9 @@ export async function getPendingProjectsList(filters = {}) {
         CASE 
           WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
             THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
-          WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 
+          WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED') AND COALESCE(gs.sequence_order, 0) < 26 
             THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
-          WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) 
+          WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) 
             THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
           ELSE (CURRENT_DATE - gp.current_status_date)
         END
@@ -500,7 +573,7 @@ export async function getPendingProjectsList(filters = {}) {
   const totalRecords = countRes?.total || 0;
 
   // Sorting
-  let orderClause = "ORDER BY days_pending DESC";
+  let orderClause = "ORDER BY days_pending DESC, gp.id DESC";
   const validSortMap = {
     days_pending: "days_pending",
     applied_area_ha: "gp.applied_area_ha",
@@ -513,7 +586,17 @@ export async function getPendingProjectsList(filters = {}) {
 
   const safeOrderField = validSortMap[sort_by] || "days_pending";
   const safeDirection = sort_order?.toUpperCase() === "ASC" ? "ASC" : "DESC";
-  orderClause = `ORDER BY ${safeOrderField} ${safeDirection}`;
+  if (sort_by === "application_id") {
+    orderClause = `ORDER BY gp.application_id ${safeDirection}`;
+  } else if (sort_by === "farmer_name") {
+    orderClause = `ORDER BY gp.farmer_name ${safeDirection}`;
+  } else if (sort_by === "work_order_date") {
+    orderClause = `ORDER BY gp.work_order_date ${safeDirection}`;
+  } else if (sort_by === "invoice_date") {
+    orderClause = `ORDER BY gp.invoice_date ${safeDirection}`;
+  } else {
+    orderClause = `ORDER BY ${safeOrderField} ${safeDirection}`;
+  }
 
   // Pagination
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -555,18 +638,18 @@ export async function getPendingProjectsList(filters = {}) {
       CASE 
         WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
           THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
-        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 
+        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED') AND COALESCE(gs.sequence_order, 0) < 26 
           THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
-        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) 
+        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) 
           THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
         ELSE (CURRENT_DATE - gp.current_status_date)
       END::integer as days_pending,
       CASE 
         WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
           THEN 'PENDING_JVR_COMPLETION'
-        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 23) AND COALESCE(gs.sequence_order, 0) < 26 
+        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED') AND COALESCE(gs.sequence_order, 0) < 26 
           THEN 'PENDING_WORK_COMPLETION'
-        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND gp.invoice_number IS NULL AND COALESCE(gs.sequence_order, 0) < 23 
+        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26 
           THEN 'PENDING_MATERIAL_SUPPLY'
         ELSE 'OTHER'
       END as pendency_stage

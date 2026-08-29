@@ -14,6 +14,8 @@ import {
   ArrowRight,
   Eye,
   RefreshCw,
+  Copy,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
@@ -48,6 +50,15 @@ export function ImportsPage() {
 
   // Commit State
   const [committing, setCommitting] = useState(false);
+
+  // IDs Inspector Modal State (for Duplicates, New Projects, Status Changes)
+  const [idsModalOpen, setIdsModalOpen] = useState(false);
+  const [idsModalTitle, setIdsModalTitle] = useState("");
+  const [idsModalAction, setIdsModalAction] = useState("");
+  const [idsModalRows, setIdsModalRows] = useState([]);
+  const [idsModalLoading, setIdsModalLoading] = useState(false);
+  const [idsModalSearch, setIdsModalSearch] = useState("");
+  const [copiedAll, setCopiedAll] = useState(false);
 
   // Past Imports History & Pagination
   const [pastImports, setPastImports] = useState([]);
@@ -124,6 +135,43 @@ export function ImportsPage() {
     } finally {
       setLoadingUnresolved(false);
     }
+  };
+
+  const handleOpenIdsModal = async (action, title, totalCount = 0) => {
+    if (!previewData?.importId) return;
+    setIdsModalTitle(title);
+    setIdsModalAction(action);
+    setIdsModalSearch("");
+    setIdsModalOpen(true);
+    setIdsModalLoading(true);
+    setCopiedAll(false);
+
+    // Also update the staged row table filter below
+    handleFilterChange(action);
+
+    try {
+      const res = await api.get(`/government/imports/${previewData.importId}/rows`, {
+        params: { action, limit: 5000, page: 1 },
+      });
+      setIdsModalRows(res.data?.rows || []);
+    } catch (err) {
+      console.error("Failed to load IDs:", err);
+      toast.error("Failed to load application IDs");
+    } finally {
+      setIdsModalLoading(false);
+    }
+  };
+
+  const handleCopyAllIds = () => {
+    const ids = idsModalRows.map((r) => r.application_id).filter(Boolean);
+    if (ids.length === 0) {
+      toast.warning("No IDs to copy");
+      return;
+    }
+    navigator.clipboard.writeText(ids.join("\n"));
+    setCopiedAll(true);
+    toast.success(`Copied ${ids.length} Application IDs to clipboard!`);
+    setTimeout(() => setCopiedAll(false), 2500);
   };
 
   useEffect(() => {
@@ -461,43 +509,136 @@ export function ImportsPage() {
 
               {/* Preview Metric Badges */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
-                <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
+                <div
+                  onClick={() => handleFilterChange("ALL")}
+                  className={`p-3 bg-[#FAFAF8] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${
+                    rowActionFilter === "ALL"
+                      ? "border-[#14213D] ring-2 ring-[#14213D]/20 shadow-xs"
+                      : "border-[#EDEAE1]"
+                  }`}
+                  title="Click to view all staged rows"
+                >
                   <span className="text-[10px] uppercase font-bold text-[#52607D]">Total Rows</span>
                   <div className="text-lg font-bold font-display text-[#14213D]">
                     {(previewData.summary?.totalRows || 0).toLocaleString()}
                   </div>
                 </div>
-                <div className="p-3 bg-[#EAF3F0] border border-[#D3E6E0] rounded-[8px]">
-                  <span className="text-[10px] uppercase font-bold text-[#2F6F5E]">New Projects</span>
+
+                <div
+                  onClick={() =>
+                    handleOpenIdsModal(
+                      "NEW_PROJECT",
+                      "New Project Application IDs",
+                      previewData.summary?.newProjects || 0
+                    )
+                  }
+                  className={`p-3 bg-[#EAF3F0] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group ${
+                    rowActionFilter === "NEW_PROJECT"
+                      ? "border-[#2F6F5E] ring-2 ring-[#2F6F5E]/30 shadow-xs"
+                      : "border-[#D3E6E0]"
+                  }`}
+                  title="Click to view and copy all New Project IDs"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] uppercase font-bold text-[#2F6F5E]">New Projects</span>
+                    <Eye size={11} className="text-[#2F6F5E] opacity-60 group-hover:opacity-100" />
+                  </div>
                   <div className="text-lg font-bold font-display text-[#2F6F5E]">
                     {(previewData.summary?.newProjects || 0).toLocaleString()}
                   </div>
                 </div>
-                <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
+
+                <div
+                  onClick={() => handleFilterChange("UNCHANGED")}
+                  className={`p-3 bg-[#FAFAF8] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${
+                    rowActionFilter === "UNCHANGED"
+                      ? "border-[#14213D] ring-2 ring-[#14213D]/20 shadow-xs"
+                      : "border-[#EDEAE1]"
+                  }`}
+                  title="Click to filter existing unchanged rows"
+                >
                   <span className="text-[10px] uppercase font-bold text-[#14213D]">Existing</span>
                   <div className="text-lg font-bold font-display text-[#14213D]">
-                    {(previewData.summary?.existingProjects ?? previewData.summary?.updatedProjects ?? 0).toLocaleString()}
+                    {(
+                      previewData.summary?.existingProjects ??
+                      previewData.summary?.updatedProjects ??
+                      0
+                    ).toLocaleString()}
                   </div>
                 </div>
-                <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
-                  <span className="text-[10px] uppercase font-bold text-[#B8860B]">Status Changes</span>
+
+                <div
+                  onClick={() =>
+                    handleOpenIdsModal(
+                      "STATUS_CHANGE",
+                      "Status Change Project IDs",
+                      previewData.summary?.statusChanges || 0
+                    )
+                  }
+                  className={`p-3 bg-[#FDF8EC] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group ${
+                    rowActionFilter === "STATUS_CHANGE"
+                      ? "border-[#B8860B] ring-2 ring-[#B8860B]/30 shadow-xs"
+                      : "border-[#F7E7C4]"
+                  }`}
+                  title="Click to view status changes"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] uppercase font-bold text-[#B8860B]">Status Changes</span>
+                    <Eye size={11} className="text-[#B8860B] opacity-60 group-hover:opacity-100" />
+                  </div>
                   <div className="text-lg font-bold font-display text-[#B8860B]">
                     {(previewData.summary?.statusChanges || 0).toLocaleString()}
                   </div>
                 </div>
-                <div className="p-3 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px]">
+
+                <div
+                  onClick={() => handleFilterChange("UNCHANGED")}
+                  className={`p-3 bg-[#FAFAF8] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${
+                    rowActionFilter === "UNCHANGED"
+                      ? "border-[#52607D] ring-2 ring-[#52607D]/20 shadow-xs"
+                      : "border-[#EDEAE1]"
+                  }`}
+                  title="Click to filter unchanged rows"
+                >
                   <span className="text-[10px] uppercase font-bold text-[#52607D]">Unchanged</span>
                   <div className="text-lg font-bold font-display text-[#52607D]">
                     {(previewData.summary?.unchanged || 0).toLocaleString()}
                   </div>
                 </div>
-                <div className="p-3 bg-[#FDF2F1] border border-[#F8D7D5] rounded-[8px]">
-                  <span className="text-[10px] uppercase font-bold text-[#B0403A]">Duplicates</span>
+
+                <div
+                  onClick={() =>
+                    handleOpenIdsModal(
+                      "DUPLICATE_SOURCE_ROW",
+                      "Duplicate Application IDs in File",
+                      previewData.summary?.duplicateRows || 0
+                    )
+                  }
+                  className={`p-3 bg-[#FDF2F1] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group ${
+                    rowActionFilter === "DUPLICATE_SOURCE_ROW"
+                      ? "border-[#B0403A] ring-2 ring-[#B0403A]/30 shadow-xs"
+                      : "border-[#F8D7D5]"
+                  }`}
+                  title="Click to view and copy all Duplicate IDs in this file"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] uppercase font-bold text-[#B0403A]">Duplicates</span>
+                    <Eye size={11} className="text-[#B0403A] opacity-60 group-hover:opacity-100" />
+                  </div>
                   <div className="text-lg font-bold font-display text-[#B0403A]">
                     {(previewData.summary?.duplicateRows || 0).toLocaleString()}
                   </div>
                 </div>
-                <div className="p-3 bg-[#FDF8EC] border border-[#F7E7C4] rounded-[8px]">
+
+                <div
+                  onClick={() => handleFilterChange("DEALER_RESOLUTION_REQUIRED")}
+                  className={`p-3 bg-[#FDF8EC] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all ${
+                    rowActionFilter === "DEALER_RESOLUTION_REQUIRED"
+                      ? "border-[#B8860B] ring-2 ring-[#B8860B]/30 shadow-xs"
+                      : "border-[#F7E7C4]"
+                  }`}
+                  title="Click to filter rows needing dealer action"
+                >
                   <span className="text-[10px] uppercase font-bold text-[#B8860B]">Dealer Needs Action</span>
                   <div className="text-lg font-bold font-display text-[#B8860B]">
                     {(previewData.summary?.dealerResolutionsRequired || 0).toLocaleString()}
@@ -574,6 +715,7 @@ export function ImportsPage() {
                     { id: "NEW_PROJECT", label: "New Projects" },
                     { id: "STATUS_CHANGE", label: "Status Changes" },
                     { id: "UNCHANGED", label: "Unchanged" },
+                    { id: "DUPLICATE_SOURCE_ROW", label: "Duplicates" },
                     { id: "ERROR", label: "Errors" },
                   ].map((tab) => (
                     <button
@@ -907,6 +1049,114 @@ export function ImportsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Application IDs Inspector Modal */}
+      <Modal
+        isOpen={idsModalOpen}
+        onClose={() => setIdsModalOpen(false)}
+        title={`${idsModalTitle} (${idsModalRows.length})`}
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Search within modal */}
+            <div className="relative flex-1">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C97AB]"
+              />
+              <input
+                type="text"
+                value={idsModalSearch}
+                onChange={(e) => setIdsModalSearch(e.target.value)}
+                placeholder="Search by ID, status, dealer, or error message..."
+                className="w-full text-xs pl-8 pr-3 py-2 border border-[#E4E1D8] rounded-[8px] bg-[#FAFAF8] focus:outline-none focus:border-[#2F6F5E] focus:bg-white"
+              />
+            </div>
+
+            {/* Copy Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              icon={copiedAll ? Check : Copy}
+              onClick={handleCopyAllIds}
+              disabled={idsModalRows.length === 0}
+              className="shrink-0 text-xs"
+            >
+              {copiedAll ? "Copied All" : "Copy All IDs"}
+            </Button>
+          </div>
+
+          {idsModalLoading ? (
+            <div className="p-6">
+              <SkeletonLoader rows={6} />
+            </div>
+          ) : (
+            (() => {
+              const filteredRows = idsModalRows.filter((r) => {
+                if (!idsModalSearch) return true;
+                const q = idsModalSearch.toLowerCase();
+                return (
+                  (r.application_id && r.application_id.toLowerCase().includes(q)) ||
+                  (r.imported_status && r.imported_status.toLowerCase().includes(q)) ||
+                  (r.dealer_name && r.dealer_name.toLowerCase().includes(q)) ||
+                  (r.error_message && r.error_message.toLowerCase().includes(q))
+                );
+              });
+
+              if (filteredRows.length === 0) {
+                return (
+                  <div className="py-8 text-center text-xs text-[#8C97AB]">
+                    {idsModalRows.length === 0
+                      ? "No records found for this action."
+                      : "No matching IDs for your search."}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="border border-[#E4E1D8] rounded-[8px] overflow-hidden max-h-[420px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#FAFAF8] sticky top-0 border-b border-[#E4E1D8] text-[#52607D] font-semibold">
+                      <tr>
+                        <th className="py-2.5 px-3">Row #</th>
+                        <th className="py-2.5 px-3">Application ID</th>
+                        <th className="py-2.5 px-3">Imported Status</th>
+                        <th className="py-2.5 px-3">Imported Dealer</th>
+                        <th className="py-2.5 px-3">Details / Message</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EDEAE1]">
+                      {filteredRows.map((r, idx) => (
+                        <tr key={r.id || idx} className="hover:bg-[#FAFAF8]">
+                          <td className="py-2 px-3 font-mono text-[#8C97AB]">
+                            {r.row_number || idx + 1}
+                          </td>
+                          <td className="py-2 px-3 font-mono font-bold text-[#14213D] select-all">
+                            {r.application_id || "—"}
+                          </td>
+                          <td className="py-2 px-3">
+                            <StatusBadge status={r.imported_status} size="sm" />
+                          </td>
+                          <td className="py-2 px-3 text-[#52607D]">
+                            {r.dealer_name || "—"}
+                          </td>
+                          <td
+                            className="py-2 px-3 text-[#8C97AB] text-[11px] truncate max-w-[220px]"
+                            title={r.error_message || r.action}
+                          >
+                            {r.error_message || r.action}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()
+          )}
+        </div>
       </Modal>
     </div>
   );

@@ -45,6 +45,9 @@ import FundPercentageMaster from "../modules/proceedings/fund-percentage.model.j
 import ProceedingBatch from "../modules/proceedings/proceeding-batch.model.js";
 import ProceedingBatchProject from "../modules/proceedings/proceeding-batch-project.model.js";
 
+// Reports & Overrides
+import MaterialSuppliedOverride from "../modules/reports/material-supplied-override.model.js";
+
 // ==========================================
 // 1. Government Module Associations
 // ==========================================
@@ -479,5 +482,6 @@ export {
   FundPercentageMaster,
   ProceedingBatch,
   ProceedingBatchProject,
+  MaterialSuppliedOverride,
 };
 

@@ -11,6 +11,8 @@ router.get("/expenses", reportController.getExpenseReport);
 router.get("/employees", reportController.getEmployeeReport);
 router.get("/pending-funnel", reportController.getPendingFunnelSummary);
 router.get("/pending-projects", reportController.getPendingProjectsList);
+router.get("/material-supplied", reportController.getMaterialSuppliedList);
+router.put("/material-supplied", reportController.upsertMaterialSupplied);
 
 export default router;
 

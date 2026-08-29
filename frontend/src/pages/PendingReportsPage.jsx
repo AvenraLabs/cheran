@@ -22,6 +22,8 @@ import {
   Apple,
   Boxes,
   HelpCircle,
+  Wheat,
+  Pencil,
   X,
   FileText,
 } from "lucide-react";
@@ -39,10 +41,9 @@ import { toast } from "sonner";
 
 const CATEGORY_OPTIONS = [
   { value: "ALL", label: "All Categories" },
-  { value: "Agriculture", label: "Agriculture (A)" },
-  { value: "Horticulture", label: "Horticulture (H)" },
-  { value: "Cluster", label: "Cluster (AK / HK)" },
-  { value: "Others", label: "Others" },
+  { value: "Agriculture", label: "Agriculture (A / AK)" },
+  { value: "Horticulture", label: "Horticulture (H / HK)" },
+  { value: "Sugarcane", label: "Sugarcane (S)" },
 ];
 
 export function PendingReportsPage() {
@@ -51,7 +52,7 @@ export function PendingReportsPage() {
   const [dealers, setDealers] = useState([]);
   const [loadingSummary, setLoadingSummary] = useState(true);
 
-  // Active Category View Tab: 'Agriculture' | 'Horticulture' | 'Cluster' | 'Others' | 'ALL'
+  // Active Category View Tab: 'Agriculture' | 'Horticulture' | 'Sugarcane' | 'ALL'
   const [selectedCategoryTab, setSelectedCategoryTab] = useState("Agriculture");
 
   // Global Filters for Summary & Drill-Down
@@ -59,9 +60,19 @@ export function PendingReportsPage() {
   const [selectedDealer, setSelectedDealer] = useState("ALL");
   const [selectedDistrict, setSelectedDistrict] = useState("ALL");
 
-  // Drill-Down States
+  // Material Supplied Edit Modal States
+  const [editMaterialModalOpen, setEditMaterialModalOpen] = useState(false);
+  const [editCategory, setEditCategory] = useState("Agriculture");
+  const [editYear, setEditYear] = useState("");
+  const [editWoHa, setEditWoHa] = useState(0);
+  const [editWoCount, setEditWoCount] = useState(0);
+  const [editSuppliedHa, setEditSuppliedHa] = useState("");
+  const [editSuppliedCount, setEditSuppliedCount] = useState("");
+  const [savingMaterialSupplied, setSavingMaterialSupplied] = useState(false);
+
+  // Drill-Down States (Independent from top summary)
   const [pendencyType, setPendencyType] = useState("PENDING_WORK_COMPLETION"); // 'PENDING_WORK_COMPLETION' | 'PENDING_MATERIAL_SUPPLY' | 'PENDING_JVR_COMPLETION' | 'ALL_PENDING'
-  const [drillCategory, setDrillCategory] = useState("Agriculture");
+  const [drillCategory, setDrillCategory] = useState("ALL");
   const [drillYear, setDrillYear] = useState("ALL");
   const [minDaysPending, setMinDaysPending] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,7 +152,7 @@ export function PendingReportsPage() {
     fetchFunnelSummary();
   }, [selectedYear, selectedDealer, selectedDistrict]);
 
-  // Fetch Granular Drill-Down Projects
+  // Fetch Pending Projects Drill-down List
   const fetchPendingProjects = async () => {
     try {
       setLoadingProjects(true);
@@ -159,13 +170,15 @@ export function PendingReportsPage() {
       if (debouncedSearch) params.search = debouncedSearch;
 
       const res = await api.get("/reports/pending-projects", { params });
-      const data = res?.data || res || {};
-      setProjects(data.projects || []);
-      if (data.pagination) {
+      const projList = res?.data?.projects || res?.projects || [];
+      const pag = res?.data?.pagination || res?.pagination;
+
+      setProjects(projList);
+      if (pag) {
         setPagination((prev) => ({
           ...prev,
-          total: data.pagination.total || 0,
-          totalPages: data.pagination.totalPages || 1,
+          total: pag.total || 0,
+          totalPages: pag.totalPages || 1,
         }));
       }
     } catch (err) {
@@ -190,11 +203,63 @@ export function PendingReportsPage() {
     pagination.limit,
   ]);
 
-  // Keep drillCategory aligned when user clicks top category tab
+  // Category Tab Change for Summary Table (kept independent from bottom detailed reports)
   const handleCategoryTabChange = (catKey) => {
     setSelectedCategoryTab(catKey);
-    setDrillCategory(catKey);
-    setPagination((prev) => ({ ...prev, page: 1 }));
+  };
+
+  // Material Supplied Edit Modal Handlers
+  const handleOpenEditMaterial = (
+    e,
+    category,
+    year,
+    currentSuppliedHa
+  ) => {
+    if (e) e.stopPropagation();
+    setEditCategory(category || "Agriculture");
+    setEditYear(year);
+    setEditSuppliedHa(
+      currentSuppliedHa !== undefined && currentSuppliedHa !== null ? currentSuppliedHa : ""
+    );
+    setEditMaterialModalOpen(true);
+  };
+
+  const handleSaveMaterialSupplied = async (e) => {
+    if (e) e.preventDefault();
+    if (!editCategory || !editYear) {
+      toast.error("Category and Financial Year are required");
+      return;
+    }
+
+    try {
+      setSavingMaterialSupplied(true);
+      const payload = {
+        category: editCategory,
+        financial_year: editYear,
+        supplied_ha: parseFloat(editSuppliedHa) || 0,
+        supplied_count: 0,
+      };
+
+      const res = await api.put("/reports/material-supplied", payload);
+      // api interceptor unwraps response.data, so res is the payload { status: 'success', data: ... }
+      if (res?.status === "success" || res?.data || res?.id || res) {
+        toast.success(
+          `Material supplied saved for ${
+            editCategory === "ALL" ? "All Categories" : editCategory
+          } (${editYear})`
+        );
+        setEditMaterialModalOpen(false);
+        // Refresh summary data
+        await fetchFunnelSummary();
+      } else {
+        toast.error("Failed to update material supplied");
+      }
+    } catch (err) {
+      console.error("Error updating material supplied:", err);
+      toast.error(err.response?.data?.message || err.message || "Failed to update material supplied");
+    } finally {
+      setSavingMaterialSupplied(false);
+    }
   };
 
   // Quick filter drill-down from funnel row click
@@ -485,12 +550,8 @@ export function PendingReportsPage() {
         cur.wo_ha += row.wo_ha || 0;
         cur.invoiced_count += row.invoiced_count || 0;
         cur.invoiced_ha += row.invoiced_ha || 0;
-        cur.mat_pendency_count += row.mat_pendency_count || 0;
-        cur.mat_pendency_ha += row.mat_pendency_ha || 0;
         cur.wc_count += row.wc_count || 0;
         cur.wc_ha += row.wc_ha || 0;
-        cur.wc_pendency_count += row.wc_pendency_count || 0;
-        cur.wc_pendency_ha += row.wc_pendency_ha || 0;
         cur.fund1_count += row.fund1_count || 0;
         cur.fund1_ha += row.fund1_ha || 0;
         cur.jv_count += row.jv_count || 0;
@@ -500,7 +561,29 @@ export function PendingReportsPage() {
       });
     });
 
-    return Array.from(yearMap.values()).sort((a, b) => {
+    // Check if there are direct 'ALL' category overrides for combined rows
+    const list = Array.from(yearMap.values()).map((cur) => {
+      const allOverride = funnelData.all_overrides?.[cur.year];
+      if (allOverride) {
+        cur.invoiced_ha = parseFloat(parseFloat(allOverride.supplied_ha).toFixed(2)) || 0;
+        cur.invoiced_count = parseInt(allOverride.supplied_count, 10) || 0;
+      }
+      cur.wo_ha = parseFloat(cur.wo_ha.toFixed(2));
+      cur.invoiced_ha = parseFloat(cur.invoiced_ha.toFixed(2));
+      cur.wc_ha = parseFloat(cur.wc_ha.toFixed(2));
+
+      // Material Supply Pendency = Work Orders Issued - Material Supplied
+      cur.mat_pendency_ha = Math.max(0, parseFloat((cur.wo_ha - cur.invoiced_ha).toFixed(2)));
+      cur.mat_pendency_count = Math.max(0, cur.wo_count - cur.invoiced_count);
+
+      // Work Completion Pendency = Material Supplied - Work Completed
+      cur.wc_pendency_ha = Math.max(0, parseFloat((cur.invoiced_ha - cur.wc_ha).toFixed(2)));
+      cur.wc_pendency_count = Math.max(0, cur.invoiced_count - cur.wc_count);
+
+      return cur;
+    });
+
+    return list.sort((a, b) => {
       if (a.year === "Unknown") return 1;
       if (b.year === "Unknown") return -1;
       return a.year.localeCompare(b.year);
@@ -571,17 +654,12 @@ export function PendingReportsPage() {
           headerColor: [217, 119, 6], // orange/amber
         },
         {
-          title: "3. Cluster Pendency Report",
-          data: categories.Cluster,
-          headerColor: [109, 40, 217], // purple
+          title: "3. Sugarcane Pendency Report",
+          data: categories.Sugarcane,
+          headerColor: [13, 148, 136], // teal/green
         },
         {
-          title: "4. Others Pendency Report",
-          data: categories.Others,
-          headerColor: [71, 85, 105], // slate
-        },
-        {
-          title: "5. All Categories Combined Pendency Report",
+          title: "4. All Categories Combined Pendency Report",
           isCombined: true,
           years: consolidatedAllYears,
           totals: grand,
@@ -890,7 +968,7 @@ export function PendingReportsPage() {
           </div>
         </div>
 
-        {/* 4 Main Category Headings / Navigation Tabs */}
+        {/* Main Category Headings / Navigation Tabs */}
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E4E1D8] pb-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -906,7 +984,7 @@ export function PendingReportsPage() {
                 <Sprout size={16} className="text-emerald-600" />
                 <span>Agriculture</span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  A
+                  A / AK
                 </span>
                 <span className="text-[11px] font-semibold text-[#8C97AB]">
                   ({categories.Agriculture?.totals?.total_projects || 0})
@@ -925,7 +1003,7 @@ export function PendingReportsPage() {
                 <Apple size={16} className="text-orange-500" />
                 <span>Horticulture</span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                  H
+                  H / HK
                 </span>
                 <span className="text-[11px] font-semibold text-[#8C97AB]">
                   ({categories.Horticulture?.totals?.total_projects || 0})
@@ -934,36 +1012,20 @@ export function PendingReportsPage() {
 
               <button
                 type="button"
-                onClick={() => handleCategoryTabChange("Cluster")}
+                onClick={() => handleCategoryTabChange("Sugarcane")}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
-                  selectedCategoryTab === "Cluster"
+                  selectedCategoryTab === "Sugarcane"
                     ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
                     : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
                 }`}
               >
-                <Boxes size={16} className="text-purple-600" />
-                <span>Cluster</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                  AK / HK
+                <Wheat size={16} className="text-teal-600" />
+                <span>Sugarcane</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+                  S
                 </span>
                 <span className="text-[11px] font-semibold text-[#8C97AB]">
-                  ({categories.Cluster?.totals?.total_projects || 0})
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCategoryTabChange("Others")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
-                  selectedCategoryTab === "Others"
-                    ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
-                    : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
-                }`}
-              >
-                <HelpCircle size={16} className="text-slate-500" />
-                <span>Others</span>
-                <span className="text-[11px] font-semibold text-[#8C97AB]">
-                  ({categories.Others?.totals?.total_projects || 0})
+                  ({categories.Sugarcane?.totals?.total_projects || 0})
                 </span>
               </button>
 
@@ -991,7 +1053,7 @@ export function PendingReportsPage() {
                 loading={exportingSummaryPdf}
                 disabled={loadingSummary || !funnelData}
                 className="bg-white border-[#2F6F5E]/40 text-[#2F6F5E] hover:bg-[#EAF3F0] hover:border-[#2F6F5E] font-semibold shadow-xs"
-                title="Download PDF report containing Agriculture, Horticulture, Cluster, Others and All Categories Combined summary tables for selected years"
+                title="Download PDF report containing Agriculture, Horticulture, Sugarcane and All Categories Combined summary tables for selected years"
               >
                 Download PDF (All Categories)
               </Button>
@@ -1035,8 +1097,7 @@ export function PendingReportsPage() {
                           activeCategoryData.years.map((row, idx) => (
                             <tr
                               key={idx}
-                              className="hover:bg-[#F4F8F6] transition-colors group cursor-pointer"
-                              onClick={() => handleQuickFilterDrillDown(selectedCategoryTab, row.year)}
+                              className="hover:bg-[#F4F8F6] transition-colors group"
                             >
                               <td className="py-3 px-4 font-bold font-mono text-[#14213D]">
                                 {row.year === "Unknown" ? "Unspecified Year" : row.year}
@@ -1050,12 +1111,29 @@ export function PendingReportsPage() {
                                 </span>
                               </td>
                               <td className="py-3 px-4 text-right">
-                                <span className="font-bold text-[#2F6F5E]">
-                                  {row.invoiced_ha.toFixed(2)} Ha
-                                </span>
-                                <span className="ml-1.5 text-[10px] text-[#2F6F5E] font-mono bg-[#EAF3F0] px-1.5 py-0.5 rounded">
-                                  {row.invoiced_count}
-                                </span>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span className="font-bold text-[#2F6F5E]">
+                                    {row.invoiced_ha.toFixed(2)} Ha
+                                  </span>
+                                  <span className="text-[10px] text-[#2F6F5E] font-mono bg-[#EAF3F0] px-1.5 py-0.5 rounded">
+                                    {row.invoiced_count}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) =>
+                                      handleOpenEditMaterial(
+                                        e,
+                                        selectedCategoryTab,
+                                        row.year,
+                                        row.invoiced_ha
+                                      )
+                                    }
+                                    title={`Edit Material Supplied for ${selectedCategoryTab} (${row.year})`}
+                                    className="p-1 rounded text-[#8C97AB] hover:text-[#2F6F5E] hover:bg-[#EAF3F0] transition-colors cursor-pointer"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                </div>
                               </td>
                               <td className="py-3 px-4 text-right bg-[#FFFDF7]">
                                 <span
@@ -1167,8 +1245,7 @@ export function PendingReportsPage() {
                           consolidatedAllYears.map((row, idx) => (
                             <tr
                               key={idx}
-                              className="hover:bg-[#F4F8F6] transition-colors group cursor-pointer"
-                              onClick={() => handleQuickFilterDrillDown("ALL", row.year)}
+                              className="hover:bg-[#F4F8F6] transition-colors group"
                             >
                               <td className="py-3 px-4 font-bold font-mono text-[#14213D]">
                                 {row.year === "Unknown" ? "Unspecified Year" : row.year}
@@ -1182,12 +1259,29 @@ export function PendingReportsPage() {
                                 </span>
                               </td>
                               <td className="py-3 px-4 text-right">
-                                <span className="font-bold text-[#2F6F5E]">
-                                  {row.invoiced_ha.toFixed(2)} Ha
-                                </span>
-                                <span className="ml-1.5 text-[10px] text-[#2F6F5E] font-mono bg-[#EAF3F0] px-1.5 py-0.5 rounded">
-                                  {row.invoiced_count}
-                                </span>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span className="font-bold text-[#2F6F5E]">
+                                    {row.invoiced_ha.toFixed(2)} Ha
+                                  </span>
+                                  <span className="text-[10px] text-[#2F6F5E] font-mono bg-[#EAF3F0] px-1.5 py-0.5 rounded">
+                                    {row.invoiced_count}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) =>
+                                      handleOpenEditMaterial(
+                                        e,
+                                        "ALL",
+                                        row.year,
+                                        row.invoiced_ha
+                                      )
+                                    }
+                                    title={`Edit Material Supplied for ${row.year}`}
+                                    className="p-1 rounded text-[#8C97AB] hover:text-[#2F6F5E] hover:bg-[#EAF3F0] transition-colors cursor-pointer"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                </div>
                               </td>
                               <td className="py-3 px-4 text-right bg-[#FFFDF7]">
                                 <span
@@ -1533,8 +1627,8 @@ export function PendingReportsPage() {
                                     ? "bg-emerald-50 text-emerald-700"
                                     : p.category === "Horticulture"
                                     ? "bg-orange-50 text-orange-700"
-                                    : p.category === "Cluster"
-                                    ? "bg-purple-50 text-purple-700"
+                                    : p.category === "Sugarcane"
+                                    ? "bg-teal-50 text-teal-700"
                                     : "bg-gray-100 text-gray-700"
                                 }`}
                               >
@@ -1641,6 +1735,72 @@ export function PendingReportsPage() {
             />
           </div>
         </div>
+
+        {/* Edit Material Supplied Modal */}
+        {editMaterialModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+            <div className="bg-white rounded-xl shadow-xl border border-[#E4E1D8] w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-5 py-4 border-b border-[#E4E1D8] flex items-center justify-between bg-[#FDFCFA]">
+                <div>
+                  <h3 className="text-sm font-bold text-[#14213D] flex items-center gap-1.5">
+                    <Pencil size={14} className="text-[#2F6F5E]" />
+                    Edit Material Supplied (Ha)
+                  </h3>
+                  <p className="text-xs text-[#52607D] mt-0.5">
+                    {editCategory === "ALL" ? "All Categories Combined" : editCategory} — {editYear}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditMaterialModalOpen(false)}
+                  className="text-[#8C97AB] hover:text-[#14213D] p-1 rounded-md hover:bg-[#F3F1EC] transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveMaterialSupplied} className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#14213D] mb-1.5">
+                    Supplied Area (Ha)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    autoFocus
+                    required
+                    value={editSuppliedHa}
+                    onChange={(e) => setEditSuppliedHa(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full text-base font-mono font-bold border border-[#E4E1D8] rounded-lg px-3 py-2 text-[#14213D] focus:outline-none focus:border-[#2F6F5E] focus:ring-1 focus:ring-[#2F6F5E]"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E4E1D8]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditMaterialModalOpen(false)}
+                    disabled={savingMaterialSupplied}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    loading={savingMaterialSupplied}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

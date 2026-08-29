@@ -66,3 +66,28 @@ export const getPendingProjectsList = asyncHandler(async (req, res) => {
   });
 });
 
+export const upsertMaterialSupplied = asyncHandler(async (req, res) => {
+  const { category, financial_year, supplied_ha, supplied_count, remarks } = req.body;
+  const result = await pendingReportService.upsertMaterialSuppliedOverride({
+    category,
+    financial_year,
+    supplied_ha,
+    supplied_count,
+    remarks,
+  });
+  res.status(200).json({
+    status: "success",
+    message: "Material supplied data updated successfully",
+    data: result,
+  });
+});
+
+export const getMaterialSuppliedList = asyncHandler(async (req, res) => {
+  const result = await pendingReportService.getMaterialSuppliedOverrides();
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+
