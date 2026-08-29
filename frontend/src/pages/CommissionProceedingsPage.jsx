@@ -29,6 +29,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
@@ -38,6 +39,10 @@ import Pagination from "../components/common/Pagination.jsx";
 
 export function CommissionProceedingsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+  const isUser = role === "USER";
+  const isAdmin = role === "ADMIN";
 
   // Active View Tab: 'batches' | 'dealer_statements'
   const [activeTab, setActiveTab] = useState("batches");
@@ -88,6 +93,11 @@ export function CommissionProceedingsPage() {
 
   // Modals state
   const [bankReceiptModalOpen, setBankReceiptModalOpen] = useState(false);
+  const [editDateModalOpen, setEditDateModalOpen] = useState(false);
+  const [activeBatchForEditDate, setActiveBatchForEditDate] = useState(null);
+  const [editProceedingDate, setEditProceedingDate] = useState("");
+  const [savingProceedingDate, setSavingProceedingDate] = useState(false);
+  const [editDateError, setEditDateError] = useState("");
 
   // Delete modal state
   const [batchToDelete, setBatchToDelete] = useState(null);
@@ -604,6 +614,39 @@ export function CommissionProceedingsPage() {
       setImportError(err?.message || err?.response?.data?.message || "Failed to import proceeding batch");
     } finally {
       setImporting(false);
+    }
+  };
+
+  // Open Edit Proceeding Date Modal
+  const handleOpenEditDate = (batch) => {
+    setActiveBatchForEditDate(batch);
+    setEditProceedingDate(
+      batch.proceeding_date ? batch.proceeding_date.split("T")[0] : ""
+    );
+    setEditDateError("");
+    setEditDateModalOpen(true);
+  };
+
+  // Save Proceeding Date
+  const handleSaveProceedingDate = async (e) => {
+    e.preventDefault();
+    if (!activeBatchForEditDate || !editProceedingDate) return;
+    setEditDateError("");
+    try {
+      setSavingProceedingDate(true);
+      await api.patch(`/proceedings/${activeBatchForEditDate.id}/proceeding-date`, {
+        proceeding_date: editProceedingDate,
+      });
+      setEditDateModalOpen(false);
+      fetchBatches(pagination.page);
+    } catch (err) {
+      setEditDateError(
+        err?.message ||
+          err?.response?.data?.message ||
+          "Failed to update proceeding date"
+      );
+    } finally {
+      setSavingProceedingDate(false);
     }
   };
 
@@ -1249,21 +1292,23 @@ export function CommissionProceedingsPage() {
                   <span>Proceeding Batches ({pagination.total || batches.length})</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("dealer_statements")}
-                  className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-[8px] transition-all cursor-pointer ${
-                    activeTab === "dealer_statements"
-                      ? "bg-[#2F6F5E] text-white shadow-xs"
-                      : "bg-white text-[#52607D] border border-[#E4E1D8] hover:bg-gray-100"
-                  }`}
-                >
-                  <Users size={15} />
-                  <span>Dealer Statements & Payouts</span>
-                </button>
+                {!isUser && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("dealer_statements")}
+                    className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-[8px] transition-all cursor-pointer ${
+                      activeTab === "dealer_statements"
+                        ? "bg-[#2F6F5E] text-white shadow-xs"
+                        : "bg-white text-[#52607D] border border-[#E4E1D8] hover:bg-gray-100"
+                    }`}
+                  >
+                    <Users size={15} />
+                    <span>Dealer Statements & Payouts</span>
+                  </button>
+                )}
               </div>
 
-              {activeTab === "dealer_statements" && (
+              {!isUser && activeTab === "dealer_statements" && (
                 <div className="flex items-center gap-2">
                   <Button
                     variant="secondary"
@@ -1285,62 +1330,64 @@ export function CommissionProceedingsPage() {
               /* VIEW 2A: PROCEEDING BATCHES LIST                                         */
               /* ========================================================================= */
               <div className="space-y-6">
-                {/* KPI Summary Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
-                    <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
-                      <span>Total Proceeding Released</span>
-                      <FileSpreadsheet size={16} className="text-[#2F6F5E]" />
+                {/* KPI Summary Cards - Visible only to Admin/Non-User */}
+                {!isUser && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
+                      <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
+                        <span>Total Proceeding Released</span>
+                        <FileSpreadsheet size={16} className="text-[#2F6F5E]" />
+                      </div>
+                      <div className="text-xl font-bold text-[#14213D] font-mono mt-1">
+                        {formatRupees(summary.total_proceeding_value)}
+                      </div>
+                      <div className="text-[11px] text-[#52607D]">
+                        Across {summary.total_batches_count || 0} batches recorded
+                      </div>
                     </div>
-                    <div className="text-xl font-bold text-[#14213D] font-mono mt-1">
-                      {formatRupees(summary.total_proceeding_value)}
-                    </div>
-                    <div className="text-[11px] text-[#52607D]">
-                      Across {summary.total_batches_count || 0} batches recorded
-                    </div>
-                  </div>
 
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
-                    <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
-                      <span>Calculated Dealer Commission</span>
-                      <IndianRupee size={16} className="text-[#2F6F5E]" />
+                    <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
+                      <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
+                        <span>Calculated Dealer Commission</span>
+                        <IndianRupee size={16} className="text-[#2F6F5E]" />
+                      </div>
+                      <div className="text-xl font-bold text-[#2F6F5E] font-mono mt-1">
+                        {formatRupees(summary.total_dealer_commission)}
+                      </div>
+                      <div className="text-[11px] text-[#52607D]">
+                        + {formatRupees(summary.total_fittings_value)} Fittings Cost (5%)
+                      </div>
                     </div>
-                    <div className="text-xl font-bold text-[#2F6F5E] font-mono mt-1">
-                      {formatRupees(summary.total_dealer_commission)}
-                    </div>
-                    <div className="text-[11px] text-[#52607D]">
-                      + {formatRupees(summary.total_fittings_value)} Fittings Cost (5%)
-                    </div>
-                  </div>
 
-                  {/* Card 3: Payment Received */}
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
-                    <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
-                      <span>Payment Received</span>
-                      <CheckCircle2 size={16} className="text-emerald-600" />
+                    {/* Card 3: Payment Received */}
+                    <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
+                      <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
+                        <span>Payment Received</span>
+                        <CheckCircle2 size={16} className="text-emerald-600" />
+                      </div>
+                      <div className="text-xl font-bold text-emerald-800 font-mono mt-1">
+                        {formatRupees(summary.total_bank_received_value)}
+                      </div>
+                      <div className="text-[11px] text-emerald-600 font-medium">
+                        Verified Received
+                      </div>
                     </div>
-                    <div className="text-xl font-bold text-emerald-800 font-mono mt-1">
-                      {formatRupees(summary.total_bank_received_value)}
-                    </div>
-                    <div className="text-[11px] text-emerald-600 font-medium">
-                      Verified Received
-                    </div>
-                  </div>
 
-                  {/* Card 4: Pending Payment */}
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
-                    <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
-                      <span>Payment Pending</span>
-                      <Clock size={16} className="text-amber-600" />
-                    </div>
-                    <div className="text-xl font-bold text-amber-800 font-mono mt-1">
-                      {formatRupees(summary.total_pending_bank_value)}
-                    </div>
-                    <div className="text-[11px] text-amber-700 font-medium">
-                      Awaiting Payment Verification
+                    {/* Card 4: Pending Payment */}
+                    <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-1">
+                      <div className="flex items-center justify-between text-[#52607D] text-xs font-semibold">
+                        <span>Payment Pending</span>
+                        <Clock size={16} className="text-amber-600" />
+                      </div>
+                      <div className="text-xl font-bold text-amber-800 font-mono mt-1">
+                        {formatRupees(summary.total_pending_bank_value)}
+                      </div>
+                      <div className="text-[11px] text-amber-700 font-medium">
+                        Awaiting Payment Verification
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Filter Bar */}
                 <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-3">
@@ -1459,7 +1506,7 @@ export function CommissionProceedingsPage() {
                             <tr>
                               <th className="py-2.5 px-3">Proceeding No</th>
                               <th className="py-2.5 px-3">Proceeding Date</th>
-                              <th className="py-2.5 px-3">Release Tranche</th>
+                              <th className="py-2.5 px-3">Fund Type</th>
                               <th className="py-2.5 px-3 text-right">Total Proceeding Value</th>
                               <th className="py-2.5 px-3 text-right">Dealer Commission</th>
                               <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>
@@ -1472,19 +1519,37 @@ export function CommissionProceedingsPage() {
                             {batches.map((b) => (
                               <tr key={b.id} className="hover:bg-[#FAFAF8] transition-colors">
                                 <td className="py-3 px-3">
-                                  <Link
-                                    to={`/commissions/${b.id}`}
-                                    className="font-bold text-[#2F6F5E] hover:underline font-mono text-xs flex items-center gap-1.5"
-                                  >
-                                    <span>#{b.proceeding_no}</span>
-                                  </Link>
+                                  {isUser ? (
+                                    <span className="font-bold text-[#14213D] font-mono text-xs flex items-center gap-1.5">
+                                      <span>#{b.proceeding_no}</span>
+                                    </span>
+                                  ) : (
+                                    <Link
+                                      to={`/commissions/${b.id}`}
+                                      className="font-bold text-[#2F6F5E] hover:underline font-mono text-xs flex items-center gap-1.5"
+                                    >
+                                      <span>#{b.proceeding_no}</span>
+                                    </Link>
+                                  )}
                                   <div className="text-[10px] text-[#52607D] mt-0.5">
                                     {b.projects?.length || 0} Projects recorded
                                   </div>
                                 </td>
 
                                 <td className="py-3 px-3 font-mono font-medium text-[#14213D]">
-                                  {formatDate(b.proceeding_date)}
+                                  <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                                    <span>{formatDate(b.proceeding_date)}</span>
+                                    {(isAdmin || isUser) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditDate(b)}
+                                        className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                                        title="Edit proceeding date"
+                                      >
+                                        <Pencil size={11} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
 
                                 <td className="py-3 px-3">
@@ -1556,27 +1621,31 @@ export function CommissionProceedingsPage() {
 
                                 <td className="py-3 px-3 text-center">
                                   <div className="flex items-center justify-center gap-1.5">
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      icon={Eye}
-                                      onClick={() => navigate(`/commissions/${b.id}`)}
-                                      title="View dealer-wise breakdown & projects"
-                                    >
-                                      Breakdown
-                                    </Button>
+                                    {!isUser && (
+                                      <Button
+                                        size="xs"
+                                        variant="secondary"
+                                        icon={Eye}
+                                        onClick={() => navigate(`/commissions/${b.id}`)}
+                                        title="View dealer-wise breakdown & projects"
+                                      >
+                                        Breakdown
+                                      </Button>
+                                    )}
 
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setBatchToDelete(b);
-                                        setDeleteError("");
-                                      }}
-                                      className="text-gray-400 hover:text-rose-600 p-1.5 rounded-[6px] hover:bg-rose-50 transition-colors cursor-pointer"
-                                      title="Delete proceeding batch"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
+                                    {isAdmin && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setBatchToDelete(b);
+                                          setDeleteError("");
+                                        }}
+                                        className="text-gray-400 hover:text-rose-600 p-1.5 rounded-[6px] hover:bg-rose-50 transition-colors cursor-pointer"
+                                        title="Delete proceeding batch"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -2079,6 +2148,67 @@ export function CommissionProceedingsPage() {
             </Button>
             <Button type="submit" loading={savingBankReceipt} icon={CheckCircle2}>
               Confirm Payment Received
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Edit Proceeding Date */}
+      <Modal
+        isOpen={editDateModalOpen}
+        onClose={() => setEditDateModalOpen(false)}
+        title="Edit Proceeding Date"
+      >
+        <form onSubmit={handleSaveProceedingDate} className="space-y-4">
+          {editDateError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-[8px] text-xs text-rose-800 flex items-center gap-2">
+              <AlertCircle size={15} className="text-rose-600 shrink-0" />
+              <span>{editDateError}</span>
+            </div>
+          )}
+
+          <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1] space-y-1 text-xs font-mono">
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Proceeding No:</span>
+              <strong className="text-[#14213D]">
+                #{activeBatchForEditDate?.proceeding_no}
+              </strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Current Date:</span>
+              <strong className="text-[#2F6F5E]">
+                {formatDate(activeBatchForEditDate?.proceeding_date)}
+              </strong>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              New Proceeding Date <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={editProceedingDate}
+              onChange={(e) => setEditProceedingDate(e.target.value)}
+              className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setEditDateModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              loading={savingProceedingDate}
+              icon={CheckCircle2}
+            >
+              Save Proceeding Date
             </Button>
           </div>
         </form>

@@ -72,6 +72,7 @@ export function PendingReportsPage() {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingSummaryPdf, setExportingSummaryPdf] = useState(false);
 
   // Dynamically compute Financial Year options strictly from backend available_years
   const yearOptions = useMemo(() => {
@@ -336,12 +337,12 @@ export function PendingReportsPage() {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
       doc.setTextColor(20, 33, 61);
-      doc.text("CHERAN PLAST & IRRIGATION", 30, 36);
+      doc.text("CHERAN IRRIGATION", 30, 36);
 
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(82, 96, 125);
-      doc.text(`Government Scheme Pendency Report — ${stageTitle}`, 30, 50);
+      doc.text(`Pendency Report — ${stageTitle}`, 30, 50);
 
       // Meta Info
       doc.setFontSize(8.5);
@@ -506,6 +507,231 @@ export function PendingReportsPage() {
     });
   }, [funnelData]);
 
+  // PDF Export for All Categories & Individual Categories Summary Table
+  const handleExportSummaryPDF = () => {
+    try {
+      if (!funnelData || !funnelData.categories) {
+        toast.warning("No summary data available to export");
+        return;
+      }
+      setExportingSummaryPdf(true);
+      toast.info("Generating All Categories Summary PDF...");
+
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      // Brand Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(20, 33, 61);
+      doc.text("CHERAN IRRIGATION", 30, 34);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(47, 111, 94);
+      doc.text("PENDENCY REPORT", 30, 48);
+
+      // Meta Info Line
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(82, 96, 125);
+      const curDealerName =
+        dealers.find((d) => d.id === selectedDealer)?.name ||
+        (selectedDealer === "UNASSIGNED" ? "Unassigned Dealers" : "All Dealers");
+      doc.text(
+        `Financial Year: ${selectedYear === "ALL" ? "All Financial Years" : selectedYear}`,
+        30,
+        64
+      );
+      doc.text(`Dealer Filter: ${curDealerName}`, 220, 64);
+      doc.text(
+        `District: ${selectedDistrict === "ALL" ? "All Districts" : selectedDistrict}`,
+        440,
+        64
+      );
+      doc.text(`Generated: ${new Date().toLocaleString("en-IN")}`, 640, 64);
+
+      let currentY = 76;
+
+      const categorySections = [
+        {
+          title: "1. Agriculture Pendency Report",
+          data: categories.Agriculture,
+          headerColor: [47, 111, 94], // emerald dark
+        },
+        {
+          title: "2. Horticulture Pendency Report",
+          data: categories.Horticulture,
+          headerColor: [217, 119, 6], // orange/amber
+        },
+        {
+          title: "3. Cluster Pendency Report",
+          data: categories.Cluster,
+          headerColor: [109, 40, 217], // purple
+        },
+        {
+          title: "4. Others Pendency Report",
+          data: categories.Others,
+          headerColor: [71, 85, 105], // slate
+        },
+        {
+          title: "5. All Categories Combined Pendency Report",
+          isCombined: true,
+          years: consolidatedAllYears,
+          totals: grand,
+          headerColor: [20, 33, 61], // navy
+        },
+      ];
+
+      const tableHeaders = [
+        [
+          "Financial Year",
+          "Work Orders Issued",
+          "Material Supplied",
+          "Material Supply Pendency",
+          "Work Completed",
+          "Work Completion Pendency",
+        ],
+      ];
+
+      categorySections.forEach((sec) => {
+        const rows = sec.isCombined
+          ? (sec.years || []).map((row) => [
+              row.year === "Unknown" ? "Unspecified Year" : row.year,
+              `${row.wo_ha.toFixed(2)} Ha  (${row.wo_count})`,
+              `${row.invoiced_ha.toFixed(2)} Ha  (${row.invoiced_count})`,
+              `${row.mat_pendency_ha.toFixed(2)} Ha  (${row.mat_pendency_count})`,
+              `${row.wc_ha.toFixed(2)} Ha  (${row.wc_count})`,
+              `${row.wc_pendency_ha.toFixed(2)} Ha  (${row.wc_pendency_count})`,
+            ])
+          : (sec.data?.years || []).map((row) => [
+              row.year === "Unknown" ? "Unspecified Year" : row.year,
+              `${row.wo_ha.toFixed(2)} Ha  (${row.wo_count})`,
+              `${row.invoiced_ha.toFixed(2)} Ha  (${row.invoiced_count})`,
+              `${row.mat_pendency_ha.toFixed(2)} Ha  (${row.mat_pendency_count})`,
+              `${row.wc_ha.toFixed(2)} Ha  (${row.wc_count})`,
+              `${row.wc_pendency_ha.toFixed(2)} Ha  (${row.wc_pendency_count})`,
+            ]);
+
+        // Totals Row
+        const tot = sec.isCombined ? sec.totals : sec.data?.totals;
+        if (tot) {
+          rows.push([
+            sec.isCombined
+              ? "GRAND TOTAL"
+              : `TOTAL ${sec.title.replace(/^[0-9]+\.\s*/, "").replace(/Pendency Report/i, "").trim().toUpperCase()}`,
+            `${(tot.wo_ha || 0).toFixed(2)} Ha  (${tot.wo_count || 0})`,
+            `${(tot.invoiced_ha || 0).toFixed(2)} Ha  (${tot.invoiced_count || 0})`,
+            `${(tot.mat_pendency_ha || 0).toFixed(2)} Ha  (${tot.mat_pendency_count || 0})`,
+            `${(tot.wc_ha || 0).toFixed(2)} Ha  (${tot.wc_count || 0})`,
+            `${(tot.wc_pendency_ha || 0).toFixed(2)} Ha  (${tot.wc_pendency_count || 0})`,
+          ]);
+        }
+
+        // If no rows, show single placeholder
+        if (rows.length === 0) {
+          rows.push(["No records for this category with selected filters", "-", "-", "-", "-", "-"]);
+        }
+
+        // Check if there is enough space on page for title + table
+        const estimatedHeight = 35 + (rows.length + 1) * 20;
+        if (currentY + estimatedHeight > pageHeight - 35) {
+          doc.addPage();
+          currentY = 35;
+        }
+
+        // Render Section Title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10.5);
+        doc.setTextColor(sec.headerColor[0], sec.headerColor[1], sec.headerColor[2]);
+        doc.text(sec.title, 30, currentY);
+        currentY += 8;
+
+        autoTable(doc, {
+          head: tableHeaders,
+          body: rows,
+          startY: currentY,
+          margin: { left: 30, right: 30 },
+          styles: {
+            fontSize: 8,
+            font: "helvetica",
+            cellPadding: { top: 4, bottom: 4, left: 6, right: 6 },
+            textColor: [20, 33, 61],
+            lineColor: [228, 225, 216],
+            lineWidth: 0.5,
+            valign: "middle",
+          },
+          headStyles: {
+            fillColor: sec.headerColor,
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+            fontSize: 8,
+            halign: "right",
+          },
+          columnStyles: {
+            0: { cellWidth: 120, halign: "left", fontStyle: "bold" },
+            1: { cellWidth: 130, halign: "right" },
+            2: { cellWidth: 130, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+            3: { cellWidth: 135, halign: "right", fontStyle: "bold", textColor: [180, 83, 9] },
+            4: { cellWidth: 130, halign: "right" },
+            5: { cellWidth: 135, halign: "right", fontStyle: "bold", textColor: [185, 28, 28] },
+          },
+          didParseCell: (hookData) => {
+            // First column header should be left aligned
+            if (hookData.section === "head" && hookData.column.index === 0) {
+              hookData.cell.styles.halign = "left";
+            }
+            // Style the last summary / total row
+            if (hookData.section === "body" && hookData.row.index === rows.length - 1 && tot) {
+              hookData.cell.styles.fontStyle = "bold";
+              hookData.cell.styles.fillColor = sec.isCombined ? [220, 230, 242] : [238, 236, 230];
+              if (sec.isCombined) {
+                hookData.cell.styles.textColor = [20, 33, 61];
+              }
+            }
+          },
+          alternateRowStyles: {
+            fillColor: [252, 252, 250],
+          },
+        });
+
+        currentY = doc.lastAutoTable.finalY + 16;
+      });
+
+      // Add Page Footers across all generated pages
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(140, 151, 171);
+        doc.text(
+          `Cheran Irrigation — Pendency Summary Report  |  Page ${i} of ${totalPages}`,
+          pageWidth - 30,
+          pageHeight - 14,
+          { align: "right" }
+        );
+      }
+
+      const fileYearPart = selectedYear !== "ALL" ? `${selectedYear}_` : "all_years_";
+      doc.save(
+        `cheran_execution_funnel_all_categories_${fileYearPart}${new Date().toISOString().split("T")[0]}.pdf`
+      );
+      toast.success("Summary PDF downloaded successfully");
+    } catch (err) {
+      console.error("Failed to generate summary PDF:", err);
+      toast.error("Failed to generate Summary PDF");
+    } finally {
+      setExportingSummaryPdf(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8] overflow-y-auto">
       {/* Top Navbar */}
@@ -538,7 +764,7 @@ export function PendingReportsPage() {
             icon={FileSpreadsheet}
           />
           <MetricCard
-            title="Material Supplied (Invoiced)"
+            title="Material Supplied"
             value={`${(grand.invoiced_ha || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Ha`}
             subtitle={`${(grand.invoiced_count || 0).toLocaleString("en-IN")} Invoiced Projects`}
             icon={Boxes}
@@ -572,7 +798,7 @@ export function PendingReportsPage() {
           <div className="bg-[#FEF2F2] border border-[#FCA5A5] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[#991B1B]">
-                Dealer Work Pendency
+                Work Completion Pendency
               </span>
               <div className="w-7 h-7 rounded-[6px] bg-[#FEE2E2] text-[#DC2626] flex items-center justify-center">
                 <AlertTriangle size={14} />
@@ -666,126 +892,114 @@ export function PendingReportsPage() {
 
         {/* 4 Main Category Headings / Navigation Tabs */}
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2 border-b border-[#E4E1D8] pb-1">
-            <button
-              type="button"
-              onClick={() => handleCategoryTabChange("Agriculture")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
-                selectedCategoryTab === "Agriculture"
-                  ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
-                  : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
-              }`}
-            >
-              <Sprout size={16} className="text-emerald-600" />
-              <span>Agriculture</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                A
-              </span>
-              <span className="text-[11px] font-semibold text-[#8C97AB]">
-                ({categories.Agriculture?.totals?.total_projects || 0})
-              </span>
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E4E1D8] pb-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleCategoryTabChange("Agriculture")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
+                  selectedCategoryTab === "Agriculture"
+                    ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
+                    : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
+                }`}
+              >
+                <Sprout size={16} className="text-emerald-600" />
+                <span>Agriculture</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  A
+                </span>
+                <span className="text-[11px] font-semibold text-[#8C97AB]">
+                  ({categories.Agriculture?.totals?.total_projects || 0})
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleCategoryTabChange("Horticulture")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
-                selectedCategoryTab === "Horticulture"
-                  ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
-                  : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
-              }`}
-            >
-              <Apple size={16} className="text-orange-500" />
-              <span>Horticulture</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                H
-              </span>
-              <span className="text-[11px] font-semibold text-[#8C97AB]">
-                ({categories.Horticulture?.totals?.total_projects || 0})
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => handleCategoryTabChange("Horticulture")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
+                  selectedCategoryTab === "Horticulture"
+                    ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
+                    : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
+                }`}
+              >
+                <Apple size={16} className="text-orange-500" />
+                <span>Horticulture</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                  H
+                </span>
+                <span className="text-[11px] font-semibold text-[#8C97AB]">
+                  ({categories.Horticulture?.totals?.total_projects || 0})
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleCategoryTabChange("Cluster")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
-                selectedCategoryTab === "Cluster"
-                  ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
-                  : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
-              }`}
-            >
-              <Boxes size={16} className="text-purple-600" />
-              <span>Cluster</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                AK / HK
-              </span>
-              <span className="text-[11px] font-semibold text-[#8C97AB]">
-                ({categories.Cluster?.totals?.total_projects || 0})
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => handleCategoryTabChange("Cluster")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
+                  selectedCategoryTab === "Cluster"
+                    ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
+                    : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
+                }`}
+              >
+                <Boxes size={16} className="text-purple-600" />
+                <span>Cluster</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  AK / HK
+                </span>
+                <span className="text-[11px] font-semibold text-[#8C97AB]">
+                  ({categories.Cluster?.totals?.total_projects || 0})
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleCategoryTabChange("Others")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
-                selectedCategoryTab === "Others"
-                  ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
-                  : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
-              }`}
-            >
-              <HelpCircle size={16} className="text-slate-500" />
-              <span>Others</span>
-              <span className="text-[11px] font-semibold text-[#8C97AB]">
-                ({categories.Others?.totals?.total_projects || 0})
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => handleCategoryTabChange("Others")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
+                  selectedCategoryTab === "Others"
+                    ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
+                    : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
+                }`}
+              >
+                <HelpCircle size={16} className="text-slate-500" />
+                <span>Others</span>
+                <span className="text-[11px] font-semibold text-[#8C97AB]">
+                  ({categories.Others?.totals?.total_projects || 0})
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleCategoryTabChange("ALL")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
-                selectedCategoryTab === "ALL"
-                  ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
-                  : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
-              }`}
-            >
-              <Layers size={16} className="text-blue-600" />
-              <span>All Categories Combined</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => handleCategoryTabChange("ALL")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-[8px] text-xs font-bold transition-all cursor-pointer border-b-2 ${
+                  selectedCategoryTab === "ALL"
+                    ? "bg-white text-[#2F6F5E] border-[#2F6F5E] shadow-xs"
+                    : "text-[#52607D] border-transparent hover:text-[#14213D] hover:bg-white/50"
+                }`}
+              >
+                <Layers size={16} className="text-blue-600" />
+                <span>All Categories Combined</span>
+              </button>
+            </div>
+
+            {/* Download Summary PDF Button */}
+            <div className="flex items-center gap-2 pb-1 sm:pb-0">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={FileText}
+                onClick={handleExportSummaryPDF}
+                loading={exportingSummaryPdf}
+                disabled={loadingSummary || !funnelData}
+                className="bg-white border-[#2F6F5E]/40 text-[#2F6F5E] hover:bg-[#EAF3F0] hover:border-[#2F6F5E] font-semibold shadow-xs"
+                title="Download PDF report containing Agriculture, Horticulture, Cluster, Others and All Categories Combined summary tables for selected years"
+              >
+                Download PDF (All Categories)
+              </Button>
+            </div>
           </div>
 
           {/* Funnel Summary Table Card */}
           <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.02)] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#E4E1D8] flex flex-wrap items-center justify-between gap-3 bg-[#FDFCFA]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-md bg-[#EAF3F0] text-[#2F6F5E] flex items-center justify-center font-bold">
-                  {selectedCategoryTab === "Agriculture" && <Sprout size={16} />}
-                  {selectedCategoryTab === "Horticulture" && <Apple size={16} />}
-                  {selectedCategoryTab === "Cluster" && <Boxes size={16} />}
-                  {selectedCategoryTab === "Others" && <HelpCircle size={16} />}
-                  {selectedCategoryTab === "ALL" && <Layers size={16} />}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#14213D]">
-                    {selectedCategoryTab === "ALL"
-                      ? "All Categories Execution Funnel & Pendency"
-                      : `${selectedCategoryTab} Execution Funnel & Pendency`}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="text-xs text-[#52607D] flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" />
-                  <span>Material Pendency (WO - Invoiced)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626]" />
-                  <span>Work Pendency (Invoiced - Completed)</span>
-                </div>
-              </div>
-            </div>
-
             {loadingSummary ? (
               <div className="p-8">
                 <SkeletonLoader count={5} />
@@ -796,37 +1010,15 @@ export function PendingReportsPage() {
                   <thead>
                     <tr className="bg-[#F8F7F4] text-[#52607D] font-bold text-[11px] uppercase tracking-wider border-b border-[#E4E1D8]">
                       <th className="py-3 px-4">Financial Year</th>
-                      <th className="py-3 px-4 text-right">
-                        Work Order Issued
-                        <span className="block text-[9px] text-[#8C97AB] font-normal font-sans">
-                          (Area Ha / Count)
-                        </span>
-                      </th>
-                      <th className="py-3 px-4 text-right">
-                        Material Supplied (Invoiced)
-                        <span className="block text-[9px] text-[#8C97AB] font-normal font-sans">
-                          (Area Ha / Count)
-                        </span>
-                      </th>
+                      <th className="py-3 px-4 text-right">Work Orders Issued</th>
+                      <th className="py-3 px-4 text-right">Material Supplied</th>
                       <th className="py-3 px-4 text-right text-[#B45309] bg-[#FFFDF7]">
                         Material Supply Pendency
-                        <span className="block text-[9px] text-[#B45309]/80 font-normal font-sans">
-                          (WO - Invoiced)
-                        </span>
                       </th>
-                      <th className="py-3 px-4 text-right">
-                        Work Completed
-                        <span className="block text-[9px] text-[#8C97AB] font-normal font-sans">
-                          (Area Ha / Count)
-                        </span>
-                      </th>
+                      <th className="py-3 px-4 text-right">Work Completed</th>
                       <th className="py-3 px-4 text-right text-[#B91C1C] bg-[#FEF2F2]">
                         Work Completion Pendency
-                        <span className="block text-[9px] text-[#B91C1C]/80 font-normal font-sans">
-                          (Invoiced - Work Completed)
-                        </span>
                       </th>
-                      <th className="py-3 px-3 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EDEAE1]">
@@ -835,7 +1027,7 @@ export function PendingReportsPage() {
                       <>
                         {(activeCategoryData?.years || []).length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="py-8 text-center text-xs text-[#8C97AB]">
+                            <td colSpan={6} className="py-8 text-center text-xs text-[#8C97AB]">
                               No project data found for this category with current filters.
                             </td>
                           </tr>
@@ -909,15 +1101,6 @@ export function PendingReportsPage() {
                                   {row.wc_pendency_count}
                                 </span>
                               </td>
-                              <td className="py-3 px-3 text-center">
-                                <button
-                                  type="button"
-                                  title="View drill down"
-                                  className="p-1 rounded text-[#52607D] hover:text-[#2F6F5E] hover:bg-[#EAF3F0] transition-colors"
-                                >
-                                  <ChevronRight size={15} />
-                                </button>
-                              </td>
                             </tr>
                           ))
                         )}
@@ -968,7 +1151,6 @@ export function PendingReportsPage() {
                                 {activeCategoryData.totals.wc_pendency_count}
                               </span>
                             </td>
-                            <td className="py-3.5 px-3 text-center" />
                           </tr>
                         )}
                       </>
@@ -977,7 +1159,7 @@ export function PendingReportsPage() {
                       <>
                         {consolidatedAllYears.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="py-8 text-center text-xs text-[#8C97AB]">
+                            <td colSpan={6} className="py-8 text-center text-xs text-[#8C97AB]">
                               No project data found with current filters.
                             </td>
                           </tr>
@@ -1051,15 +1233,6 @@ export function PendingReportsPage() {
                                   {row.wc_pendency_count}
                                 </span>
                               </td>
-                              <td className="py-3 px-3 text-center">
-                                <button
-                                  type="button"
-                                  title="View drill down"
-                                  className="p-1 rounded text-[#52607D] hover:text-[#2F6F5E] hover:bg-[#EAF3F0] transition-colors"
-                                >
-                                  <ChevronRight size={15} />
-                                </button>
-                              </td>
                             </tr>
                           ))
                         )}
@@ -1109,7 +1282,6 @@ export function PendingReportsPage() {
                               {grand.wc_pendency_count || 0}
                             </span>
                           </td>
-                          <td className="py-4 px-3" />
                         </tr>
                       </>
                     )}

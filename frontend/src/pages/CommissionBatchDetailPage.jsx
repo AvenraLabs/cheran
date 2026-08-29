@@ -23,6 +23,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
@@ -32,12 +33,20 @@ import Pagination from "../components/common/Pagination.jsx";
 export function CommissionBatchDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+  const isAdmin = role === "ADMIN";
 
   const [loading, setLoading] = useState(true);
   const [batch, setBatch] = useState(null);
   const [dealerSummaries, setDealerSummaries] = useState([]);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
   const [error, setError] = useState("");
+
+  const [editDateModalOpen, setEditDateModalOpen] = useState(false);
+  const [editProceedingDate, setEditProceedingDate] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
+  const [editDateError, setEditDateError] = useState("");
 
   // Search filter for individual projects table
   const [projectSearch, setProjectSearch] = useState("");
@@ -231,6 +240,39 @@ export function CommissionBatchDetailPage() {
     }
   };
 
+  // Open Edit Proceeding Date Modal
+  const handleOpenEditDate = () => {
+    if (!batch) return;
+    setEditProceedingDate(
+      batch.proceeding_date ? batch.proceeding_date.split("T")[0] : ""
+    );
+    setEditDateError("");
+    setEditDateModalOpen(true);
+  };
+
+  // Save Proceeding Date
+  const handleSaveProceedingDate = async (e) => {
+    e.preventDefault();
+    if (!editProceedingDate) return;
+    setEditDateError("");
+    try {
+      setSavingDate(true);
+      const res = await api.patch(`/proceedings/${id}/proceeding-date`, {
+        proceeding_date: editProceedingDate,
+      });
+      setBatch(res?.batch || { ...batch, proceeding_date: editProceedingDate });
+      setEditDateModalOpen(false);
+    } catch (err) {
+      setEditDateError(
+        err?.message ||
+          err?.response?.data?.message ||
+          "Failed to update proceeding date"
+      );
+    } finally {
+      setSavingDate(false);
+    }
+  };
+
   // Export Proceeding Line Items Table to PDF
   const handleExportPDF = () => {
     if (!batch || !filteredProjects || filteredProjects.length === 0) return;
@@ -260,7 +302,7 @@ export function CommissionBatchDetailPage() {
     doc.setTextColor(20, 33, 61);
     doc.text(`Batch No: #${batch.proceeding_no || "—"}`, 30, 68);
     doc.text(`Proceeding Date: ${formatDate(batch.proceeding_date)}`, 200, 68);
-    doc.text(`Release Tranche: ${batch.fund_percentage_value}% Fund Release`, 380, 68);
+    doc.text(`Fund Type: ${batch.fund_percentage_value}% Fund Release`, 380, 68);
     doc.text(`5% Fittings Cost: ${hasFittings ? "Included" : "Excluded"}`, 560, 68);
 
     // Table Headers
@@ -566,11 +608,21 @@ export function CommissionBatchDetailPage() {
             <div className="font-bold text-[#14213D] text-sm mt-0.5 flex items-center gap-1.5">
               <Calendar size={13} className="text-[#2F6F5E]" />
               <span>{formatDate(batch.proceeding_date)}</span>
+              {(isAdmin || role === "USER") && (
+                <button
+                  type="button"
+                  onClick={handleOpenEditDate}
+                  className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer ml-1 inline-flex items-center justify-center"
+                  title="Edit proceeding date"
+                >
+                  <Pencil size={12} />
+                </button>
+              )}
             </div>
           </div>
 
           <div>
-            <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Release Tranche</span>
+            <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Fund Type</span>
             <div className="font-bold text-[#2F6F5E] text-sm mt-0.5 font-mono">
               {batch.fund_percentage_value}% Fund Release
             </div>
@@ -1242,6 +1294,61 @@ export function CommissionBatchDetailPage() {
             </Button>
             <Button type="submit" loading={savingPenalty} icon={CheckCircle2}>
               Save Penalty
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Edit Proceeding Date */}
+      <Modal
+        isOpen={editDateModalOpen}
+        onClose={() => setEditDateModalOpen(false)}
+        title="Edit Proceeding Date"
+      >
+        <form onSubmit={handleSaveProceedingDate} className="space-y-4">
+          {editDateError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-[8px] text-xs text-rose-800 flex items-center gap-2">
+              <AlertCircle size={15} className="text-rose-600 shrink-0" />
+              <span>{editDateError}</span>
+            </div>
+          )}
+
+          <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1] space-y-1 text-xs font-mono">
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Proceeding No:</span>
+              <strong className="text-[#14213D]">#{batch?.proceeding_no}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#52607D]">Current Date:</span>
+              <strong className="text-[#2F6F5E]">
+                {formatDate(batch?.proceeding_date)}
+              </strong>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              New Proceeding Date <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={editProceedingDate}
+              onChange={(e) => setEditProceedingDate(e.target.value)}
+              className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setEditDateModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={savingDate} icon={CheckCircle2}>
+              Save Proceeding Date
             </Button>
           </div>
         </form>

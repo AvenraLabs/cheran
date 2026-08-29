@@ -26,6 +26,7 @@ import {
   Edit3,
 } from "lucide-react";
 import api from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import Navbar from "../components/layout/Navbar.jsx";
 import StatusBadge from "../components/common/StatusBadge.jsx";
 import Button from "../components/common/Button.jsx";
@@ -37,6 +38,9 @@ import MergeProjectModal from "../components/projects/MergeProjectModal.jsx";
 export function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = (user?.role || "USER").toUpperCase() === "ADMIN";
+
   const [project, setProject] = useState(null);
   const [historyData, setHistoryData] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -126,15 +130,17 @@ export function ProjectDetailPage() {
         title={`Application ${project.application_id}`}
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              icon={GitMerge}
-              onClick={() => setMergeModalOpen(true)}
-              title="Correct mistyped ID or merge this invoice with another government project"
-            >
-              Correct / Merge ID
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={GitMerge}
+                onClick={() => setMergeModalOpen(true)}
+                title="Correct mistyped ID or merge this invoice with another government project"
+              >
+                Correct / Merge ID
+              </Button>
+            )}
             <Link to="/projects">
               <Button variant="secondary" icon={ArrowLeft}>
                 Back

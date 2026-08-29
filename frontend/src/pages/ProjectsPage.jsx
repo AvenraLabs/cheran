@@ -465,17 +465,19 @@ export function ProjectsPage() {
                           </td>
                           <td className="py-3 px-4 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMergeSourceProject(proj);
-                                  setMergeModalOpen(true);
-                                }}
-                                className="w-7 h-7 rounded-[6px] bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white border border-slate-300 flex items-center justify-center transition-all shadow-2xs cursor-pointer"
-                                title="Edit / Correct ID"
-                              >
-                                <Edit3 size={13} strokeWidth={2.2} />
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMergeSourceProject(proj);
+                                    setMergeModalOpen(true);
+                                  }}
+                                  className="w-7 h-7 rounded-[6px] bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white border border-slate-300 flex items-center justify-center transition-all shadow-2xs cursor-pointer"
+                                  title="Edit / Correct ID"
+                                >
+                                  <Edit3 size={13} strokeWidth={2.2} />
+                                </button>
+                              )}
 
                               <button
                                 type="button"

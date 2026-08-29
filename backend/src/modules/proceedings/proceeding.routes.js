@@ -13,6 +13,7 @@ router.get("/", controller.listProceedingBatches);
 router.get("/dealer-statement", controller.getDealerCommissionStatement);
 router.get("/:id", controller.getProceedingBatchById);
 router.post("/:id/recalculate", controller.recalculateProceedingBatch);
+router.patch("/:id/proceeding-date", controller.updateProceedingDate);
 router.patch("/:id/bank-receipt", controller.updateBankPaymentReceipt);
 router.post("/:id/mark-dealer-paid", controller.markDealerPayout);
 router.patch("/:id/projects/:projectRecordId/penalty", controller.updateProjectPenalty);

@@ -824,6 +824,22 @@ export async function updateProjectPenalty(batch_id, projectRecordId, { adjusted
 }
 
 /**
+ * Update proceeding date on a batch
+ */
+export async function updateProceedingDate(batch_id, { proceeding_date }) {
+  if (!proceeding_date) {
+    throw new AppError("Proceeding date is required", 400);
+  }
+  const batch = await ProceedingBatch.findByPk(batch_id);
+  if (!batch) throw new AppError("Proceeding batch not found", 404);
+
+  batch.proceeding_date = proceeding_date;
+  await batch.save();
+
+  return batch;
+}
+
+/**
  * Update payment received date on a batch
  */
 export async function updateBankPaymentReceipt(batch_id, { payment_received_date, payment_received_ref }) {

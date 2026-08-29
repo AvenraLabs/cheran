@@ -107,6 +107,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
       "/api/government/projects",
       "/api/government/statuses",
       "/api/government/imports",
+      "/api/reports",
       "/api/dealers",
     ];
 
@@ -114,7 +115,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     if (!isAllowed) {
       return next(
         new AppError(
-          `Access forbidden. Dealer role is restricted to Govt Projects, Excel Imports, and Dealers Directory.`,
+          `Access forbidden. Dealer role is restricted to Govt Projects, Pendency Report, and Excel Imports.`,
           403
         )
       );
@@ -122,26 +123,22 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     return next();
   }
 
-  // 'USER' role: 6 Operations & Govt modules (Govt Projects, Direct Sales, Load Orders, Excel Imports, Dealers Directory, Commissions)
+  // 'USER' role: Restricted to 4 modules (Govt Projects, Load Order Import, Excel Imports, and Commissions)
   if (role === "USER") {
     const userAllowedPrefixes = [
       "/api/government/projects",
       "/api/government/statuses",
-      "/api/sales",
-      "/api/customers",
-      "/api/items",
-      "/api/units",
-      "/api/invoices",
       "/api/government/imports",
-      "/api/dealers",
+      "/api/invoices",
       "/api/proceedings",
+      "/api/dealers",
     ];
 
     const isAllowed = userAllowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
     if (!isAllowed) {
       return next(
         new AppError(
-          `Access forbidden. User role is restricted to Govt Projects, Direct Sales, Load Order, Excel Imports, Dealers Directory, and Commissions.`,
+          `Access forbidden. User role is restricted to Govt Projects, Load Order Import, Excel Imports, and Commission modules.`,
           403
         )
       );

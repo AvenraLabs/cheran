@@ -128,6 +128,18 @@ export async function recalculateProceedingBatch(req, res, next) {
 }
 
 /**
+ * PATCH /api/proceedings/:id/proceeding-date
+ */
+export async function updateProceedingDate(req, res, next) {
+  try {
+    const batch = await proceedingService.updateProceedingDate(req.params.id, req.body);
+    res.json({ status: "success", batch });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * PATCH /api/proceedings/:id/bank-receipt
  */
 export async function updateBankPaymentReceipt(req, res, next) {

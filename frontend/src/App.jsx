@@ -86,6 +86,20 @@ function UserOrAdminRoute({ children }) {
 }
 
 /**
+ * Route guard for Dealer + Admin pages (excludes USER)
+ */
+function DealerOrAdminRoute({ children }) {
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+
+  if (role === "USER") {
+    return <Navigate to="/projects" replace />;
+  }
+
+  return children;
+}
+
+/**
  * Index Route Handler: Only Admin gets Dashboard, User & Dealer land on /projects
  */
 function IndexRoute() {
@@ -111,27 +125,35 @@ export function App() {
           {/* Index Route */}
           <Route index element={<IndexRoute />} />
 
-          {/* Common Routes for All 3 Roles (ADMIN, USER, DEALER) */}
+          {/* Projects & Excel Imports (Allowed for ADMIN, USER, DEALER) */}
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
-          <Route path="pending-reports" element={<PendingReportsPage />} />
           <Route path="imports" element={<ImportsPage />} />
-          <Route path="dealers" element={<DealersPage />} />
 
-          {/* Operations Routes (Allowed for USER & ADMIN, Forbidden for DEALER) */}
+          {/* Pendency Reports (Allowed for DEALER & ADMIN, Forbidden for USER) */}
+          <Route
+            path="pending-reports"
+            element={
+              <DealerOrAdminRoute>
+                <PendingReportsPage />
+              </DealerOrAdminRoute>
+            }
+          />
+
+          {/* Load Order Import & Commission Overview (Allowed for USER & ADMIN, Forbidden for DEALER) */}
+          <Route
+            path="imports/load-order"
+            element={
+              <UserOrAdminRoute>
+                <LoadOrderUploadPage />
+              </UserOrAdminRoute>
+            }
+          />
           <Route
             path="commissions"
             element={
               <UserOrAdminRoute>
                 <CommissionProceedingsPage />
-              </UserOrAdminRoute>
-            }
-          />
-          <Route
-            path="commissions/:id"
-            element={
-              <UserOrAdminRoute>
-                <CommissionBatchDetailPage />
               </UserOrAdminRoute>
             }
           />
@@ -159,28 +181,38 @@ export function App() {
               </UserOrAdminRoute>
             }
           />
+
+          {/* Admin-Only Domain Routes */}
+          <Route
+            path="commissions/:id"
+            element={
+              <AdminRoute>
+                <CommissionBatchDetailPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="dealers"
+            element={
+              <AdminRoute>
+                <DealersPage />
+              </AdminRoute>
+            }
+          />
           <Route
             path="sales"
             element={
-              <UserOrAdminRoute>
+              <AdminRoute>
                 <DirectSalesPage />
-              </UserOrAdminRoute>
+              </AdminRoute>
             }
           />
           <Route
             path="sales/new"
             element={
-              <UserOrAdminRoute>
+              <AdminRoute>
                 <CreateDirectSalePage />
-              </UserOrAdminRoute>
-            }
-          />
-          <Route
-            path="imports/load-order"
-            element={
-              <UserOrAdminRoute>
-                <LoadOrderUploadPage />
-              </UserOrAdminRoute>
+              </AdminRoute>
             }
           />
 

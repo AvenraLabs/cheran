@@ -94,22 +94,18 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
           { label: "Pendency Report", path: "/pending-reports", icon: ClipboardCheck },
           { label: "Excel Imports", path: "/imports", icon: FileText },
-          { label: "Dealers Directory", path: "/dealers", icon: Users },
         ],
       },
     ];
   } else {
-    // 'USER' role: Operations & Govt group
+    // 'USER' role: Restricted to 4 modules (Govt Projects, Load Order Import, Excel Imports, Commission)
     navigationSections = [
       {
         title: "Operations & Govt",
         items: [
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
-          { label: "Pendency Report", path: "/pending-reports", icon: ClipboardCheck },
-          { label: "Direct Sales", path: "/sales", icon: ShoppingCart },
           { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
           { label: "Excel Imports", path: "/imports", icon: FileText },
-          { label: "Dealers Directory", path: "/dealers", icon: Users },
           { label: "Commission", path: "/commissions", icon: Receipt },
         ],
       },
