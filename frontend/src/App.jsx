@@ -33,6 +33,19 @@ import ReportsPage from "./pages/ReportsPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 
+// Cheran Plast Pages (Company 2)
+import PlastLayout from "./components/plast/PlastLayout.jsx";
+import PlastDashboardPage from "./pages/plast/PlastDashboardPage.jsx";
+import PlastItemsPage from "./pages/plast/PlastItemsPage.jsx";
+import PlastStockPage from "./pages/plast/PlastStockPage.jsx";
+import PlastPurchasesPage from "./pages/plast/PlastPurchasesPage.jsx";
+import PlastProductionPage from "./pages/plast/PlastProductionPage.jsx";
+import PlastCustomersPage from "./pages/plast/PlastCustomersPage.jsx";
+import PlastSuppliersPage from "./pages/plast/PlastSuppliersPage.jsx";
+import PlastSalesPage from "./pages/plast/PlastSalesPage.jsx";
+import PlastCreateSalePage from "./pages/plast/PlastCreateSalePage.jsx";
+import PlastReportsPage from "./pages/plast/PlastReportsPage.jsx";
+
 function ProtectedLayout() {
   const { user, loading } = useAuth();
 
@@ -52,6 +65,32 @@ function ProtectedLayout() {
   }
 
   return <Layout />;
+}
+
+function PlastProtectedLayout() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF8] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-[#2F6F5E] border-t-transparent rounded-full animate-spin" />
+          <div className="text-xs font-semibold text-[#52607D]">Verifying session...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = (user?.role || "USER").toUpperCase();
+  if (role !== "ADMIN") {
+    return <Navigate to="/" replace />;
+  }
+
+  return <PlastLayout />;
 }
 
 /**
@@ -332,6 +371,21 @@ export function App() {
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+
+        {/* Cheran Plast Routes (Isolated 2nd Company - Admin Only) */}
+        <Route path="/plast" element={<PlastProtectedLayout />}>
+          <Route index element={<PlastDashboardPage />} />
+          <Route path="items" element={<PlastItemsPage />} />
+          <Route path="stock" element={<PlastStockPage />} />
+          <Route path="purchases" element={<PlastPurchasesPage />} />
+          <Route path="suppliers" element={<PlastSuppliersPage />} />
+          <Route path="vendors" element={<Navigate to="/plast/suppliers" replace />} />
+          <Route path="production" element={<PlastProductionPage />} />
+          <Route path="customers" element={<PlastCustomersPage />} />
+          <Route path="sales" element={<PlastSalesPage />} />
+          <Route path="sales/new" element={<PlastCreateSalePage />} />
+          <Route path="reports" element={<PlastReportsPage />} />
         </Route>
       </Routes>
     </AuthProvider>

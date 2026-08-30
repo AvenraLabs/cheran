@@ -3,6 +3,7 @@ import React from "react";
 export function Button({
   children,
   variant = "primary",
+  theme = "green",
   size = "md",
   icon: Icon,
   loading = false,
@@ -11,7 +12,7 @@ export function Button({
   ...props
 }) {
   const baseClasses =
-    "inline-flex items-center justify-center whitespace-nowrap font-medium rounded-[8px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
+    "inline-flex items-center justify-center whitespace-nowrap font-medium rounded-[7px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
 
   const sizeClasses = {
     xs: "text-[11px] px-2 py-1 gap-1 font-semibold",

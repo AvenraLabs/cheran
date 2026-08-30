@@ -70,6 +70,7 @@ export async function createExpense({
   payment_method,
   reference,
   notes,
+  company = "irrigation",
 }) {
   const category = await ExpenseCategory.findByPk(category_id);
   if (!category) {
@@ -81,14 +82,17 @@ export async function createExpense({
     throw new AppError("Expense amount must be a positive number", 400);
   }
 
+  const validCompany = (company || "irrigation").toLowerCase() === "plast" ? "plast" : "irrigation";
+
   const expense = await Expense.create({
     category_id,
     expense_date,
     amount: amt,
-    description: description.trim(),
+    description: description ? description.trim() : null,
     payment_method: payment_method || null,
     reference: reference ? reference.trim() : null,
     notes: notes ? notes.trim() : null,
+    company: validCompany,
   });
 
   return getExpenseById(expense.id);
@@ -112,6 +116,7 @@ export async function getExpenseById(id) {
 
 export async function listExpenses({
   category_id,
+  company,
   start_date,
   end_date,
   search,
@@ -120,6 +125,9 @@ export async function listExpenses({
 } = {}) {
   const where = {};
   if (category_id) where.category_id = category_id;
+  if (company && company.toUpperCase() !== "ALL" && company.trim() !== "") {
+    where.company = company.toLowerCase().trim();
+  }
   if (start_date && end_date) {
     where.expense_date = { [Op.between]: [start_date, end_date] };
   } else if (start_date) {

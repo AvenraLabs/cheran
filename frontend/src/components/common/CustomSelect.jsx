@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
 export function CustomSelect({
   options = [],
@@ -16,13 +17,25 @@ export function CustomSelect({
   label = null,
   error = null,
   required = false,
+  theme, // "blue" | "teak" (defaults automatically based on route)
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [menuStyle, setMenuStyle] = useState({});
+  const [menuStyle, setMenuStyle] = useState({ position: "fixed", zIndex: 999999 });
   const dropdownRef = useRef(null);
   const menuRef = useRef(null);
   const searchInputRef = useRef(null);
+
+  // Auto-detect company theme from current route if not explicitly passed
+  let isTeak = theme === "teak" || theme === "blue";
+  try {
+    const location = useLocation();
+    if (!theme) {
+      isTeak = location?.pathname?.startsWith("/plast");
+    }
+  } catch (e) {
+    if (!theme) isTeak = true;
+  }
 
   // Normalize options array to { value, label, subtitle, badge }
   const normalizedOptions = options.map((opt) => {
@@ -55,21 +68,24 @@ export function CustomSelect({
   const updatePosition = useCallback(() => {
     if (!dropdownRef.current) return;
     const rect = dropdownRef.current.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
-    const shouldOpenUpwards = spaceBelow < 260 && spaceAbove > spaceBelow;
+    const shouldOpenUpwards = spaceBelow < 240 && spaceAbove > spaceBelow;
 
-    const availableHeight = shouldOpenUpwards ? spaceAbove : spaceBelow;
-    const calculatedMaxHeight = Math.min(320, Math.max(140, availableHeight - 16));
+    const availableHeight = shouldOpenUpwards ? spaceAbove - 16 : spaceBelow - 16;
+    const calculatedMaxHeight = Math.min(300, Math.max(140, availableHeight));
 
-    const menuWidth = Math.max(rect.width, Math.min(320, window.innerWidth - 16));
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+    const menuWidth = Math.max(rect.width, 180);
+    const maxLeft = window.innerWidth - menuWidth - 8;
+    const left = Math.max(8, Math.min(rect.left, maxLeft));
 
     setMenuStyle({
       position: "fixed",
       left: `${left}px`,
       width: `${menuWidth}px`,
-      zIndex: 99999,
+      zIndex: 999999,
       ...(shouldOpenUpwards
         ? {
             bottom: `${window.innerHeight - rect.top + 4}px`,
@@ -82,6 +98,14 @@ export function CustomSelect({
       maxHeight: `${calculatedMaxHeight}px`,
     });
   }, []);
+
+  const handleToggle = () => {
+    if (disabled) return;
+    if (!isOpen) {
+      updatePosition();
+    }
+    setIsOpen((prev) => !prev);
+  };
 
   // Update position on open, scroll, or resize
   useEffect(() => {
@@ -135,7 +159,6 @@ export function CustomSelect({
   // Auto focus search input when opened
   useEffect(() => {
     if (isOpen && searchable && searchInputRef.current) {
-      // Small timeout for DOM render in portal
       const timer = setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
@@ -157,9 +180,28 @@ export function CustomSelect({
   };
 
   const sizeClasses = {
-    sm: "py-1.5 px-3 text-xs min-h-[32px]",
+    xs: "py-1 px-2 text-[11px] min-h-[28px]",
+    sm: "py-1.5 px-2.5 text-xs min-h-[32px]",
     md: "py-2 px-3 text-xs min-h-[36px]",
-  }[size];
+  }[size] || "py-1.5 px-2.5 text-xs min-h-[32px]";
+
+  const focusBorderClasses = "focus:ring-[#2F6F5E] focus:border-[#2F6F5E]";
+
+  const openStateClasses = isOpen
+    ? "border-[#2F6F5E] ring-2 ring-[#2F6F5E]/20 bg-white"
+    : "border-[#E4E1D8]";
+
+  const chevronActiveClasses = isOpen
+    ? "rotate-180 text-[#2F6F5E]"
+    : "text-[#52607D]";
+
+  const searchFocusClasses = "focus:ring-[#2F6F5E] focus:border-[#2F6F5E]";
+
+  const selectedItemClasses = "bg-[#EAF3F0] text-[#2F6F5E] font-semibold";
+
+  const hoverItemClasses = "text-[#14213D] hover:bg-[#FAFAF8] hover:text-[#2F6F5E]";
+
+  const checkIconClasses = "text-[#2F6F5E]";
 
   return (
     <div className={`relative flex flex-col ${className}`} ref={dropdownRef}>
@@ -173,12 +215,12 @@ export function CustomSelect({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={handleToggle}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`w-full flex items-center justify-between gap-2 bg-[#FAFAF8] hover:bg-white border rounded-[8px] transition-all cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] focus:border-[#2F6F5E] shadow-2xs ${
-          isOpen ? "border-[#2F6F5E] ring-2 ring-[#2F6F5E]/20 bg-white" : "border-[#E4E1D8]"
-        } ${disabled ? "opacity-50 cursor-not-allowed bg-[#EDEAE1]" : ""} ${sizeClasses}`}
+        className={`w-full flex items-center justify-between gap-2 bg-[#FAFAF8] hover:bg-white border rounded-[7px] transition-all cursor-pointer text-left focus:outline-none focus:ring-2 shadow-2xs ${focusBorderClasses} ${openStateClasses} ${
+          disabled ? "opacity-50 cursor-not-allowed bg-[#EDEAE1]" : ""
+        } ${sizeClasses}`}
       >
         <div className="flex items-center gap-2 truncate flex-1 min-w-0">
           {Icon && <Icon size={14} className="text-[#52607D] shrink-0" />}
@@ -201,24 +243,22 @@ export function CustomSelect({
           )}
           <ChevronDown
             size={14}
-            className={`text-[#52607D] transition-transform duration-200 ${
-              isOpen ? "rotate-180 text-[#2F6F5E]" : ""
-            }`}
+            className={`transition-transform duration-200 ${chevronActiveClasses}`}
           />
         </div>
       </button>
 
-      {/* Floating Dropdown Menu rendered via Portal */}
+      {/* Floating Dropdown Menu rendered via Portal with guaranteed top z-index */}
       {isOpen &&
         typeof document !== "undefined" &&
         createPortal(
           <div
             ref={menuRef}
-            style={menuStyle}
-            className="bg-white border border-[#E4E1D8] rounded-[8px] shadow-[0_12px_32px_rgba(20,33,61,0.18)] py-1.5 overflow-hidden flex flex-col min-w-[200px]"
+            style={{ ...menuStyle, zIndex: 999999 }}
+            className="fixed z-[999999] bg-white border border-[#E4E1D8] rounded-[8px] shadow-[0_16px_40px_rgba(20,33,61,0.22)] py-1.5 overflow-hidden flex flex-col min-w-[180px]"
           >
             {/* Search Input */}
-            {(searchable || normalizedOptions.length > 6) && (
+            {(searchable || normalizedOptions.length > 5) && (
               <div className="px-2.5 py-1.5 border-b border-[#EDEAE1] shrink-0 bg-[#FAFAF8]">
                 <div className="relative">
                   <Search
@@ -231,7 +271,7 @@ export function CustomSelect({
                     placeholder="Search options..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-7 pr-2.5 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[6px] focus:outline-none focus:ring-1 focus:ring-[#2F6F5E] text-[#14213D] placeholder-[#8C97AB]"
+                    className={`w-full pl-7 pr-2.5 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[6px] focus:outline-none focus:ring-1 text-[#14213D] placeholder-[#8C97AB] ${searchFocusClasses}`}
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
@@ -253,9 +293,7 @@ export function CustomSelect({
                       type="button"
                       onClick={() => handleSelect(opt.value)}
                       className={`w-full px-3 py-2 text-xs flex items-center justify-between gap-2 text-left transition-colors cursor-pointer ${
-                        isSelected
-                          ? "bg-[#EAF3F0] text-[#2F6F5E] font-semibold"
-                          : "text-[#14213D] hover:bg-[#FAFAF8] hover:text-[#2F6F5E]"
+                        isSelected ? selectedItemClasses : hoverItemClasses
                       }`}
                     >
                       <div className="min-w-0 flex-1 truncate">
@@ -274,7 +312,7 @@ export function CustomSelect({
                       )}
 
                       {isSelected && (
-                        <Check size={14} className="text-[#2F6F5E] shrink-0 ml-1.5" />
+                        <Check size={14} className={`shrink-0 ml-1.5 ${checkIconClasses}`} />
                       )}
                     </button>
                   );

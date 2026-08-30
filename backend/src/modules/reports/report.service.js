@@ -437,14 +437,20 @@ export async function getDealerReport({ start_date, end_date, year, dealer_id } 
 // ==========================================
 // 5. Operating Expense Report (SQL Aggregated)
 // ==========================================
-export async function getExpenseReport({ year } = {}) {
-  let whereClause = "";
+export async function getExpenseReport({ year, company } = {}) {
+  const conditions = [];
   const replacements = {};
   if (year) {
-    whereClause = " WHERE e.expense_date BETWEEN :startDate AND :endDate";
+    conditions.push("e.expense_date BETWEEN :startDate AND :endDate");
     replacements.startDate = `${year}-01-01`;
     replacements.endDate = `${year}-12-31`;
   }
+  if (company && company.toUpperCase() !== "ALL" && company.trim() !== "") {
+    conditions.push("e.company = :company");
+    replacements.company = company.toLowerCase().trim();
+  }
+
+  const whereClause = conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
 
   const [totalRes] = await db.query(
     `SELECT COALESCE(SUM(amount), 0)::float AS grand_total FROM expenses e ${whereClause}`,

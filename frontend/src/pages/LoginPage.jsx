@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Lock, User, Eye, EyeOff, ArrowRight, Download, Share, X } from "lucide-react";
+import { Lock, User, Eye, EyeOff, ArrowRight, Download, Share, X, ShieldCheck, Factory, Sprout } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import Button from "../components/common/Button.jsx";
 
 export function LoginPage() {
+  const [selectedCompany, setSelectedCompany] = useState(() => {
+    try {
+      return localStorage.getItem("cheran_active_company") || "irrigation";
+    } catch {
+      return "irrigation";
+    }
+  });
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +29,8 @@ export function LoginPage() {
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const isPlast = selectedCompany === "plast";
 
   useEffect(() => {
     // Check if running in standalone mode (already installed)
@@ -86,8 +96,12 @@ export function LoginPage() {
     setErrorMsg("");
     setLoading(true);
     try {
-      await login(username, password);
-      navigate("/");
+      const authUser = await login(username, password, selectedCompany);
+      if (selectedCompany === "plast") {
+        navigate("/plast");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       setErrorMsg(err.message || err.response?.data?.message || "Invalid username or password.");
     } finally {
@@ -96,10 +110,14 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] flex flex-col selection:bg-[#D3E6E0] selection:text-[#14213D]">
-      {/* Top Mobile-Only PWA Install Banner (Strictly Hidden on Desktop / PC) */}
+    <div
+      className="min-h-screen flex flex-col bg-[#FAFAF8] selection:bg-[#D3E6E0] selection:text-[#14213D] transition-colors duration-500"
+    >
+      {/* Top Mobile-Only PWA Install Banner */}
       {isMobile && !isInstalled && !installPromptDismissed && (
-        <div className="w-full bg-[#1E4D40] text-white px-4 py-2.5 shadow-md flex items-center justify-between gap-3 z-50 animate-in slide-in-from-top duration-300 border-b border-[#2F6F5E] sticky top-0">
+        <div
+          className="w-full text-white px-4 py-2.5 shadow-md flex items-center justify-between gap-3 z-50 sticky top-0 bg-[#1E4D40] border-b border-[#2F6F5E]"
+        >
           <div className="flex items-center gap-2.5 min-w-0">
             <img src="/icon.png" alt="App Icon" className="w-7 h-7 rounded-[6px] object-contain shrink-0" />
             <span className="text-xs font-bold text-white truncate">Install App</span>
@@ -109,7 +127,7 @@ export function LoginPage() {
             <button
               type="button"
               onClick={handleInstallClick}
-              className="px-3 py-1 bg-white text-[#1E4D40] hover:bg-[#EAF3F0] active:scale-95 text-xs font-bold rounded-[6px] shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1 bg-white hover:bg-opacity-90 active:scale-95 text-xs font-bold rounded-[6px] shadow-xs flex items-center gap-1.5 transition-all cursor-pointer text-[#1E4D40]"
             >
               <Download size={13} />
               <span>Install</span>
@@ -128,24 +146,44 @@ export function LoginPage() {
 
       <div className="flex-1 flex flex-col lg:flex-row">
         {/* Left Minimal Brand Panel */}
-        <div className="lg:w-5/12 bg-gradient-to-br from-[#1E4D40] via-[#2F6F5E] to-[#14382F] text-white p-8 lg:p-16 flex flex-col justify-between relative overflow-hidden shrink-0 min-h-[200px] lg:min-h-screen">
+        <div
+          className="lg:w-5/12 text-white p-8 lg:p-16 flex flex-col justify-between relative overflow-hidden shrink-0 min-h-[220px] lg:min-h-screen bg-gradient-to-br from-[#1E4D40] via-[#2F6F5E] to-[#14382F] transition-all duration-700"
+        >
           {/* Subtle Ambient Glow */}
-          <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-[#13362C]/40 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div
+            className="absolute -bottom-24 -right-24 w-96 h-96 rounded-full blur-3xl pointer-events-none bg-[#13362C]/40"
+          />
 
           {/* Center Minimal Typography */}
           <div className="relative z-10 my-auto space-y-4 max-w-sm">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-medium border border-white/20">
+              {isPlast ? (
+                <>
+                  <Factory size={14} className="text-[#86EFAC]" />
+                  <span className="text-[#DCFCE7]">Cheran Plast Division</span>
+                </>
+              ) : (
+                <>
+                  <Sprout size={14} className="text-[#86EFAC]" />
+                  <span className="text-[#DCFCE7]">Cheran Irrigation & Horticulture</span>
+                </>
+              )}
+            </div>
+
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-snug">
-              Enterprise Operations & Management Portal.
+              {isPlast
+                ? "Inventory & Sales Management"
+                : "Enterprise Operations & Government Management Portal."}
             </h2>
 
-            {/* Desktop PWA Install Button (Minimal - No verbose text) */}
+            {/* Desktop PWA Install Button */}
             {!isMobile && !isInstalled && (
               <div className="pt-2">
                 <button
                   type="button"
                   onClick={handleInstallClick}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-[#1E4D40] hover:bg-[#EAF3F0] active:scale-95 font-bold text-xs rounded-[10px] shadow-sm transition-all cursor-pointer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-white active:scale-95 font-bold text-xs rounded-[10px] shadow-sm transition-all cursor-pointer text-[#1E4D40] hover:bg-[#EAF3F0]"
                 >
                   <Download size={15} />
                   <span>Install App</span>
@@ -155,23 +193,68 @@ export function LoginPage() {
           </div>
 
           {/* Bottom subtle copyright */}
-          <div className="relative z-10 text-[11px] text-white/40">
-            © {new Date().getFullYear()} Cheran Irrigation. All rights reserved.
+          <div className="relative z-10 text-[11px] text-white/50">
+            © {new Date().getFullYear()} {isPlast ? "Cheran Plast" : "Cheran Irrigation"}. All rights reserved.
           </div>
         </div>
 
         {/* Right Login Form Panel */}
         <div className="lg:w-7/12 flex flex-col justify-center items-center p-6 sm:p-12 lg:p-20 flex-1">
           <div className="w-full max-w-md space-y-6">
-            {/* Brand Logo & Header on White Side */}
+            {/* COMPANY SWITCH TOGGLE BUTTON */}
+            <div className="p-1 bg-[#E2E8F0] dark:bg-slate-200 rounded-[12px] flex items-center shadow-inner">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCompany("irrigation");
+                  setErrorMsg("");
+                }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer ${
+                  !isPlast
+                    ? "bg-[#1E4D40] text-white shadow-sm"
+                    : "text-[#475569] hover:text-[#0F172A] hover:bg-white/50"
+                }`}
+              >
+                <Sprout size={15} />
+                <span>Cheran Irrigation</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCompany("plast");
+                  setErrorMsg("");
+                }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-[9px] text-xs font-bold transition-all cursor-pointer ${
+                  isPlast
+                    ? "bg-[#1E4D40] text-white shadow-sm"
+                    : "text-[#475569] hover:text-[#0F172A] hover:bg-white/50"
+                }`}
+              >
+                <Factory size={15} />
+                <span>Cheran Plast</span>
+                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/20 text-white font-mono">
+                  Admin
+                </span>
+              </button>
+            </div>
+
+            {/* Brand Logo & Header */}
             <div className="flex items-center gap-3">
-              <img
-                src="/icon.png"
-                alt="Cheran Logo"
-                className="w-10 h-10 object-contain shrink-0"
-              />
-              <div className="text-base sm:text-lg font-bold tracking-tight text-[#14213D] leading-none font-display">
-                CHERAN IRRIGATION
+              <div
+                className="w-10 h-10 rounded-[10px] flex items-center justify-center shadow-sm shrink-0 bg-[#1E4D40] text-white"
+              >
+                {isPlast ? <Factory size={22} /> : <img src="/icon.png" alt="Logo" className="w-7 h-7 object-contain" />}
+              </div>
+              <div>
+                <div
+                  className="text-base sm:text-lg font-extrabold tracking-tight leading-none font-display text-[#14213D]"
+                >
+                  {isPlast ? "CHERAN PLAST" : "CHERAN IRRIGATION"}
+                </div>
+                <div className="text-[10px] font-semibold text-[#64748B] mt-0.5">
+                  {isPlast ? "Inventory & Sales Management" : "Horticulture & Operations ERP"}
+                </div>
               </div>
             </div>
 
@@ -179,6 +262,12 @@ export function LoginPage() {
               <h1 className="text-2xl sm:text-3xl font-extrabold text-[#14213D] tracking-tight">
                 Sign In
               </h1>
+              {isPlast && (
+                <p className="text-xs text-[#2F6F5E] mt-1 font-medium flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-[#2F6F5E] shrink-0" />
+                  <span>Admin login required for Cheran Plast portal</span>
+                </p>
+              )}
             </div>
 
             {errorMsg && (
@@ -203,7 +292,7 @@ export function LoginPage() {
                     placeholder="Enter username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-[#FAFAF8] border border-[#E4E1D8] rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] focus:border-transparent text-[#14213D] transition-all"
+                    className="w-full pl-10 pr-3.5 py-2.5 text-xs sm:text-sm bg-white border border-[#E4E1D8] rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] focus:border-transparent text-[#14213D] transition-all"
                     required
                   />
                 </div>
@@ -223,7 +312,7 @@ export function LoginPage() {
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-11 py-2.5 text-xs sm:text-sm bg-[#FAFAF8] border border-[#E4E1D8] rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] focus:border-transparent text-[#14213D] transition-all"
+                    className="w-full pl-10 pr-11 py-2.5 text-xs sm:text-sm bg-white border border-[#E4E1D8] rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] focus:border-transparent text-[#14213D] transition-all"
                     required
                   />
                   <button
@@ -237,16 +326,20 @@ export function LoginPage() {
                 </div>
               </div>
 
-              <Button
+              <button
                 type="submit"
-                variant="primary"
-                size="md"
-                loading={loading}
-                className="w-full py-3 text-sm font-bold shadow-[0_2px_8px_rgba(47,111,94,0.25)] flex items-center justify-center gap-2 mt-4"
+                disabled={loading}
+                className="w-full py-3 text-sm font-bold text-white rounded-[10px] flex items-center justify-center gap-2 mt-4 cursor-pointer transition-all active:scale-[0.99] disabled:opacity-50 bg-[#1E4D40] hover:bg-[#2F6F5E] shadow-[0_2px_12px_rgba(30,77,64,0.3)]"
               >
-                <span>Sign In</span>
-                <ArrowRight size={16} />
-              </Button>
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Sign In to {isPlast ? "Cheran Plast" : "Cheran Irrigation"}</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </button>
             </form>
           </div>
         </div>
@@ -348,7 +441,7 @@ export function LoginPage() {
             <button
               type="button"
               onClick={() => setShowIOSPrompt(false)}
-              className="w-full py-2.5 bg-[#2F6F5E] hover:bg-[#255b4d] text-white font-bold text-xs rounded-[8px] transition-colors cursor-pointer"
+              className="w-full py-2.5 bg-[#1E4D40] hover:bg-[#2F6F5E] text-white font-bold text-xs rounded-[8px] transition-colors cursor-pointer"
             >
               Got it
             </button>

@@ -31,6 +31,7 @@ import authRoutes from "./modules/auth/auth.routes.js";
 import userRoutes from "./modules/users/user.routes.js";
 import settingsRoutes from "./modules/settings/settings.routes.js";
 import proceedingRoutes from "./modules/proceedings/proceeding.routes.js";
+import plastRoutes from "./modules/plast/plast.routes.js";
 
 const app = express();
 
@@ -115,6 +116,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/proceedings", proceedingRoutes);
+app.use("/api/plast", plastRoutes);
 
 // Catch-all 404 handler
 app.use((req, res, next) => {

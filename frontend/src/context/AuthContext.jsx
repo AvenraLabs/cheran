@@ -53,7 +53,23 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = async (username, password) => {
+  const [activeCompany, setActiveCompanyState] = useState(() => {
+    try {
+      return localStorage.getItem("cheran_active_company") || "irrigation";
+    } catch {
+      return "irrigation";
+    }
+  });
+
+  const setActiveCompany = (company) => {
+    const normalized = company === "plast" ? "plast" : "irrigation";
+    setActiveCompanyState(normalized);
+    try {
+      localStorage.setItem("cheran_active_company", normalized);
+    } catch {}
+  };
+
+  const login = async (username, password, intendedCompany = "irrigation") => {
     const res = await api.post("/auth/login", { username, password });
     const { user: authUser, token: authToken } = res.data;
 
@@ -61,6 +77,17 @@ export function AuthProvider({ children }) {
     setToken(authToken);
     localStorage.setItem("cheran_auth_token", authToken);
     localStorage.setItem("cheran_auth_user", JSON.stringify(authUser));
+
+    const role = (authUser?.role || "USER").toUpperCase();
+    if (intendedCompany === "plast") {
+      if (role !== "ADMIN") {
+        throw new Error("Access Denied: Cheran Plast is strictly restricted to Administrator accounts.");
+      }
+      setActiveCompany("plast");
+    } else {
+      setActiveCompany("irrigation");
+    }
+
     return authUser;
   };
 
@@ -72,7 +99,18 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        activeCompany,
+        setActiveCompany,
+        login,
+        logout,
+        isAuthenticated: !!user,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

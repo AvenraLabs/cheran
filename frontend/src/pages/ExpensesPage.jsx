@@ -30,9 +30,11 @@ export function ExpensesPage() {
   // Filters
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState("");
 
   // Add Expense Modal
   const [modalOpen, setModalOpen] = useState(false);
+  const [company, setCompany] = useState("irrigation");
   const [categoryId, setCategoryId] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
@@ -69,6 +71,7 @@ export function ExpensesPage() {
         limit,
         ...(search ? { search: search.trim() } : {}),
         ...(selectedCategory ? { category_id: selectedCategory } : {}),
+        ...(selectedCompany ? { company: selectedCompany } : {}),
       };
       const res = await api.get("/expenses", { params });
       setExpenses(res.data?.expenses || []);
@@ -91,9 +94,10 @@ export function ExpensesPage() {
       fetchExpenses(1, pagination.limit);
     }, 280);
     return () => clearTimeout(timer);
-  }, [search, selectedCategory]);
+  }, [search, selectedCategory, selectedCompany]);
 
   const handleOpenAdd = () => {
+    setCompany(selectedCompany && selectedCompany !== "" ? selectedCompany : "irrigation");
     setCategoryId(categories.length > 0 ? categories[0].id : "");
     setExpenseDate(new Date().toISOString().split("T")[0]);
     setAmount("");
@@ -118,6 +122,7 @@ export function ExpensesPage() {
       setErrorMsg("");
 
       await api.post("/expenses", {
+        company,
         category_id: categoryId,
         expense_date: expenseDate,
         amount: amt,
@@ -184,6 +189,17 @@ export function ExpensesPage() {
     label: c.name,
   }));
 
+  const companyFilterOptions = [
+    { value: "", label: "All Companies" },
+    { value: "irrigation", label: "Cheran Irrigation" },
+    { value: "plast", label: "Cheran Plast" },
+  ];
+
+  const companyModalOptions = [
+    { value: "irrigation", label: "Cheran Irrigation" },
+    { value: "plast", label: "Cheran Plast" },
+  ];
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
@@ -228,14 +244,23 @@ export function ExpensesPage() {
 
         {/* Filter Strip */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             <input
               type="text"
               placeholder="Search expenses by description, ref..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full sm:w-80 px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              className="w-full sm:w-72 px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
             />
+
+            <div className="w-44">
+              <CustomSelect
+                options={companyFilterOptions}
+                value={selectedCompany}
+                onChange={(val) => setSelectedCompany(val)}
+                placeholder="All Companies"
+              />
+            </div>
 
             <div className="w-48">
               <CustomSelect
@@ -275,6 +300,7 @@ export function ExpensesPage() {
                   <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
                     <tr>
                       <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Company</th>
                       <th className="py-3 px-4">Category</th>
                       <th className="py-3 px-4">Description</th>
                       <th className="py-3 px-4">Payment Method</th>
@@ -288,6 +314,17 @@ export function ExpensesPage() {
                         <td className="py-3 px-4 font-mono text-[#52607D] flex items-center gap-1.5">
                           <Calendar size={12} className="text-[#2F6F5E]" />
                           {formatDate(e.expense_date)}
+                        </td>
+                        <td className="py-3 px-4">
+                          {e.company === "plast" ? (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#F4F9F7] text-[#1E4D40] border border-[#B8D7CE]">
+                              Cheran Plast
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#EAF3F0] text-[#2F6F5E] border border-[#D3E6E0]">
+                              Cheran Irrigation
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-4 font-semibold text-[#14213D]">
                           <span className="px-2 py-0.5 rounded-full text-[11px] bg-[#EAF3F0] text-[#2F6F5E]">
@@ -340,23 +377,14 @@ export function ExpensesPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-[#14213D]">
-                  Category <span className="text-rose-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setCatModalOpen(true)}
-                  className="text-[11px] text-[#2F6F5E] hover:underline font-medium flex items-center gap-0.5"
-                >
-                  <Plus size={12} /> Add Category
-                </button>
-              </div>
+              <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                Company <span className="text-rose-500">*</span>
+              </label>
               <CustomSelect
-                options={categorySelectOptions}
-                value={categoryId}
-                onChange={(val) => setCategoryId(val)}
-                placeholder={categories.length === 0 ? "No categories (click Add Category)" : "Select Category"}
+                options={companyModalOptions}
+                value={company}
+                onChange={(val) => setCompany(val)}
+                placeholder="Select Company"
               />
             </div>
 
@@ -372,6 +400,27 @@ export function ExpensesPage() {
                 required
               />
             </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[#14213D]">
+                Category <span className="text-rose-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setCatModalOpen(true)}
+                className="text-[11px] text-[#2F6F5E] hover:underline font-medium flex items-center gap-0.5"
+              >
+                <Plus size={12} /> Add Category
+              </button>
+            </div>
+            <CustomSelect
+              options={categorySelectOptions}
+              value={categoryId}
+              onChange={(val) => setCategoryId(val)}
+              placeholder={categories.length === 0 ? "No categories (click Add Category)" : "Select Category"}
+            />
           </div>
 
           <div>

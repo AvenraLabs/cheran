@@ -48,6 +48,22 @@ import ProceedingBatchProject from "../modules/proceedings/proceeding-batch-proj
 // Reports & Overrides
 import MaterialSuppliedOverride from "../modules/reports/material-supplied-override.model.js";
 
+// Cheran Plast Models (Isolated 2nd Company Modules)
+import PlastUnit from "../modules/plast/plast-unit.model.js";
+import PlastItem from "../modules/plast/plast-item.model.js";
+import PlastSupplier from "../modules/plast/plast-supplier.model.js";
+import PlastCustomer from "../modules/plast/plast-customer.model.js";
+import PlastInventoryStock from "../modules/plast/plast-inventory-stock.model.js";
+import PlastStockReceipt from "../modules/plast/plast-stock-receipt.model.js";
+import PlastStockReceiptItem from "../modules/plast/plast-stock-receipt-item.model.js";
+import {
+  PlastProductionEntry,
+  PlastProductionMaterial,
+  PlastProductionOutput,
+} from "../modules/plast/plast-production.model.js";
+import PlastSale from "../modules/plast/plast-sale.model.js";
+import PlastSaleItem from "../modules/plast/plast-sale-item.model.js";
+
 // ==========================================
 // 1. Government Module Associations
 // ==========================================
@@ -450,6 +466,129 @@ DealerSettlement.belongsTo(ProceedingBatch, {
   as: "proceeding_batch",
 });
 
+// ==========================================
+// 8. Cheran Plast Associations (Isolated)
+// ==========================================
+
+// Plast Unit <-> Items
+PlastUnit.hasMany(PlastItem, {
+  foreignKey: "unit_id",
+  as: "items",
+  onDelete: "RESTRICT",
+});
+PlastItem.belongsTo(PlastUnit, {
+  foreignKey: "unit_id",
+  as: "unit",
+});
+
+// Plast Item <-> Stock
+PlastItem.hasOne(PlastInventoryStock, {
+  foreignKey: "item_id",
+  as: "stock",
+  onDelete: "CASCADE",
+});
+PlastInventoryStock.belongsTo(PlastItem, {
+  foreignKey: "item_id",
+  as: "item",
+});
+
+// Plast Supplier <-> Stock Receipts (Purchases)
+PlastSupplier.hasMany(PlastStockReceipt, {
+  foreignKey: "supplier_id",
+  as: "receipts",
+  onDelete: "SET NULL",
+});
+PlastStockReceipt.belongsTo(PlastSupplier, {
+  foreignKey: "supplier_id",
+  as: "supplier",
+});
+
+// Plast Stock Receipt <-> Items
+PlastStockReceipt.hasMany(PlastStockReceiptItem, {
+  foreignKey: "stock_receipt_id",
+  as: "items",
+  onDelete: "CASCADE",
+});
+PlastStockReceiptItem.belongsTo(PlastStockReceipt, {
+  foreignKey: "stock_receipt_id",
+  as: "stock_receipt",
+});
+PlastStockReceiptItem.belongsTo(PlastItem, {
+  foreignKey: "item_id",
+  as: "item",
+});
+PlastStockReceiptItem.belongsTo(PlastUnit, {
+  foreignKey: "unit_id",
+  as: "unit",
+});
+
+// Plast Production Entry <-> Materials & Outputs
+PlastProductionEntry.hasMany(PlastProductionMaterial, {
+  foreignKey: "production_entry_id",
+  as: "materials",
+  onDelete: "CASCADE",
+});
+PlastProductionMaterial.belongsTo(PlastProductionEntry, {
+  foreignKey: "production_entry_id",
+  as: "production_entry",
+});
+PlastProductionMaterial.belongsTo(PlastItem, {
+  foreignKey: "item_id",
+  as: "item",
+});
+PlastProductionMaterial.belongsTo(PlastUnit, {
+  foreignKey: "unit_id",
+  as: "unit",
+});
+
+PlastProductionEntry.hasMany(PlastProductionOutput, {
+  foreignKey: "production_entry_id",
+  as: "outputs",
+  onDelete: "CASCADE",
+});
+PlastProductionOutput.belongsTo(PlastProductionEntry, {
+  foreignKey: "production_entry_id",
+  as: "production_entry",
+});
+PlastProductionOutput.belongsTo(PlastItem, {
+  foreignKey: "item_id",
+  as: "item",
+});
+PlastProductionOutput.belongsTo(PlastUnit, {
+  foreignKey: "unit_id",
+  as: "unit",
+});
+
+// Plast Customer <-> Sales
+PlastCustomer.hasMany(PlastSale, {
+  foreignKey: "customer_id",
+  as: "sales",
+  onDelete: "SET NULL",
+});
+PlastSale.belongsTo(PlastCustomer, {
+  foreignKey: "customer_id",
+  as: "customer",
+});
+
+// Plast Sale <-> Items
+PlastSale.hasMany(PlastSaleItem, {
+  foreignKey: "sale_id",
+  as: "items",
+  onDelete: "CASCADE",
+});
+PlastSaleItem.belongsTo(PlastSale, {
+  foreignKey: "sale_id",
+  as: "sale",
+});
+PlastSaleItem.belongsTo(PlastItem, {
+  foreignKey: "item_id",
+  as: "item",
+});
+PlastSaleItem.belongsTo(PlastUnit, {
+  foreignKey: "unit_id",
+  as: "unit",
+});
+
 export {
   Dealer,
   GovernmentStatus,
@@ -483,5 +622,18 @@ export {
   ProceedingBatch,
   ProceedingBatchProject,
   MaterialSuppliedOverride,
+  // Plast Models
+  PlastUnit,
+  PlastItem,
+  PlastSupplier,
+  PlastCustomer,
+  PlastInventoryStock,
+  PlastStockReceipt,
+  PlastStockReceiptItem,
+  PlastProductionEntry,
+  PlastProductionMaterial,
+  PlastProductionOutput,
+  PlastSale,
+  PlastSaleItem,
 };
 

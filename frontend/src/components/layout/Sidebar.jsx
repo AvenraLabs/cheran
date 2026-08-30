@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FileSpreadsheet,
@@ -25,11 +25,13 @@ import {
   Settings,
   Menu,
   ClipboardCheck,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
-  const { user, logout } = useAuth();
+  const { user, logout, setActiveCompany } = useAuth();
+  const navigate = useNavigate();
   const role = (user?.role || "USER").toUpperCase();
   const isAdmin = role === "ADMIN";
   const isDealer = role === "DEALER";
@@ -59,7 +61,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
           { label: "Daily Production", path: "/inventory/production", icon: Factory },
           { label: "Item Master", path: "/items", icon: Package },
           { label: "Units of Measure", path: "/units", icon: Scale },
-          { label: "Suppliers / Vendors", path: "/suppliers", icon: Truck },
+          { label: "Suppliers", path: "/suppliers", icon: Truck },
         ],
       },
       {
@@ -169,6 +171,30 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
             </button>
           </div>
 
+          {/* Admin Company Switcher: Switch to Cheran Plast */}
+          {isAdmin && (
+            <div className="p-2.5 bg-[#EAF3F0] border-b border-[#D3E6E0]">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCompany("plast");
+                  navigate("/plast");
+                  if (onClose) onClose();
+                }}
+                className="w-full py-1.5 px-2.5 bg-white hover:bg-emerald-50 text-[#1E4D40] border border-[#B8D7CE] rounded-[7px] text-[11px] font-bold flex items-center justify-between transition-all shadow-xs cursor-pointer active:scale-98"
+                title="Switch to Cheran Plast"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ArrowLeftRight size={13} className="text-[#2F6F5E] shrink-0" />
+                  <span className="truncate">Switch to Cheran Plast</span>
+                </div>
+                <span className="text-[9px] px-1.5 py-0.2 bg-[#1E4D40] text-white rounded font-mono shrink-0">
+                  Plast
+                </span>
+              </button>
+            </div>
+          )}
+
           {/* Nav Menu */}
           <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
             {navigationSections.map((section, idx) => (
@@ -182,6 +208,9 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
                     key={item.path}
                     to={item.path}
                     end={item.path === "/" || item.path === "/inventory" || item.path === "/imports"}
+                    onClick={() => {
+                      if (onClose) onClose();
+                    }}
                     className={({ isActive }) =>
                       `flex items-center gap-2.5 px-3 py-2 rounded-[7px] text-xs font-medium transition-colors ${
                         isActive

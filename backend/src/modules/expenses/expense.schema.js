@@ -26,12 +26,14 @@ export const createExpenseSchema = z.object({
     payment_method: z.string().max(50).optional().nullable(),
     reference: z.string().max(100).optional().nullable(),
     notes: z.string().optional().nullable(),
+    company: z.enum(["irrigation", "plast"]).optional().default("irrigation"),
   }),
 });
 
 export const listExpenseSchema = z.object({
   query: z.object({
     category_id: z.string().optional(),
+    company: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     search: z.string().optional(),

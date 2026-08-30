@@ -38,6 +38,11 @@ const Expense = db.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    company: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: "irrigation",
+    },
   },
   {
     tableName: "expenses",
@@ -47,6 +52,7 @@ const Expense = db.define(
     indexes: [
       { fields: ["category_id"] },
       { fields: ["expense_date"] },
+      { fields: ["company"] },
     ],
   }
 );

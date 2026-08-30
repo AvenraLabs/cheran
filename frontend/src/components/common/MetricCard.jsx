@@ -1,6 +1,13 @@
 import React from "react";
 
-export function MetricCard({ title, value, subtitle, icon: Icon, trend }) {
+export function MetricCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  trend,
+  theme = "green",
+}) {
   return (
     <div className="bg-[#FFFFFF] border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] flex flex-col justify-between">
       <div className="flex items-center justify-between">
@@ -8,7 +15,9 @@ export function MetricCard({ title, value, subtitle, icon: Icon, trend }) {
           {title}
         </span>
         {Icon && (
-          <div className="w-8 h-8 rounded-[8px] bg-[#EAF3F0] text-[#2F6F5E] flex items-center justify-center">
+          <div
+            className="w-8 h-8 rounded-[8px] flex items-center justify-center bg-[#EAF3F0] text-[#2F6F5E]"
+          >
             <Icon size={16} />
           </div>
         )}

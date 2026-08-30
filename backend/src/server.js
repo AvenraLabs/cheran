@@ -10,11 +10,7 @@ async function startServer() {
     await db.authenticate();
     console.log("✅ PostgreSQL connected successfully.");
 
-    // Sync schema with models (creates any missing tables)
-    console.log("🔄 Synchronizing database tables...");
-    await db.sync({ force: false });
-
-    // Idempotent column check for dealer_commissions (adds any newly introduced columns safely)
+    // Idempotent column check (ensures newly introduced columns/tables exist before sync & index creation)
     await db.query(`
       ALTER TABLE IF EXISTS dealer_commissions
         ADD COLUMN IF NOT EXISTS fittings_amount DECIMAL(14, 2) DEFAULT 0.00,
@@ -22,6 +18,9 @@ async function startServer() {
         ADD COLUMN IF NOT EXISTS fittings_paid_date DATE,
         ADD COLUMN IF NOT EXISTS fittings_paid_ref VARCHAR(255),
         ADD COLUMN IF NOT EXISTS fittings_notes TEXT;
+
+      ALTER TABLE IF EXISTS expenses
+        ADD COLUMN IF NOT EXISTS company VARCHAR(50) DEFAULT 'irrigation';
 
       CREATE TABLE IF NOT EXISTS material_supplied_overrides (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -35,6 +34,10 @@ async function startServer() {
         CONSTRAINT unique_material_supplied_cat_year UNIQUE (category, financial_year)
       );
     `);
+
+    // Sync schema with models (creates any missing tables)
+    console.log("🔄 Synchronizing database tables...");
+    await db.sync({ force: false });
 
     console.log("✅ Database schema synchronized.");
 

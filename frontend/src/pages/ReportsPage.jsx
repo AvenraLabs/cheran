@@ -386,7 +386,7 @@ export function ReportsPage() {
                       <div className="text-xl font-extrabold font-mono text-[#14213D] mt-1">
                         {procurementReport.bySupplier.length}
                       </div>
-                      <div className="text-[11px] text-[#8C97AB] mt-0.5">Active Vendors</div>
+                      <div className="text-[11px] text-[#8C97AB] mt-0.5">Active Suppliers</div>
                     </div>
                   </div>
                 </div>
@@ -408,7 +408,7 @@ export function ReportsPage() {
                         <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
                           <tr>
                             <th className="py-3 px-4">Receipt Date</th>
-                            <th className="py-3 px-4">Supplier / Vendor</th>
+                            <th className="py-3 px-4">Supplier</th>
                             <th className="py-3 px-4">Reference Bill #</th>
                             <th className="py-3 px-4">Materials Purchased</th>
                             <th className="py-3 px-4 text-right">Total Invoice Cost (₹)</th>
