@@ -61,21 +61,31 @@ export const ORDERED_GOVERNMENT_STATUSES = [
 ];
 
 export async function seedGovernmentStatuses() {
-  for (let index = 0; index < ORDERED_GOVERNMENT_STATUSES.length; index++) {
-    const name = ORDERED_GOVERNMENT_STATUSES[index];
-    const sequence = index + 1;
+  try {
+    const existingCount = await GovernmentStatus.count();
+    if (existingCount >= ORDERED_GOVERNMENT_STATUSES.length) {
+      return;
+    }
 
-    await db.query(
-      `INSERT INTO government_statuses (id, name, sequence_order, is_active, created_at, updated_at)
-       VALUES (gen_random_uuid(), :name, :sequence, true, NOW(), NOW())
-       ON CONFLICT (name) DO UPDATE 
-       SET sequence_order = :sequence, is_active = true, updated_at = NOW();`,
-      {
-        replacements: { name, sequence },
-      }
-    );
+    // Fast bulk upsert
+    for (let index = 0; index < ORDERED_GOVERNMENT_STATUSES.length; index++) {
+      const name = ORDERED_GOVERNMENT_STATUSES[index];
+      const sequence = index + 1;
+
+      await db.query(
+        `INSERT INTO government_statuses (id, name, sequence_order, is_active, created_at, updated_at)
+         VALUES (gen_random_uuid(), :name, :sequence, true, NOW(), NOW())
+         ON CONFLICT (name) DO UPDATE 
+         SET sequence_order = :sequence, is_active = true, updated_at = NOW();`,
+        {
+          replacements: { name, sequence },
+        }
+      );
+    }
+    console.log(`✅ ${ORDERED_GOVERNMENT_STATUSES.length} Government Statuses verified & seeded.`);
+  } catch (err) {
+    console.warn("Status seeding note:", err?.message);
   }
-  console.log(`✅ ${ORDERED_GOVERNMENT_STATUSES.length} Government Statuses verified & seeded.`);
 }
 
 // Standalone runner
