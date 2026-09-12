@@ -2,6 +2,7 @@ import app from "./app.js";
 import db from "./config/db.js";
 import env from "./config/env.js";
 import "./models/initModels.js";
+import { runAutomatedMigrations } from "./config/runMigrations.js";
 import { seedGovernmentStatuses } from "./scripts/seedStatuses.js";
 
 async function startServer() {
@@ -10,30 +11,8 @@ async function startServer() {
     await db.authenticate();
     console.log("✅ PostgreSQL connected successfully.");
 
-    // Idempotent column check (ensures newly introduced columns/tables exist before sync & index creation)
-    await db.query(`
-      ALTER TABLE IF EXISTS dealer_commissions
-        ADD COLUMN IF NOT EXISTS fittings_amount DECIMAL(14, 2) DEFAULT 0.00,
-        ADD COLUMN IF NOT EXISTS fittings_status VARCHAR(50) DEFAULT 'PENDING',
-        ADD COLUMN IF NOT EXISTS fittings_paid_date DATE,
-        ADD COLUMN IF NOT EXISTS fittings_paid_ref VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS fittings_notes TEXT;
-
-      ALTER TABLE IF EXISTS expenses
-        ADD COLUMN IF NOT EXISTS company VARCHAR(50) DEFAULT 'irrigation';
-
-      CREATE TABLE IF NOT EXISTS material_supplied_overrides (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        category VARCHAR(50) NOT NULL,
-        financial_year VARCHAR(20) NOT NULL,
-        supplied_ha DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-        supplied_count INTEGER NOT NULL DEFAULT 0,
-        remarks TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        CONSTRAINT unique_material_supplied_cat_year UNIQUE (category, financial_year)
-      );
-    `);
+    // Run versioned database migrations (Umzug with PostgreSQL advisory locks)
+    await runAutomatedMigrations();
 
     // Sync schema with models (creates any missing tables)
     console.log("🔄 Synchronizing database tables...");
