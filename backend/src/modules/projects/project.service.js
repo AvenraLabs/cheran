@@ -231,7 +231,14 @@ export function sortProjectStatusHistories(histories = []) {
 
 export async function getProjectStatusHistory(projectId) {
   const project = await GovernmentProject.findByPk(projectId, {
-    attributes: ["id", "application_id", "farmer_name", "current_status"],
+    attributes: [
+      "id",
+      "application_id",
+      "farmer_name",
+      "current_status",
+      "current_status_date",
+      "invoice_date",
+    ],
   });
 
   if (!project) {
@@ -252,7 +259,7 @@ export async function getProjectStatusHistory(projectId) {
   // Sort chronologically by status_date, then by logical lifecycle stage
   const sortedHistories = sortProjectStatusHistories(histories);
 
-  // Calculate days between consecutive observed statuses
+  // Calculate days between consecutive observed statuses and duration in each stage
   const historyWithIntervals = sortedHistories.map((entry, index) => {
     const json = entry.toJSON ? entry.toJSON() : { ...entry };
     if (index === 0) {
@@ -263,6 +270,28 @@ export async function getProjectStatusHistory(projectId) {
       json.previous_status = prev.status;
       json.days_since_previous = calculateDaysBetween(prev.status_date, entry.status_date);
     }
+
+    // Days elapsed while in this stage
+    if (index < sortedHistories.length - 1) {
+      const next = sortedHistories[index + 1];
+      json.days_in_stage = calculateDaysBetween(entry.status_date, next.status_date);
+      json.is_current = false;
+    } else {
+      // Last observed stage
+      const isWOStage =
+        entry.status === "Issued Work Order" ||
+        entry.status === "Issue Work Order (Auto Quotation)" ||
+        entry.status === "Quotation Prepared by Block (Auto Quotation)" ||
+        entry.status === "Auto Quotation Prepared";
+
+      if (isWOStage && project.invoice_date) {
+        json.days_in_stage = calculateDaysBetween(entry.status_date, project.invoice_date);
+      } else {
+        json.days_in_stage = calculateDaysBetween(entry.status_date, new Date());
+      }
+      json.is_current = true;
+    }
+
     return json;
   });
 

@@ -718,7 +718,7 @@ export function CommissionProceedingsPage() {
         subtitle={
           isUploadMode
             ? "Live in-page preview of government proceeding sheet and commission calculations"
-            : "Upload government proceeding Excel files (.xls / .xlsx) to calculate dealer commissions and track disbursements"
+            : undefined
         }
         actions={
           <div className="flex items-center gap-2">
@@ -1125,8 +1125,21 @@ export function CommissionProceedingsPage() {
                               <td className="py-2.5 px-3 text-[#14213D] font-medium">
                                 <div>{r.dealer_name}</div>
                                 {r.dealer_rate_percentage > 0 && (
-                                  <div className="text-[10px] font-mono text-[#2F6F5E]">
-                                    Base: {r.dealer_rate_percentage}%
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span
+                                      className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
+                                        r.dealer_rate_percentage >= 19
+                                          ? "bg-amber-100 text-amber-900 border border-amber-200"
+                                          : "bg-emerald-100 text-[#2F6F5E] border border-emerald-200"
+                                      }`}
+                                    >
+                                      {r.dealer_rate_percentage}% Rate
+                                    </span>
+                                    {r.invoice_date && (
+                                      <span className="text-[10px] text-[#52607D]">
+                                        ({formatDate(r.invoice_date)})
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </td>

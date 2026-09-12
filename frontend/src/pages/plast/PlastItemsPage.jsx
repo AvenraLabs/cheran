@@ -311,7 +311,7 @@ export function PlastItemsPage() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-[#52607D]">{item.category || "—"}</td>
-                        <td className="py-3 px-3 text-[#52607D] font-mono">{item.unit?.name || "Kg"}</td>
+                        <td className="py-3 px-3 text-[#52607D] font-mono">{item.unit?.name || "—"}</td>
                         <td className="py-3 px-3 text-right font-medium text-[#14213D]">
                           {formatCurrency(item.unit_price)}
                         </td>

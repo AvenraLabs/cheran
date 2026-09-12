@@ -16,34 +16,101 @@ import PlastSale from "./plast-sale.model.js";
 import PlastSaleItem from "./plast-sale-item.model.js";
 import AppError from "../../shared/appError.js";
 
-/**
- * Seed default Plast Units if none exist
- */
-export const ensurePlastDefaultUnits = async () => {
-  const count = await PlastUnit.count();
-  if (count === 0) {
-    await PlastUnit.bulkCreate([
-      { name: "Kilograms", symbol: "Kg", is_active: true },
-      { name: "Numbers / Pieces", symbol: "Nos", is_active: true },
-      { name: "Meters", symbol: "Mtr", is_active: true },
-      { name: "Bags", symbol: "Bag", is_active: true },
-      { name: "Rolls", symbol: "Roll", is_active: true },
-      { name: "Bundles", symbol: "Bndl", is_active: true },
-    ]);
-  }
-};
-
 // =========================================================================
 // 1. UNITS & ITEMS
 // =========================================================================
 
-export const getUnits = async () => {
-  await ensurePlastDefaultUnits();
-  return await PlastUnit.findAll({ order: [["name", "ASC"]] });
+export const getUnits = async (filters = {}) => {
+  const where = {};
+  if (filters.search) {
+    where[Op.or] = [
+      { name: { [Op.iLike]: `%${filters.search.trim()}%` } },
+      { symbol: { [Op.iLike]: `%${filters.search.trim()}%` } },
+    ];
+  }
+  if (filters.is_active !== undefined) {
+    where.is_active = filters.is_active === true || filters.is_active === "true";
+  }
+  return await PlastUnit.findAll({ where, order: [["name", "ASC"]] });
 };
 
 export const createUnit = async (data) => {
-  return await PlastUnit.create(data);
+  const { name, symbol, is_active } = data;
+  if (!name || !name.trim()) throw new AppError("Unit name is required", 400);
+
+  const cleanName = name.trim();
+  const cleanSymbol = symbol && symbol.trim() ? symbol.trim() : cleanName.slice(0, 3).toUpperCase();
+
+  const existing = await PlastUnit.findOne({
+    where: {
+      [Op.or]: [
+        { name: { [Op.iLike]: cleanName } },
+        { symbol: { [Op.iLike]: cleanSymbol } },
+      ],
+    },
+  });
+  if (existing) {
+    throw new AppError("A unit with this name or symbol already exists", 409);
+  }
+
+  return await PlastUnit.create({
+    name: cleanName,
+    symbol: cleanSymbol,
+    is_active: is_active !== undefined ? Boolean(is_active) : true,
+  });
+};
+
+export const updateUnit = async (id, data) => {
+  const unit = await PlastUnit.findByPk(id);
+  if (!unit) throw new AppError("Unit not found", 404);
+
+  const { name, symbol, is_active } = data;
+  if (name && name.trim()) {
+    const cleanName = name.trim();
+    const existing = await PlastUnit.findOne({
+      where: {
+        id: { [Op.ne]: id },
+        name: { [Op.iLike]: cleanName },
+      },
+    });
+    if (existing) throw new AppError(`A unit named '${cleanName}' already exists`, 409);
+    unit.name = cleanName;
+  }
+
+  if (symbol !== undefined) {
+    const cleanSymbol = symbol ? symbol.trim() : unit.name.slice(0, 3).toUpperCase();
+    const existing = await PlastUnit.findOne({
+      where: {
+        id: { [Op.ne]: id },
+        symbol: { [Op.iLike]: cleanSymbol },
+      },
+    });
+    if (existing) throw new AppError(`A unit with symbol '${cleanSymbol}' already exists`, 409);
+    unit.symbol = cleanSymbol;
+  }
+
+  if (is_active !== undefined) {
+    unit.is_active = Boolean(is_active);
+  }
+
+  await unit.save();
+  return unit;
+};
+
+export const deleteUnit = async (id) => {
+  const unit = await PlastUnit.findByPk(id);
+  if (!unit) throw new AppError("Unit not found", 404);
+
+  const assignedItemsCount = await PlastItem.count({ where: { unit_id: id } });
+  if (assignedItemsCount > 0) {
+    throw new AppError(
+      `Cannot delete unit "${unit.name}" as it is currently assigned to ${assignedItemsCount} item(s).`,
+      400
+    );
+  }
+
+  await unit.destroy();
+  return { success: true, message: `Unit '${unit.name}' deleted successfully` };
 };
 
 export const getItems = async (filters = {}) => {
@@ -346,10 +413,22 @@ export const getProductionEntries = async (filters = {}) => {
 };
 
 export const createProductionEntry = async (data) => {
-  const { production_date, reference_number, notes, materials = [], outputs = [] } = data;
+  const {
+    production_date,
+    reference_number,
+    notes,
+    wastage_quantity = 0,
+    materials = [],
+    outputs = [],
+  } = data;
 
   if (!materials.length && !outputs.length) {
     throw new AppError("Production entry must have materials or finished outputs.", 400);
+  }
+
+  const parsedWastage = parseFloat(wastage_quantity || 0);
+  if (isNaN(parsedWastage) || parsedWastage < 0) {
+    throw new AppError("Wastage quantity cannot be negative", 400);
   }
 
   return await db.transaction(async (t) => {
@@ -358,15 +437,15 @@ export const createProductionEntry = async (data) => {
         production_date: production_date || new Date().toISOString().split("T")[0],
         reference_number: reference_number || null,
         notes: notes || null,
+        wastage_quantity: parsedWastage,
       },
       { transaction: t }
     );
 
-    // 1. Process Materials Consumed + Wastage (DECREASE RAW STOCK)
+    // 1. Process Materials Consumed (DECREASE RAW STOCK for quantity_used ONLY)
+    // Note: Wastage comes out of the consumed raw materials, so wastage is NOT deducted again.
     for (const mat of materials) {
       const qtyUsed = Number(mat.quantity_used || 0);
-      const wastage = Number(mat.wastage_quantity || 0);
-      const totalDeduction = qtyUsed + wastage;
 
       await PlastProductionMaterial.create(
         {
@@ -374,13 +453,13 @@ export const createProductionEntry = async (data) => {
           item_id: mat.item_id,
           unit_id: mat.unit_id || null,
           quantity_used: qtyUsed,
-          wastage_quantity: wastage,
+          wastage_quantity: 0,
         },
         { transaction: t }
       );
 
-      if (totalDeduction > 0) {
-        await adjustStock(mat.item_id, -totalDeduction, t);
+      if (qtyUsed > 0) {
+        await adjustStock(mat.item_id, -qtyUsed, t);
       }
     }
 
@@ -408,7 +487,7 @@ export const createProductionEntry = async (data) => {
 };
 
 // =========================================================================
-// 6. SALES & BILLING (with per-item discount % and 0/5/18 GST)
+// 6. SALES & BILLING (with common bill discount and 0/5/18 GST)
 // =========================================================================
 
 export const getSales = async (filters = {}) => {
@@ -448,7 +527,7 @@ export const getSales = async (filters = {}) => {
         ],
       },
     ],
-    order: [["sale_date", "DESC"], ["created_at", "DESC"]],
+    order: [["created_at", "DESC"]],
   });
 };
 
@@ -502,15 +581,18 @@ export const createSale = async (data) => {
     customer_id,
     customer_name,
     customer_phone,
-    gst_rate = 0, // 0, 5, or 18
-    payment_status = "PAID",
-    payment_mode = "CASH",
-    notes,
     items = [],
+    discount_type = "AMOUNT",
+    discount_value = 0,
+    bill_discount,
+    gst_rate = 0,
+    payment_status,
+    payment_mode,
+    notes,
   } = data;
 
-  if (!items.length) {
-    throw new AppError("Sale must contain at least one item.", 400);
+  if (!items || !items.length) {
+    throw new AppError("Sale must contain at least 1 item.", 400);
   }
 
   return await db.transaction(async (t) => {
@@ -520,8 +602,8 @@ export const createSale = async (data) => {
     if (customer_id) {
       const cust = await PlastCustomer.findByPk(customer_id, { transaction: t });
       if (cust) {
-        if (!resolvedCustomerName) resolvedCustomerName = cust.name;
-        if (!resolvedCustomerPhone) resolvedCustomerPhone = cust.phone;
+        resolvedCustomerName = cust.name;
+        resolvedCustomerPhone = cust.phone;
       }
     } else if (customer_name) {
       // Auto-save new customer if phone provided
@@ -537,10 +619,9 @@ export const createSale = async (data) => {
       }
     }
 
-    // Calculations
+    // Item line totals & Subtotal
     let subtotal = 0;
-    let totalDiscount = 0;
-
+    let itemDiscounts = 0;
     const processedItems = [];
 
     for (const it of items) {
@@ -560,7 +641,7 @@ export const createSale = async (data) => {
       const lineTotal = gross - discountAmt;
 
       subtotal += gross;
-      totalDiscount += discountAmt;
+      itemDiscounts += discountAmt;
 
       processedItems.push({
         item_id: it.item_id,
@@ -574,9 +655,25 @@ export const createSale = async (data) => {
       });
     }
 
-    const taxableAmount = subtotal - totalDiscount;
+    // Common Bill Discount Calculation
+    const discType = discount_type === "PERCENTAGE" ? "PERCENTAGE" : "AMOUNT";
+    const rawDiscVal = Number(discount_value || bill_discount || 0);
+    let totalDiscount = 0;
+
+    if (rawDiscVal > 0) {
+      if (discType === "PERCENTAGE") {
+        totalDiscount = Number(((subtotal * rawDiscVal) / 100).toFixed(2));
+      } else {
+        totalDiscount = Number(rawDiscVal.toFixed(2));
+      }
+    } else if (itemDiscounts > 0) {
+      totalDiscount = itemDiscounts;
+    }
+
+    totalDiscount = Math.min(subtotal, Math.max(0, totalDiscount));
+    const taxableAmount = Math.max(0, subtotal - totalDiscount);
     const gstPct = Number(gst_rate || 0);
-    const gstAmount = taxableAmount * (gstPct / 100);
+    const gstAmount = Number(((taxableAmount * gstPct) / 100).toFixed(2));
     const grandTotal = Math.round(taxableAmount + gstAmount);
 
     const saleNumber = await generateNextSaleNumber(t);
@@ -590,6 +687,8 @@ export const createSale = async (data) => {
         customer_phone: resolvedCustomerPhone || null,
         subtotal,
         total_discount: totalDiscount,
+        discount_type: discType,
+        discount_value: rawDiscVal,
         taxable_amount: taxableAmount,
         gst_rate: gstPct,
         gst_amount: gstAmount,
@@ -653,12 +752,21 @@ export const getReports = async (type = "sales", filters = {}) => {
       order: [["sale_date", "DESC"]],
     });
 
+    const totalTaxable = sales.reduce((acc, s) => acc + Number(s.taxable_amount || 0), 0);
+    const totalGst = sales.reduce((acc, s) => acc + Number(s.gst_amount || 0), 0);
+    const totalDiscount = sales.reduce((acc, s) => acc + Number(s.total_discount || 0), 0);
+    const grandTotal = sales.reduce((acc, s) => acc + Number(s.grand_total || 0), 0);
+
     const summary = {
       total_sales_count: sales.length,
-      total_taxable: sales.reduce((acc, s) => acc + Number(s.taxable_amount || 0), 0),
-      total_gst: sales.reduce((acc, s) => acc + Number(s.gst_amount || 0), 0),
-      total_discount: sales.reduce((acc, s) => acc + Number(s.total_discount || 0), 0),
-      grand_total: sales.reduce((acc, s) => acc + Number(s.grand_total || 0), 0),
+      total_invoices: sales.length,
+      total_taxable: totalTaxable,
+      total_taxable_sales: totalTaxable,
+      total_gst: totalGst,
+      total_gst_collected: totalGst,
+      total_discount: totalDiscount,
+      grand_total: grandTotal,
+      total_gross_sales: grandTotal,
     };
 
     return { type: "sales", summary, data: sales };
@@ -686,9 +794,12 @@ export const getReports = async (type = "sales", filters = {}) => {
       order: [["receipt_date", "DESC"]],
     });
 
+    const totalPurchases = purchases.reduce((acc, p) => acc + Number(p.total_amount || 0), 0);
     const summary = {
       total_purchases_count: purchases.length,
-      grand_total: purchases.reduce((acc, p) => acc + Number(p.total_amount || 0), 0),
+      total_receipts: purchases.length,
+      grand_total: totalPurchases,
+      total_purchase_amount: totalPurchases,
     };
 
     return { type: "purchases", summary, data: purchases };
@@ -722,9 +833,17 @@ export const getReports = async (type = "sales", filters = {}) => {
     let totalProduced = 0;
 
     entries.forEach((e) => {
+      const entryWaste = Number(e.wastage_quantity || 0);
+      if (entryWaste > 0) {
+        totalWastage += entryWaste;
+      } else {
+        e.materials?.forEach((m) => {
+          totalWastage += Number(m.wastage_quantity || 0);
+        });
+      }
+
       e.materials?.forEach((m) => {
         totalRawUsed += Number(m.quantity_used || 0);
-        totalWastage += Number(m.wastage_quantity || 0);
       });
       e.outputs?.forEach((o) => {
         totalProduced += Number(o.quantity_produced || 0);
@@ -733,9 +852,10 @@ export const getReports = async (type = "sales", filters = {}) => {
 
     const summary = {
       total_entries: entries.length,
-      total_raw_used: totalRawUsed,
-      total_wastage: totalWastage,
-      total_produced: totalProduced,
+      total_production_runs: entries.length,
+      total_raw_used: Math.round(totalRawUsed * 1000) / 1000,
+      total_wastage: Math.round(totalWastage * 1000) / 1000,
+      total_produced: Math.round(totalProduced * 1000) / 1000,
     };
 
     return { type: "production", summary, data: entries };
@@ -743,11 +863,21 @@ export const getReports = async (type = "sales", filters = {}) => {
 
   if (type === "stock") {
     const stockList = await getStockOnHand(filters);
+    const rawValuation = stockList
+      .filter((s) => s.item_type === "RAW_MATERIAL")
+      .reduce((acc, s) => acc + Number(s.stock_value || 0), 0);
+    const finishedValuation = stockList
+      .filter((s) => s.item_type === "FINISHED_GOOD")
+      .reduce((acc, s) => acc + Number(s.stock_value || 0), 0);
+    const totalValuation = stockList.reduce((acc, s) => acc + Number(s.stock_value || 0), 0);
+
     const summary = {
       total_items: stockList.length,
       raw_materials_count: stockList.filter((s) => s.item_type === "RAW_MATERIAL").length,
       finished_goods_count: stockList.filter((s) => s.item_type === "FINISHED_GOOD").length,
-      total_stock_value: stockList.reduce((acc, s) => acc + s.stock_value, 0),
+      raw_material_valuation: rawValuation,
+      finished_goods_valuation: finishedValuation,
+      total_stock_value: totalValuation,
     };
     return { type: "stock", summary, data: stockList };
   }
@@ -796,7 +926,12 @@ export const getDashboardStats = async () => {
   let todayWastageUnits = 0;
   todayProduction.forEach((p) => {
     p.outputs?.forEach((o) => (todayProducedUnits += Number(o.quantity_produced || 0)));
-    p.materials?.forEach((m) => (todayWastageUnits += Number(m.wastage_quantity || 0)));
+    const pw = Number(p.wastage_quantity || 0);
+    if (pw > 0) {
+      todayWastageUnits += pw;
+    } else {
+      p.materials?.forEach((m) => (todayWastageUnits += Number(m.wastage_quantity || 0)));
+    }
   });
 
   // 5. Recent Sales
@@ -808,21 +943,26 @@ export const getDashboardStats = async () => {
   return {
     today_sales_count: todaySales.length,
     today_sales_amount: todaySalesAmount,
+    today_sales_revenue: todaySalesAmount,
     month_sales_amount: monthSalesAmount,
+    month_sales_revenue: monthSalesAmount,
     raw_materials_count: rawCount,
     finished_goods_count: finishedCount,
     low_stock_count: lowStockItems.length,
     low_stock_items: lowStockItems.slice(0, 5),
     today_produced_units: todayProducedUnits,
+    production_today_units: todayProducedUnits,
     today_wastage_units: todayWastageUnits,
+    wastage_today_units: todayWastageUnits,
     recent_sales: recentSales,
   };
 };
 
 export default {
-  ensurePlastDefaultUnits,
   getUnits,
   createUnit,
+  updateUnit,
+  deleteUnit,
   getItems,
   getItemById,
   createItem,

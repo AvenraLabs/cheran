@@ -45,8 +45,17 @@ router.post(
   dealerController.setUniversalCommission
 );
 
+// Universal commission policy rule (date-effective)
+router.post("/universal-policy", dealerController.applyUniversalCommissionPolicy);
+
 // Merge duplicate dealers into a target dealer
 router.post("/merge", validate(mergeDealersSchema), dealerController.mergeDealers);
+
+// Dealer Commission Slabs
+router.get("/:id/slabs", dealerController.getDealerCommissionSlabs);
+router.post("/:id/slabs", dealerController.createDealerCommissionSlab);
+router.put("/slabs/:slabId", dealerController.updateDealerCommissionSlab);
+router.delete("/slabs/:slabId", dealerController.deleteDealerCommissionSlab);
 
 router
   .route("/:id")

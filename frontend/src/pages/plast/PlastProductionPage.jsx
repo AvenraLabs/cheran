@@ -8,6 +8,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Layers,
+  AlertTriangle,
 } from "lucide-react";
 import { plastApi } from "../../api/plastApi.js";
 import Navbar from "../../components/layout/Navbar.jsx";
@@ -31,9 +32,10 @@ export function PlastProductionPage() {
   );
   const [referenceNumber, setReferenceNumber] = useState("");
   const [notes, setNotes] = useState("");
+  const [wastageQuantity, setWastageQuantity] = useState("0");
 
   const [materials, setMaterials] = useState([
-    { item_id: "", quantity_used: "", wastage_quantity: "0" },
+    { item_id: "", quantity_used: "" },
   ]);
   const [outputs, setOutputs] = useState([
     { item_id: "", quantity_produced: "" },
@@ -58,7 +60,7 @@ export function PlastProductionPage() {
       setFinishedGoods(fin);
 
       if (raw.length > 0 && (!materials[0] || !materials[0].item_id)) {
-        setMaterials([{ item_id: raw[0].id, quantity_used: "", wastage_quantity: "0" }]);
+        setMaterials([{ item_id: raw[0].id, quantity_used: "" }]);
       }
       if (fin.length > 0 && (!outputs[0] || !outputs[0].item_id)) {
         setOutputs([{ item_id: fin[0].id, quantity_produced: "" }]);
@@ -78,7 +80,7 @@ export function PlastProductionPage() {
   const addMaterialRow = () => {
     setMaterials((prev) => [
       ...prev,
-      { item_id: rawMaterials[0]?.id || "", quantity_used: "", wastage_quantity: "0" },
+      { item_id: rawMaterials[0]?.id || "", quantity_used: "" },
     ]);
   };
 
@@ -134,16 +136,22 @@ export function PlastProductionPage() {
       return;
     }
 
+    const parsedWastage = parseFloat(wastageQuantity || 0);
+    if (isNaN(parsedWastage) || parsedWastage < 0) {
+      toast.error("Wastage quantity cannot be negative");
+      return;
+    }
+
     setSaving(true);
     try {
       await plastApi.createProductionEntry({
         production_date: productionDate,
         reference_number: referenceNumber.trim() || undefined,
         notes: notes.trim() || undefined,
+        wastage_quantity: parsedWastage,
         materials: validMaterials.map((m) => ({
           item_id: m.item_id,
           quantity_used: parseFloat(m.quantity_used),
-          wastage_quantity: parseFloat(m.wastage_quantity) || 0,
         })),
         outputs: validOutputs.map((o) => ({
           item_id: o.item_id,
@@ -154,8 +162,9 @@ export function PlastProductionPage() {
       toast.success("Production entry recorded & inventory stock updated");
       setReferenceNumber("");
       setNotes("");
+      setWastageQuantity("0");
       setMaterials([
-        { item_id: rawMaterials[0]?.id || "", quantity_used: "", wastage_quantity: "0" },
+        { item_id: rawMaterials[0]?.id || "", quantity_used: "" },
       ]);
       setOutputs([
         { item_id: finishedGoods[0]?.id || "", quantity_produced: "" },
@@ -176,7 +185,7 @@ export function PlastProductionPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Daily Production & Wastage"
-        subtitle="Log daily raw material consumption, wastage, and finished goods output"
+        subtitle="Log daily raw material consumption, batch scrap mixture, and finished goods output"
         actions={
           <Button
             variant="secondary"
@@ -201,13 +210,13 @@ export function PlastProductionPage() {
               </h2>
             </div>
             <span className="text-[11px] text-[#52607D]">
-              Atomic Raw Material Deduction & Finished Good Addition
+              Atomic Raw Material Stock Deduction & Finished Good Addition
             </span>
           </div>
 
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
-            {/* Header info: Date & Ref */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Header info: Date, Ref, Batch Wastage, Notes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#14213D] mb-1">
                   Production Date *
@@ -231,6 +240,24 @@ export function PlastProductionPage() {
                   value={referenceNumber}
                   onChange={(e) => setReferenceNumber(e.target.value)}
                   className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-amber-900">
+                    Common Batch Wastage
+                  </label>
+                  <span className="text-[10px] text-[#8C97AB] font-normal">Scrap/Purge mix</span>
+                </div>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0.00"
+                  value={wastageQuantity}
+                  onChange={(e) => setWastageQuantity(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs font-mono bg-amber-50/40 border border-amber-300 rounded-[7px] text-[#14213D] focus:outline-none focus:border-amber-600"
                 />
               </div>
 
@@ -304,35 +331,20 @@ export function PlastProductionPage() {
                             )}
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <span className="text-[10px] font-semibold text-[#52607D]">
-                                Used Qty ({selectedItem?.unit?.symbol || "Kg"}) *
-                              </span>
-                              <input
-                                type="number"
-                                step="any"
-                                min="0.01"
-                                placeholder="Used"
-                                value={mat.quantity_used}
-                                onChange={(e) => updateMaterial(idx, "quantity_used", e.target.value)}
-                                className="w-full mt-0.5 px-2.5 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-                              />
-                            </div>
-                            <div>
-                              <span className="text-[10px] font-semibold text-rose-700">
-                                Wastage Qty ({selectedItem?.unit?.symbol || "Kg"})
-                              </span>
-                              <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                placeholder="Wastage"
-                                value={mat.wastage_quantity}
-                                onChange={(e) => updateMaterial(idx, "wastage_quantity", e.target.value)}
-                                className="w-full mt-0.5 px-2.5 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-                              />
-                            </div>
+                          <div>
+                            <span className="text-[10px] font-semibold text-[#52607D]">
+                              Quantity Consumed ({selectedItem?.unit?.symbol || "Units"}) *
+                            </span>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0.01"
+                              placeholder="Used quantity"
+                              value={mat.quantity_used}
+                              onChange={(e) => updateMaterial(idx, "quantity_used", e.target.value)}
+                              className="w-full mt-0.5 px-2.5 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+                              required
+                            />
                           </div>
                         </div>
                       );
@@ -397,7 +409,7 @@ export function PlastProductionPage() {
 
                           <div>
                             <span className="text-[10px] font-semibold text-[#52607D]">
-                              Output Produced ({selectedItem?.unit?.symbol || "Nos"}) *
+                              Output Produced ({selectedItem?.unit?.symbol || "Units"}) *
                             </span>
                             <input
                               type="number"
@@ -407,6 +419,7 @@ export function PlastProductionPage() {
                               value={out.quantity_produced}
                               onChange={(e) => updateOutput(idx, "quantity_produced", e.target.value)}
                               className="w-full mt-0.5 px-2.5 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] font-mono font-bold focus:outline-none focus:border-[#2F6F5E]"
+                              required
                             />
                           </div>
                         </div>
@@ -451,64 +464,73 @@ export function PlastProductionPage() {
             />
           ) : (
             <div className="divide-y divide-[#EDEAE1]">
-              {safeEntries.map((entry) => (
-                <div key={entry.id} className="p-4 hover:bg-[#FAFAF8] transition-colors space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-[#EAF3F0] text-[#2F6F5E] font-mono text-xs font-bold border border-[#D3E6E0]">
-                        {entry.production_date}
-                      </span>
-                      {entry.reference_number && (
-                        <span className="text-xs font-bold text-[#14213D]">
-                          Ref: {entry.reference_number}
+              {safeEntries.map((entry) => {
+                const entryWastage = parseFloat(entry.wastage_quantity || 0);
+                const legacyWastage = (entry.materials || []).reduce(
+                  (sum, m) => sum + (parseFloat(m.wastage_quantity) || 0),
+                  0
+                );
+                const displayWastage = entryWastage > 0 ? entryWastage : legacyWastage;
+
+                return (
+                  <div key={entry.id} className="p-4 hover:bg-[#FAFAF8] transition-colors space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-[#EAF3F0] text-[#2F6F5E] font-mono text-xs font-bold border border-[#D3E6E0]">
+                          {entry.production_date}
                         </span>
+                        {entry.reference_number && (
+                          <span className="text-xs font-bold text-[#14213D]">
+                            Ref: {entry.reference_number}
+                          </span>
+                        )}
+                        {displayWastage > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-mono text-xs font-bold border border-amber-200">
+                            Wastage: {displayWastage} Kg
+                          </span>
+                        )}
+                      </div>
+                      {entry.notes && (
+                        <div className="text-[11px] text-[#52607D] italic">"{entry.notes}"</div>
                       )}
                     </div>
-                    {entry.notes && (
-                      <div className="text-[11px] text-[#52607D] italic">"{entry.notes}"</div>
-                    )}
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                    {/* Consumed */}
-                    <div className="p-2.5 rounded-[7px] bg-amber-50/60 border border-amber-200/70 space-y-1">
-                      <div className="text-[10px] font-bold uppercase text-amber-900 flex items-center gap-1">
-                        <ArrowDownRight size={12} />
-                        <span>Consumed Raw Materials</span>
-                      </div>
-                      {(entry.materials || []).map((m) => (
-                        <div key={m.id} className="flex justify-between text-[11px]">
-                          <span className="text-[#14213D] font-medium">{m.item?.name || "Raw Mat"}</span>
-                          <span className="text-[#52607D]">
-                            <strong>{m.quantity_used}</strong> {m.unit?.symbol || "Kg"}{" "}
-                            {Number(m.wastage_quantity) > 0 && (
-                              <span className="text-rose-600 font-bold">
-                                (+{m.wastage_quantity} waste)
-                              </span>
-                            )}
-                          </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {/* Consumed */}
+                      <div className="p-2.5 rounded-[7px] bg-amber-50/60 border border-amber-200/70 space-y-1">
+                        <div className="text-[10px] font-bold uppercase text-amber-900 flex items-center gap-1">
+                          <ArrowDownRight size={12} />
+                          <span>Consumed Raw Materials</span>
                         </div>
-                      ))}
-                    </div>
+                        {(entry.materials || []).map((m) => (
+                          <div key={m.id} className="flex justify-between text-[11px]">
+                            <span className="text-[#14213D] font-medium">{m.item?.name || "Raw Mat"}</span>
+                            <span className="text-[#52607D]">
+                              <strong>{m.quantity_used}</strong> {m.unit?.symbol || m.item?.unit?.symbol || "Units"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
 
-                    {/* Output */}
-                    <div className="p-2.5 rounded-[7px] bg-[#EAF3F0]/60 border border-[#D3E6E0]/70 space-y-1">
-                      <div className="text-[10px] font-bold uppercase text-[#1E4D40] flex items-center gap-1">
-                        <ArrowUpRight size={12} />
-                        <span>Manufactured Finished Goods</span>
-                      </div>
-                      {(entry.outputs || []).map((o) => (
-                        <div key={o.id} className="flex justify-between text-[11px]">
-                          <span className="text-[#14213D] font-medium">{o.item?.name || "Finished Good"}</span>
-                          <span className="text-[#2F6F5E] font-bold">
-                            +{o.quantity_produced} {o.unit?.symbol || "Nos"}
-                          </span>
+                      {/* Output */}
+                      <div className="p-2.5 rounded-[7px] bg-[#EAF3F0]/60 border border-[#D3E6E0]/70 space-y-1">
+                        <div className="text-[10px] font-bold uppercase text-[#1E4D40] flex items-center gap-1">
+                          <ArrowUpRight size={12} />
+                          <span>Manufactured Finished Goods</span>
                         </div>
-                      ))}
+                        {(entry.outputs || []).map((o) => (
+                          <div key={o.id} className="flex justify-between text-[11px]">
+                            <span className="text-[#14213D] font-medium">{o.item?.name || "Finished Good"}</span>
+                            <span className="text-[#2F6F5E] font-bold">
+                              +{o.quantity_produced} {o.unit?.symbol || o.item?.unit?.symbol || "Units"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

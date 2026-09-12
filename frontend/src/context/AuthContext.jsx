@@ -79,9 +79,11 @@ export function AuthProvider({ children }) {
     localStorage.setItem("cheran_auth_user", JSON.stringify(authUser));
 
     const role = (authUser?.role || "USER").toUpperCase();
-    if (intendedCompany === "plast") {
+    if (role === "PLAST") {
+      setActiveCompany("plast");
+    } else if (intendedCompany === "plast") {
       if (role !== "ADMIN") {
-        throw new Error("Access Denied: Cheran Plast is strictly restricted to Administrator accounts.");
+        throw new Error("Access Denied: Cheran Plast is strictly restricted to Administrator and Plast accounts.");
       }
       setActiveCompany("plast");
     } else {

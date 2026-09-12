@@ -41,6 +41,10 @@ export function PlastCreateSalePage() {
   const [paymentStatus, setPaymentStatus] = useState("PAID");
   const [notes, setNotes] = useState("");
 
+  // Common Bill Discount State
+  const [discountType, setDiscountType] = useState("AMOUNT"); // "AMOUNT" or "PERCENTAGE"
+  const [discountValue, setDiscountValue] = useState("");
+
   const [saleItems, setSaleItems] = useState([
     {
       item_id: "",
@@ -148,16 +152,20 @@ export function PlastCreateSalePage() {
     return acc + qty * price;
   }, 0);
 
-  const totalDiscount = saleItems.reduce((acc, row) => {
+  const itemDiscounts = saleItems.reduce((acc, row) => {
     const qty = parseFloat(row.quantity) || 0;
     const price = parseFloat(row.unit_price) || 0;
     const disc = parseFloat(row.discount_percent) || 0;
     return acc + (qty * price * disc) / 100;
   }, 0);
 
+  // Common Bill Discount Calculation
+  const rawDiscVal = parseFloat(discountValue) || 0;
+  const billDiscountAmt = discountType === "PERCENTAGE" ? (subtotal * rawDiscVal) / 100 : rawDiscVal;
+  const totalDiscount = Math.min(subtotal, Math.max(0, billDiscountAmt + itemDiscounts));
   const taxableAmount = Math.max(0, subtotal - totalDiscount);
   const gstAmount = (taxableAmount * gstRate) / 100;
-  const grandTotal = taxableAmount + gstAmount;
+  const grandTotal = Math.round(taxableAmount + gstAmount);
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat("en-IN", {
@@ -194,6 +202,9 @@ export function PlastCreateSalePage() {
         gst_rate: gstRate,
         payment_mode: paymentMode,
         payment_status: paymentStatus,
+        discount_type: discountType,
+        discount_value: rawDiscVal,
+        bill_discount: billDiscountAmt,
         notes: notes.trim() || undefined,
         items: validItems.map((r) => ({
           item_id: r.item_id,
@@ -217,7 +228,7 @@ export function PlastCreateSalePage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
         title="Create Sales Invoice"
-        subtitle="Issue direct customer bill with per-item discounts and GST"
+        subtitle="Issue customer sales bill with total bill discount and GST"
         actions={
           <Button
             variant="secondary"
@@ -267,29 +278,42 @@ export function PlastCreateSalePage() {
                   <input
                     type="text"
                     required
-                    placeholder="Customer / Shop Name"
+                    placeholder="Enter customer name..."
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
                   />
                 </div>
 
                 <div className="sm:col-span-1">
                   <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                    Phone Number
+                    Customer Phone
                   </label>
                   <input
                     type="tel"
-                    placeholder="Mobile number"
+                    placeholder="10-digit mobile number"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                    Customer Address / City
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Optional delivery address..."
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  />
+                </div>
+
+                <div className="sm:col-span-1">
                   <label className="block text-xs font-semibold text-[#14213D] mb-1">
                     Invoice Date *
                   </label>
@@ -298,54 +322,43 @@ export function PlastCreateSalePage() {
                     required
                     value={saleDate}
                     onChange={(e) => setSaleDate(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                    Customer Address / City
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="City, District"
-                    value={customerAddress}
-                    onChange={(e) => setCustomerAddress(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Billing Items Card */}
+            {/* Bill Line Items Card */}
             <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] p-4 sm:p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
                 <div className="flex items-center gap-2">
                   <ShoppingCart size={16} className="text-[#2F6F5E]" />
                   <h2 className="text-xs font-bold uppercase tracking-wider text-[#14213D]">
-                    Bill Items & Per-Item Discount
+                    Bill Items & Quantities
                   </h2>
                 </div>
-                <Button type="button" variant="outline" size="xs" icon={Plus} onClick={addItemRow}>
-                  Add Item
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  icon={Plus}
+                  onClick={addItemRow}
+                >
+                  Add Row
                 </Button>
               </div>
 
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {saleItems.map((row, idx) => {
-                  const selectedItem = itemsList.find((i) => i.id === row.item_id);
-                  const stockOnHand = Number(selectedItem?.stock?.quantity_on_hand || 0);
-
                   return (
                     <div
                       key={idx}
-                      className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#E4E1D8] grid grid-cols-12 gap-2.5 items-center text-xs"
+                      className="grid grid-cols-12 gap-2.5 items-end p-3 rounded-[8px] bg-[#FAFAF8] border border-[#E4E1D8]"
                     >
-                      {/* Item Dropdown */}
+                      {/* Item Selector */}
                       <div className="col-span-12 sm:col-span-5">
-                        <label className="block text-[10px] font-semibold text-[#52607D] mb-0.5">
-                          Product SKU (Stock: {stockOnHand} {selectedItem?.unit?.symbol || "Nos"})
-                        </label>
                         <CustomSelect
+                          label={`Item #${idx + 1}`}
                           size="sm"
                           value={row.item_id}
                           onChange={(val) => updateItemRow(idx, "item_id", val)}
@@ -388,7 +401,7 @@ export function PlastCreateSalePage() {
                         />
                       </div>
 
-                      {/* Discount % */}
+                      {/* Item Disc % */}
                       <div className="col-span-3 sm:col-span-2">
                         <label className="block text-[10px] font-semibold text-emerald-800 mb-0.5">
                           Disc %
@@ -459,7 +472,59 @@ export function PlastCreateSalePage() {
                 </div>
               </div>
 
-              {/* Payment Mode */}
+              {/* Common Bill Discount on Total Bill */}
+              <div className="p-3 bg-amber-50/50 rounded-[8px] border border-amber-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-amber-900">
+                    Total Bill Discount
+                  </label>
+                  <div className="flex items-center bg-white rounded-[6px] border border-[#E4E1D8] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType("AMOUNT")}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer transition-all ${
+                        discountType === "AMOUNT"
+                          ? "bg-[#2F6F5E] text-white"
+                          : "text-[#52607D] hover:text-[#14213D]"
+                      }`}
+                    >
+                      ₹ Flat
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType("PERCENTAGE")}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer transition-all ${
+                        discountType === "PERCENTAGE"
+                          ? "bg-[#2F6F5E] text-white"
+                          : "text-[#52607D] hover:text-[#14213D]"
+                      }`}
+                    >
+                      % Percent
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    max={discountType === "PERCENTAGE" ? 100 : undefined}
+                    placeholder={discountType === "PERCENTAGE" ? "e.g. 5 for 5% off bill" : "e.g. 150"}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-[6px] text-xs font-mono font-bold text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#8C97AB] font-bold">
+                    {discountType === "AMOUNT" ? "₹" : "%"}
+                  </span>
+                </div>
+                <div className="text-[10px] text-[#52607D]">
+                  Applies directly to invoice subtotal before GST calculation.
+                </div>
+              </div>
+
+              {/* Payment Mode & Status */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <CustomSelect
@@ -490,25 +555,38 @@ export function PlastCreateSalePage() {
               </div>
 
               {/* Financial Breakdown */}
-              <div className="bg-[#F8FAFC] p-3 rounded-[8px] border border-[#EDEAE1] space-y-2 text-xs">
+              <div className="bg-[#F8FAFC] p-3.5 rounded-[8px] border border-[#EDEAE1] space-y-2 text-xs">
                 <div className="flex justify-between text-[#52607D]">
                   <span>Subtotal:</span>
-                  <span className="font-mono">{formatCurrency(subtotal)}</span>
+                  <span className="font-mono font-medium">{formatCurrency(subtotal)}</span>
                 </div>
-                {totalDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-700">
-                    <span>Discount Saved:</span>
-                    <span className="font-mono">-{formatCurrency(totalDiscount)}</span>
+
+                {billDiscountAmt > 0 && (
+                  <div className="flex justify-between text-amber-800 font-medium">
+                    <span>
+                      Bill Discount {discountType === "PERCENTAGE" ? `(${rawDiscVal}%)` : ""}:
+                    </span>
+                    <span className="font-mono">-{formatCurrency(billDiscountAmt)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-[#52607D]">
+
+                {itemDiscounts > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Item Discounts:</span>
+                    <span className="font-mono">-{formatCurrency(itemDiscounts)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between text-[#52607D] border-t border-[#EDEAE1] pt-1.5">
                   <span>Taxable Value:</span>
-                  <span className="font-mono">{formatCurrency(taxableAmount)}</span>
+                  <span className="font-mono font-semibold text-[#14213D]">{formatCurrency(taxableAmount)}</span>
                 </div>
+
                 <div className="flex justify-between text-[#52607D]">
                   <span>GST Amount ({gstRate}%):</span>
                   <span className="font-mono">+{formatCurrency(gstAmount)}</span>
                 </div>
+
                 <div className="flex justify-between text-sm font-bold text-[#14213D] border-t border-[#EDEAE1] pt-2">
                   <span>Grand Total:</span>
                   <span className="text-[#2F6F5E] font-mono text-base font-black">
@@ -524,7 +602,7 @@ export function PlastCreateSalePage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Delivered via auto..."
+                  placeholder="e.g. Delivered via vehicle..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
@@ -565,8 +643,29 @@ export function PlastCreateSalePage() {
               <div className="text-xs text-[#52607D]">Invoice Number</div>
               <div className="text-base font-mono font-bold text-[#2F6F5E]">{createdSale.sale_number}</div>
               <div className="text-sm font-bold text-[#14213D] mt-1">{createdSale.customer_name}</div>
-              <div className="text-lg font-mono font-black text-[#14213D] mt-1">
+              <div className="text-xl font-mono font-black text-[#14213D] mt-2">
                 {formatCurrency(createdSale.grand_total)}
+              </div>
+            </div>
+
+            <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#EDEAE1] text-xs text-left space-y-1.5">
+              <div className="flex justify-between text-[#52607D]">
+                <span>Subtotal:</span>
+                <span className="font-mono">{formatCurrency(createdSale.subtotal)}</span>
+              </div>
+              {Number(createdSale.discount_amount) > 0 && (
+                <div className="flex justify-between text-amber-800 font-medium">
+                  <span>Discount Applied:</span>
+                  <span className="font-mono">-{formatCurrency(createdSale.discount_amount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-[#52607D]">
+                <span>Taxable Amount:</span>
+                <span className="font-mono">{formatCurrency(createdSale.taxable_amount)}</span>
+              </div>
+              <div className="flex justify-between text-[#52607D]">
+                <span>GST ({createdSale.gst_rate}%):</span>
+                <span className="font-mono">+{formatCurrency(createdSale.gst_amount)}</span>
               </div>
             </div>
 

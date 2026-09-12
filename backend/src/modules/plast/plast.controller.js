@@ -5,7 +5,7 @@ import * as plastService from "./plast.service.js";
 // ==========================================
 export const getUnits = async (req, res, next) => {
   try {
-    const data = await plastService.getUnits();
+    const data = await plastService.getUnits(req.query);
     res.status(200).json({ status: "success", data });
   } catch (err) {
     next(err);
@@ -16,6 +16,24 @@ export const createUnit = async (req, res, next) => {
   try {
     const data = await plastService.createUnit(req.body);
     res.status(201).json({ status: "success", message: "Unit created successfully", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateUnit = async (req, res, next) => {
+  try {
+    const data = await plastService.updateUnit(req.params.id, req.body);
+    res.status(200).json({ status: "success", message: "Unit updated successfully", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteUnit = async (req, res, next) => {
+  try {
+    const result = await plastService.deleteUnit(req.params.id);
+    res.status(200).json({ status: "success", ...result });
   } catch (err) {
     next(err);
   }

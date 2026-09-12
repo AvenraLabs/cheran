@@ -6,9 +6,11 @@ import {
   GovernmentProject,
   GovernmentProjectStatusHistory,
   Dealer,
+  DealerCommissionSlab,
   DealerSettlement,
 } from "../../models/initModels.js";
 import { getEffectiveSchemeTaxSlab } from "../settings/settings.service.js";
+import { resolveEffectiveDealerCommission } from "../dealers/dealer.service.js";
 import { calculateDaysBetween } from "../../utils/dates.js";
 import { parseProceedingExcel } from "./proceeding-excel-parser.js";
 import AppError from "../../shared/appError.js";
@@ -47,6 +49,13 @@ export async function previewProceedingExcel(
         model: Dealer,
         as: "dealer",
         attributes: ["id", "name", "commission_percentage"],
+        include: [
+          {
+            model: DealerCommissionSlab,
+            as: "commission_slabs",
+            required: false,
+          },
+        ],
       },
     ],
   });
@@ -146,12 +155,14 @@ export async function previewProceedingExcel(
     const releasedNetMaterial = Math.floor((totalMaterialCost * fundPct) / 100.0);
     const calculatedGst = Math.floor(subsidyEligible - taxableEligible);
 
-    // Dealer Rate
+    // Dealer Rate resolved by project invoice date
     const dealer = proj?.dealer || null;
-    const dealerBaseRate =
-      dealer?.commission_percentage !== undefined && dealer?.commission_percentage !== null
-        ? Math.floor(parseFloat(dealer.commission_percentage))
-        : 20;
+    const rateResolution = resolveEffectiveDealerCommission(
+      dealer,
+      invoiceDate,
+      dealer?.commission_slabs || []
+    );
+    const dealerBaseRate = Math.floor(rateResolution.rate);
 
     // Milestone 45-day delay penalty analysis & Milestone Dates
     let milestoneType = isFirstFund ? "FIRST_FUND" : "SECOND_FUND";
@@ -231,6 +242,7 @@ export async function previewProceedingExcel(
       dealer_id: dealer?.id || null,
       dealer_name: dealer?.name || (isMatched ? "Unassigned Dealer" : "Unassigned (Not in DB)"),
       dealer_rate_percentage: dealerBaseRate,
+      dealer_rate_source: rateResolution.source,
       farmer_name: farmerName,
       district,
       block,
@@ -659,6 +671,13 @@ export async function recalculateProceedingBatch(id) {
         model: Dealer,
         as: "dealer",
         attributes: ["id", "name", "commission_percentage"],
+        include: [
+          {
+            model: DealerCommissionSlab,
+            as: "commission_slabs",
+            required: false,
+          },
+        ],
       },
     ],
   });
@@ -690,12 +709,17 @@ export async function recalculateProceedingBatch(id) {
     for (const item of batch.projects) {
       const proj = item.project_id ? projectMap.get(item.project_id) : null;
       const dealer = proj?.dealer || null;
-      const dealerBaseRate =
-        dealer?.commission_percentage !== undefined && dealer?.commission_percentage !== null
-          ? Math.floor(parseFloat(dealer.commission_percentage))
-          : Math.floor(parseFloat(item.dealer_rate_percentage || 20));
-
       const invoiceDate = proj?.invoice_date || item.invoice_date || null;
+
+      let dealerBaseRate = Math.floor(parseFloat(item.dealer_rate_percentage || 20));
+      if (dealer) {
+        const rateResolution = resolveEffectiveDealerCommission(
+          dealer,
+          invoiceDate,
+          dealer.commission_slabs || []
+        );
+        dealerBaseRate = Math.floor(rateResolution.rate);
+      }
       const taxDate = invoiceDate || new Date().toISOString().split("T")[0];
       const taxSlab = await getEffectiveSchemeTaxSlab(taxDate);
       const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);

@@ -14,6 +14,7 @@ import {
   LogOut,
   X,
   ArrowLeftRight,
+  Scale,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -22,32 +23,44 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
   const navigate = useNavigate();
   const role = (user?.role || "ADMIN").toUpperCase();
 
-  const navigationSections = [
-    {
-      title: "Operations & Sales",
-      items: [
-        { label: "Dashboard", path: "/plast", icon: LayoutDashboard },
-        { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
-        { label: "Customers", path: "/plast/customers", icon: Users },
-      ],
-    },
-    {
-      title: "Manufacturing & Inventory",
-      items: [
-        { label: "Stock On-Hand", path: "/plast/stock", icon: Boxes },
-        { label: "Daily Production", path: "/plast/production", icon: Factory },
-        { label: "Raw Purchases", path: "/plast/purchases", icon: Truck },
-        { label: "Suppliers", path: "/plast/suppliers", icon: Building },
-        { label: "Items", path: "/plast/items", icon: Package },
-      ],
-    },
-    {
-      title: "Financials & Intelligence",
-      items: [
-        { label: "Reports & Analytics", path: "/plast/reports", icon: BarChart3 },
-      ],
-    },
-  ];
+  const navigationSections =
+    role === "PLAST"
+      ? [
+          {
+            title: "Operations & Sales",
+            items: [
+              { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
+              { label: "Customers", path: "/plast/customers", icon: Users },
+            ],
+          },
+        ]
+      : [
+          {
+            title: "Operations & Sales",
+            items: [
+              { label: "Dashboard", path: "/plast", icon: LayoutDashboard },
+              { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
+              { label: "Customers", path: "/plast/customers", icon: Users },
+            ],
+          },
+          {
+            title: "Manufacturing & Inventory",
+            items: [
+              { label: "Stock On-Hand", path: "/plast/stock", icon: Boxes },
+              { label: "Daily Production", path: "/plast/production", icon: Factory },
+              { label: "Raw Purchases", path: "/plast/purchases", icon: Truck },
+              { label: "Suppliers", path: "/plast/suppliers", icon: Building },
+              { label: "Items", path: "/plast/items", icon: Package },
+              { label: "Units of Measure", path: "/plast/units", icon: Scale },
+            ],
+          },
+          {
+            title: "Financials & Intelligence",
+            items: [
+              { label: "Reports & Analytics", path: "/plast/reports", icon: BarChart3 },
+            ],
+          },
+        ];
 
   return (
     <>
@@ -104,27 +117,29 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
             </button>
           </div>
 
-          {/* Company Switcher: Switch to Cheran Irrigation */}
-          <div className="p-2.5 bg-[#EAF3F0] border-b border-[#D3E6E0]">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveCompany("irrigation");
-                navigate("/");
-                if (onClose) onClose();
-              }}
-              className="w-full py-1.5 px-2.5 bg-white hover:bg-emerald-50 text-[#1E4D40] border border-[#B8D7CE] rounded-[7px] text-[11px] font-bold flex items-center justify-between transition-all shadow-xs cursor-pointer active:scale-98"
-              title="Switch to Cheran Irrigation"
-            >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <ArrowLeftRight size={13} className="text-[#2F6F5E] shrink-0" />
-                <span className="truncate">Switch to Cheran Irrigation</span>
-              </div>
-              <span className="text-[9px] px-1.5 py-0.2 bg-[#1E4D40] text-white rounded font-mono shrink-0">
-                Irrigation
-              </span>
-            </button>
-          </div>
+          {/* Company Switcher: Switch to Cheran Irrigation (Hidden for PLAST role) */}
+          {role !== "PLAST" && (
+            <div className="p-2.5 bg-[#EAF3F0] border-b border-[#D3E6E0]">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCompany("irrigation");
+                  navigate("/");
+                  if (onClose) onClose();
+                }}
+                className="w-full py-1.5 px-2.5 bg-white hover:bg-emerald-50 text-[#1E4D40] border border-[#B8D7CE] rounded-[7px] text-[11px] font-bold flex items-center justify-between transition-all shadow-xs cursor-pointer active:scale-98"
+                title="Switch to Cheran Irrigation"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ArrowLeftRight size={13} className="text-[#2F6F5E] shrink-0" />
+                  <span className="truncate">Switch to Cheran Irrigation</span>
+                </div>
+                <span className="text-[9px] px-1.5 py-0.2 bg-[#1E4D40] text-white rounded font-mono shrink-0">
+                  Irrigation
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* Nav Menu */}
           <nav className="flex-1 p-3 space-y-4 overflow-y-auto">

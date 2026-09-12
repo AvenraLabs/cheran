@@ -40,6 +40,16 @@ const PlastSale = db.define(
       allowNull: false,
       defaultValue: 0.0,
     },
+    discount_type: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: "AMOUNT", // 'AMOUNT' or 'PERCENTAGE'
+    },
+    discount_value: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      defaultValue: 0.0,
+    },
     taxable_amount: {
       type: DataTypes.DECIMAL(14, 2),
       allowNull: false,

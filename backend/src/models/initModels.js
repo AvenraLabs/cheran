@@ -22,6 +22,7 @@ import ProductionOutput from "../modules/inventory/production-output.model.js";
 
 // Commissions & Settlements
 import DealerCommission from "../modules/dealers/dealer-commission.model.js";
+import DealerCommissionSlab from "../modules/dealers/dealer-commission-slab.model.js";
 import DealerSettlement from "../modules/dealers/dealer-settlement.model.js";
 
 // Expenses
@@ -75,6 +76,17 @@ Dealer.hasMany(GovernmentProject, {
   onDelete: "SET NULL",
 });
 GovernmentProject.belongsTo(Dealer, {
+  foreignKey: "dealer_id",
+  as: "dealer",
+});
+
+// Dealer <-> Commission Slabs (Date-effective rates)
+Dealer.hasMany(DealerCommissionSlab, {
+  foreignKey: "dealer_id",
+  as: "commission_slabs",
+  onDelete: "CASCADE",
+});
+DealerCommissionSlab.belongsTo(Dealer, {
   foreignKey: "dealer_id",
   as: "dealer",
 });
@@ -607,6 +619,7 @@ export {
   ProductionMaterial,
   ProductionOutput,
   DealerCommission,
+  DealerCommissionSlab,
   DealerSettlement,
   ExpenseCategory,
   Expense,

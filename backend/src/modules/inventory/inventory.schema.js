@@ -43,13 +43,15 @@ export const createProductionEntrySchema = z.object({
   body: z.object({
     production_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
     reference_number: z.string().max(100).optional().nullable(),
+    wastage_quantity: z.coerce.number().min(0, "Wastage quantity cannot be negative").optional().default(0),
+    notes: z.string().max(1000).optional().nullable(),
     materials: z
       .array(
         z.object({
           item_id: z.string().min(1, "Invalid raw material ID"),
           unit_id: z.string().min(1, "Invalid unit ID").optional(),
-          quantity_used: z.number().positive("Quantity used must be greater than 0"),
-          wastage_quantity: z.number().min(0, "Wastage quantity cannot be negative").optional().default(0),
+          quantity_used: z.coerce.number().positive("Quantity used must be greater than 0"),
+          wastage_quantity: z.coerce.number().min(0, "Wastage quantity cannot be negative").optional().default(0),
         })
       )
       .min(1, "At least one raw material input is required"),
@@ -58,7 +60,7 @@ export const createProductionEntrySchema = z.object({
         z.object({
           item_id: z.string().min(1, "Invalid finished good ID"),
           unit_id: z.string().min(1, "Invalid unit ID").optional(),
-          quantity_produced: z.number().positive("Quantity produced must be greater than 0"),
+          quantity_produced: z.coerce.number().positive("Quantity produced must be greater than 0"),
         })
       )
       .min(1, "At least one finished good output is required"),

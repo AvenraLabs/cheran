@@ -576,9 +576,9 @@ export function PendingReportsPage() {
       cur.mat_pendency_ha = Math.max(0, parseFloat((cur.wo_ha - cur.invoiced_ha).toFixed(2)));
       cur.mat_pendency_count = Math.max(0, cur.wo_count - cur.invoiced_count);
 
-      // Work Completion Pendency = Material Supplied - Work Completed
-      cur.wc_pendency_ha = Math.max(0, parseFloat((cur.invoiced_ha - cur.wc_ha).toFixed(2)));
-      cur.wc_pendency_count = Math.max(0, cur.invoiced_count - cur.wc_count);
+      // Work Completion Pendency = Work Orders Issued - Work Completed
+      cur.wc_pendency_ha = Math.max(0, parseFloat((cur.wo_ha - cur.wc_ha).toFixed(2)));
+      cur.wc_pendency_count = Math.max(0, cur.wo_count - cur.wc_count);
 
       return cur;
     });
@@ -887,7 +887,7 @@ export function PendingReportsPage() {
                 {(grand.wc_pendency_ha || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })} Ha
               </div>
               <div className="mt-0.5 text-[11px] text-[#991B1B] font-semibold">
-                {grand.wc_pendency_count || 0} Invoiced Pending Work
+                {grand.wc_pendency_count || 0} WO Pending Work Completion
               </div>
             </div>
           </div>

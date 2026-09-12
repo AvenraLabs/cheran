@@ -4,6 +4,7 @@ export const createDealerSchema = z.object({
   body: z.object({
     name: z.string().min(1, "Dealer name is required").max(255),
     commission_percentage: z.number().min(0).max(100).optional().nullable(),
+    effective_from: z.string().optional().nullable(),
     is_active: z.boolean().optional(),
   }),
 });

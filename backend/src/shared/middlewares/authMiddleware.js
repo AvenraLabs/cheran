@@ -146,6 +146,27 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     return next();
   }
 
+  // 'PLAST' role: Restricted to Plast Sales & Billing and Customers only
+  if (role === "PLAST") {
+    const plastAllowedPrefixes = [
+      "/api/plast/sales",
+      "/api/plast/customers",
+      "/api/plast/items",
+      "/api/plast/units",
+    ];
+
+    const isAllowed = plastAllowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
+    if (!isAllowed) {
+      return next(
+        new AppError(
+          `Access forbidden. Plast role is restricted to Sales & Billing and Customers.`,
+          403
+        )
+      );
+    }
+    return next();
+  }
+
   return next();
 };
 

@@ -862,9 +862,6 @@ export function CommissionBatchDetailPage() {
                 <FileText size={16} className="text-[#2F6F5E]" />
                 Proceeding Line Items ({filteredProjects.length})
               </h3>
-              <p className="text-xs text-[#52607D] mt-0.5">
-                Farmers, subsidy allocations, delay metrics, and exact dealer payout breakdown for this tranche.
-              </p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -963,7 +960,25 @@ export function CommissionBatchDetailPage() {
                           </div>
                         </td>
                         <td className="py-2.5 px-3 text-[#14213D] font-medium">
-                          {p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned")}
+                          <div>{p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned")}</div>
+                          {p.dealer_rate_percentage > 0 && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span
+                                className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
+                                  p.dealer_rate_percentage >= 19
+                                    ? "bg-amber-100 text-amber-900 border border-amber-200"
+                                    : "bg-emerald-100 text-[#2F6F5E] border border-emerald-200"
+                                }`}
+                              >
+                                {p.dealer_rate_percentage}% Rate
+                              </span>
+                              {p.invoice_date && (
+                                <span className="text-[10px] text-[#52607D]">
+                                  ({formatDate(p.invoice_date)})
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">

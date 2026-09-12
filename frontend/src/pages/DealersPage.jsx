@@ -1,5 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Users, Search, RefreshCw, Edit2, Trash2, GitMerge, ArrowRight, Info, Percent, CheckCircle2 } from "lucide-react";
+import {
+  Plus,
+  Users,
+  Search,
+  RefreshCw,
+  Edit2,
+  Trash2,
+  GitMerge,
+  ArrowRight,
+  Info,
+  Percent,
+  CheckCircle2,
+  Calendar,
+  Clock,
+} from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
@@ -17,25 +31,34 @@ export function DealersPage() {
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
 
-  // Bulk / Universal Commission Modal State
-  const [bulkCommissionModalOpen, setBulkCommissionModalOpen] = useState(false);
-  const [universalCommissionInput, setUniversalCommissionInput] = useState("8.0");
-  const [overwriteExisting, setOverwriteExisting] = useState(true);
-  const [applyingBulkCommission, setApplyingBulkCommission] = useState(false);
+  // Date-Effective Universal Policy Rule State
+  const [policyModalOpen, setPolicyModalOpen] = useState(false);
+  const [policyEffectiveFrom, setPolicyEffectiveFrom] = useState("2026-06-01");
+  const [policyCommission, setPolicyCommission] = useState("15.0");
+  const [applyingPolicy, setApplyingPolicy] = useState(false);
+
 
   // Add Modal State
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [name, setName] = useState("");
-  const [commissionPercentage, setCommissionPercentage] = useState("");
+  const [createEffectiveFrom, setCreateEffectiveFrom] = useState("2026-06-01");
+  const [createCommissionRate, setCreateCommissionRate] = useState("15.0");
   const [saving, setSaving] = useState(false);
 
-  // Edit Modal State
+  // Edit Modal State (with embedded Date-Based Commission Slabs)
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingDealer, setEditingDealer] = useState(null);
   const [editName, setEditName] = useState("");
-  const [editCommission, setEditCommission] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [updating, setUpdating] = useState(false);
+
+  // Embedded slabs inside Edit Dealer modal
+  const [editDealerSlabs, setEditDealerSlabs] = useState([]);
+  const [loadingEditSlabs, setLoadingEditSlabs] = useState(false);
+  const [inlineSlabFrom, setInlineSlabFrom] = useState("");
+  const [inlineSlabTo, setInlineSlabTo] = useState("");
+  const [inlineSlabRate, setInlineSlabRate] = useState("");
+  const [addingInlineSlab, setAddingInlineSlab] = useState(false);
 
   // Delete Confirmation State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -84,13 +107,15 @@ export function DealersPage() {
       setSaving(true);
       await api.post("/dealers", {
         name,
-        commission_percentage: commissionPercentage ? parseFloat(commissionPercentage) : null,
+        commission_percentage: createCommissionRate ? parseFloat(createCommissionRate) : null,
+        effective_from: createEffectiveFrom || "2026-06-01",
       });
 
       toast.success(`Dealer '${name}' registered successfully`);
       setCreateModalOpen(false);
       setName("");
-      setCommissionPercentage("");
+      setCreateCommissionRate("15.0");
+      setCreateEffectiveFrom("2026-06-01");
       fetchDealers(1, pagination.limit);
       fetchAllDealersForMerge();
     } catch (err) {
@@ -100,12 +125,71 @@ export function DealersPage() {
     }
   };
 
-  const openEditModal = (dealer) => {
+  const openEditModal = async (dealer) => {
     setEditingDealer(dealer);
     setEditName(dealer.name || "");
-    setEditCommission(dealer.commission_percentage || "");
     setEditIsActive(dealer.is_active !== false);
+    setInlineSlabFrom("");
+    setInlineSlabTo("");
+    setInlineSlabRate("");
     setEditModalOpen(true);
+    try {
+      setLoadingEditSlabs(true);
+      const res = await api.get(`/dealers/${dealer.id}/slabs`);
+      setEditDealerSlabs(res.data?.slabs || []);
+    } catch (err) {
+      console.error("Failed to fetch dealer slabs:", err);
+    } finally {
+      setLoadingEditSlabs(false);
+    }
+  };
+
+  const handleAddInlineSlab = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!editingDealer) return;
+    if (!inlineSlabFrom) {
+      toast.error("Effective from date is required");
+      return;
+    }
+    const val = parseFloat(inlineSlabRate);
+    if (isNaN(val) || val < 0 || val > 100) {
+      toast.error("Commission rate must be between 0% and 100%");
+      return;
+    }
+
+    try {
+      setAddingInlineSlab(true);
+      await api.post(`/dealers/${editingDealer.id}/slabs`, {
+        effective_from: inlineSlabFrom,
+        effective_to: inlineSlabTo || null,
+        commission_percentage: val,
+      });
+      toast.success("Date-based commission slab added!");
+      setInlineSlabFrom("");
+      setInlineSlabTo("");
+      setInlineSlabRate("");
+      const res = await api.get(`/dealers/${editingDealer.id}/slabs`);
+      setEditDealerSlabs(res.data?.slabs || []);
+      fetchDealers(pagination.page, pagination.limit);
+    } catch (err) {
+      toast.error(err.message || "Failed to add commission slab");
+    } finally {
+      setAddingInlineSlab(false);
+    }
+  };
+
+  const handleDeleteInlineSlab = async (slabId) => {
+    try {
+      await api.delete(`/dealers/slabs/${slabId}`);
+      toast.success("Commission slab removed");
+      if (editingDealer) {
+        const res = await api.get(`/dealers/${editingDealer.id}/slabs`);
+        setEditDealerSlabs(res.data?.slabs || []);
+      }
+      fetchDealers(pagination.page, pagination.limit);
+    } catch (err) {
+      toast.error(err.message || "Failed to delete slab");
+    }
   };
 
   const handleUpdateDealer = async (e) => {
@@ -116,7 +200,6 @@ export function DealersPage() {
       setUpdating(true);
       await api.patch(`/dealers/${editingDealer.id}`, {
         name: editName,
-        commission_percentage: editCommission !== "" ? parseFloat(editCommission) : null,
         is_active: editIsActive,
       });
 
@@ -191,39 +274,42 @@ export function DealersPage() {
     }
   };
 
-  const openUniversalCommissionModal = () => {
-    setUniversalCommissionInput("8.0");
-    setOverwriteExisting(true);
-    setBulkCommissionModalOpen(true);
+  // Open Commission Slabs / Edit Modal for a Dealer
+  const openSlabsModal = (dealer) => {
+    openEditModal(dealer);
   };
 
-  const handleSetUniversalCommission = async (e) => {
+
+  // Apply Universal Date Policy Rule
+  const handleApplyUniversalPolicy = async (e) => {
     e.preventDefault();
-    if (universalCommissionInput === "" || isNaN(parseFloat(universalCommissionInput))) {
-      toast.error("Please enter a valid commission percentage");
+    if (!policyEffectiveFrom) {
+      toast.error("Effective date is required (e.g. 2026-06-01)");
       return;
     }
-    const val = parseFloat(universalCommissionInput);
-    if (val < 0 || val > 100) {
+    const val = parseFloat(policyCommission);
+    if (isNaN(val) || val < 0 || val > 100) {
       toast.error("Commission percentage must be between 0% and 100%");
       return;
     }
 
     try {
-      setApplyingBulkCommission(true);
-      const res = await api.post("/dealers/universal-commission", {
+      setApplyingPolicy(true);
+      const res = await api.post("/dealers/universal-policy", {
+        effective_from: policyEffectiveFrom,
         commission_percentage: val,
-        overwrite_existing: overwriteExisting,
       });
 
-      toast.success(res.data?.message || `Commission percentage set to ${val}% for all dealers`);
-      setBulkCommissionModalOpen(false);
+      toast.success(
+        res.data?.message ||
+          `Universal rule applied! Set ${val}% starting ${policyEffectiveFrom} for all active dealers.`
+      );
+      setPolicyModalOpen(false);
       fetchDealers(pagination.page, pagination.limit);
-      fetchAllDealersForMerge();
     } catch (err) {
-      toast.error(err.message || "Failed to set universal commission percentage");
+      toast.error(err.message || "Failed to apply universal commission policy");
     } finally {
-      setApplyingBulkCommission(false);
+      setApplyingPolicy(false);
     }
   };
 
@@ -238,11 +324,11 @@ export function DealersPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
-              icon={Percent}
-              onClick={openUniversalCommissionModal}
-              title="Set universal standard commission percentage for all dealers"
+              icon={Calendar}
+              onClick={() => setPolicyModalOpen(true)}
+              title="Apply date-effective commission rule to all dealers (e.g. 15% from 01-06-2026)"
             >
-              Set Commission for All
+              Apply Date Policy Rule
             </Button>
             <Button variant="secondary" icon={GitMerge} onClick={openMergeModal}>
               Merge
@@ -302,7 +388,7 @@ export function DealersPage() {
                     <tr>
                       <th className="py-3 px-4">Dealer Name</th>
                       <th className="py-3 px-4">Normalized Key</th>
-                      <th className="py-3 px-4">Commission %</th>
+                      <th className="py-3 px-4">Commission Slabs (Date-Based)</th>
                       <th className="py-3 px-4">Created By</th>
                       <th className="py-3 px-4">Last Edited By</th>
                       <th className="py-3 px-4">Status</th>
@@ -318,7 +404,37 @@ export function DealersPage() {
                           {d.normalized_name}
                         </td>
                         <td className="py-3 px-4 font-medium text-[#14213D]">
-                          {d.commission_percentage ? `${d.commission_percentage}%` : "—"}
+                          {d.commission_slabs && d.commission_slabs.length > 0 ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-[#2F6F5E]">
+                                {(() => {
+                                  const ongoing = d.commission_slabs.find((s) => !s.effective_to);
+                                  return ongoing
+                                    ? `${ongoing.commission_percentage}%`
+                                    : `${d.commission_slabs[0].commission_percentage}%`;
+                                })()}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(d)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
+                                title="Click to view and configure date slabs"
+                              >
+                                <Calendar size={10} />
+                                {d.commission_slabs.length} Slabs
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(d)}
+                              className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 font-semibold cursor-pointer"
+                              title="Click to configure date-based commission slabs"
+                            >
+                              <Plus size={10} />
+                              Configure Slabs
+                            </button>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-[#52607D]">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#FAFAF8] text-[#52607D] border border-[#E4E1D8]">
@@ -351,10 +467,10 @@ export function DealersPage() {
                               size="sm"
                               icon={Edit2}
                               onClick={() => openEditModal(d)}
-                              className="px-2 py-1"
-                              title="Edit Dealer"
+                              className="px-2.5 py-1"
+                              title="Edit Dealer & Commission Slabs"
                             >
-                              Edit
+                              Edit & Slabs
                             </Button>
                             <Button
                               variant="danger"
@@ -495,7 +611,8 @@ export function DealersPage() {
       <Modal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        title="Add New Dealer"
+        title="Add New Partner Dealer"
+        size="md"
       >
         <form onSubmit={handleCreateDealer} className="space-y-4 text-xs">
           <div>
@@ -510,16 +627,41 @@ export function DealersPage() {
             />
           </div>
 
-          <div>
-            <label className="font-semibold text-[#14213D]">Commission Percentage (%)</label>
-            <input
-              type="number"
-              step="0.01"
-              placeholder="e.g. 12.5"
-              value={commissionPercentage}
-              onChange={(e) => setCommissionPercentage(e.target.value)}
-              className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
-            />
+          <div className="p-3 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] space-y-2">
+            <div className="font-semibold text-[#14213D] text-xs">
+              Initial Date-Based Commission (Optional)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#52607D] mb-1">
+                  Effective From Date
+                </label>
+                <input
+                  type="date"
+                  value={createEffectiveFrom}
+                  onChange={(e) => setCreateEffectiveFrom(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[#52607D] mb-1">
+                  Commission Rate (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="e.g. 15.0"
+                  value={createCommissionRate}
+                  onChange={(e) => setCreateCommissionRate(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs font-mono font-bold"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-[#52607D]">
+              Commission is date-based. Additional date slabs can be added or edited anytime in Edit Dealer.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
@@ -532,148 +674,192 @@ export function DealersPage() {
               Cancel
             </Button>
             <Button type="submit" size="sm" loading={saving}>
-              Save
+              Save Dealer
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* Edit Dealer Modal */}
+      {/* Edit Dealer Modal (Unified with Date-Based Slabs) */}
       <Modal
         isOpen={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         title={`Edit Dealer: ${editingDealer?.name}`}
+        size="lg"
       >
-        <form onSubmit={handleUpdateDealer} className="space-y-4 text-xs">
-          <div>
-            <label className="font-semibold text-[#14213D]">Dealer / Firm Name *</label>
-            <input
-              type="text"
-              required
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
-            />
+        <div className="space-y-4 text-xs">
+          {/* Dealer Information Form */}
+          <form onSubmit={handleUpdateDealer} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+              <div className="sm:col-span-2">
+                <label className="font-semibold text-[#14213D]">Dealer / Firm Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pb-2.5">
+                <input
+                  type="checkbox"
+                  id="editIsActive"
+                  checked={editIsActive}
+                  onChange={(e) => setEditIsActive(e.target.checked)}
+                  className="rounded border-[#E4E1D8] text-[#2F6F5E] focus:ring-[#2F6F5E]"
+                />
+                <label htmlFor="editIsActive" className="font-semibold text-[#14213D] cursor-pointer">
+                  Dealer is Active
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" size="sm" loading={updating}>
+                Save Dealer Info
+              </Button>
+            </div>
+          </form>
+
+          {/* Date-Based Commission Slabs Section */}
+          <div className="pt-3 border-t border-[#EDEAE1] space-y-3">
+            <div>
+              <span className="font-bold text-[#14213D] text-xs block">
+                Date-Based Commission Timeline
+              </span>
+              <span className="text-[11px] text-[#52607D]">
+                Matched against project <strong>Invoice Date</strong> during proceedings calculation
+              </span>
+            </div>
+
+            {/* Slabs Table */}
+            {loadingEditSlabs ? (
+              <div className="p-3">
+                <SkeletonLoader rows={2} />
+              </div>
+            ) : editDealerSlabs.length === 0 ? (
+              <div className="p-3 text-center bg-[#FAFAF8] border border-dashed border-[#E4E1D8] rounded-[8px] text-[#52607D]">
+                No date slabs configured yet. Add an effective date slab below.
+              </div>
+            ) : (
+              <div className="border border-[#E4E1D8] rounded-[8px] overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] font-semibold">
+                    <tr>
+                      <th className="py-2 px-3">Effective From</th>
+                      <th className="py-2 px-3">Effective To</th>
+                      <th className="py-2 px-3 text-right">Commission Rate</th>
+                      <th className="py-2 px-3 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EDEAE1]">
+                    {editDealerSlabs.map((s) => (
+                      <tr key={s.id} className="hover:bg-[#FAFAF8]">
+                        <td className="py-2 px-3 font-mono font-semibold text-[#14213D]">
+                          {s.effective_from}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-[#52607D]">
+                          {s.effective_to ? (
+                            s.effective_to
+                          ) : (
+                            <span className="text-emerald-700 font-sans font-bold">
+                              Present / Ongoing
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                          {s.commission_percentage}%
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInlineSlab(s.id)}
+                            className="text-rose-600 hover:text-rose-800 p-1 rounded hover:bg-rose-50 cursor-pointer"
+                            title="Delete Slab"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Inline Add Slab Form */}
+            <div className="p-3 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] space-y-2">
+              <div className="font-semibold text-[#14213D] text-[11px]">
+                Add Date Slab for this Dealer
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#52607D] mb-0.5">
+                    From Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={inlineSlabFrom}
+                    onChange={(e) => setInlineSlabFrom(e.target.value)}
+                    className="w-full px-2 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#52607D] mb-0.5">
+                    To Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={inlineSlabTo}
+                    onChange={(e) => setInlineSlabTo(e.target.value)}
+                    placeholder="Ongoing"
+                    className="w-full px-2 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#52607D] mb-0.5">
+                    Commission Rate (%) *
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      placeholder="e.g. 15.0"
+                      value={inlineSlabRate}
+                      onChange={(e) => setInlineSlabRate(e.target.value)}
+                      className="w-full px-2 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs font-mono font-bold"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      icon={Plus}
+                      loading={addingInlineSlab}
+                      onClick={handleAddInlineSlab}
+                      className="shrink-0 px-2 py-1 text-xs"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label className="font-semibold text-[#14213D]">Commission Percentage (%)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={editCommission}
-              onChange={(e) => setEditCommission(e.target.value)}
-              className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="editIsActive"
-              checked={editIsActive}
-              onChange={(e) => setEditIsActive(e.target.checked)}
-              className="rounded border-[#E4E1D8] text-[#2F6F5E] focus:ring-[#2F6F5E]"
-            />
-            <label htmlFor="editIsActive" className="font-semibold text-[#14213D] cursor-pointer">
-              Dealer is Active
-            </label>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+          <div className="flex justify-end pt-3 border-t border-[#EDEAE1]">
             <Button
               type="button"
               variant="secondary"
               size="sm"
               onClick={() => setEditModalOpen(false)}
             >
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" loading={updating}>
-              Save
+              Close
             </Button>
           </div>
-        </form>
-      </Modal>
-
-      {/* Universal / Bulk Commission Modal */}
-      <Modal
-        isOpen={bulkCommissionModalOpen}
-        onClose={() => setBulkCommissionModalOpen(false)}
-        title="Set Universal Commission for All Dealers"
-      >
-        <form onSubmit={handleSetUniversalCommission} className="space-y-4 text-xs">
-          <div className="p-3 bg-[#EAF3F0] rounded-[8px] border border-[#C2DFD6] space-y-1.5 text-xs text-[#2F6F5E]">
-            <div className="flex items-center gap-2 font-bold text-[#14213D]">
-              <Percent size={15} className="text-[#2F6F5E]" />
-              <span>Universal Standard Commission</span>
-            </div>
-            <p className="text-[#52607D] text-[11px] leading-relaxed">
-              This will update the standard commission percentage for all registered dealers across the system. You can still customize or override any dealer's commission individually anytime from the table.
-            </p>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-[#14213D] mb-1">
-              Standard Commission Percentage (%) <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                required
-                placeholder="e.g. 8.0"
-                value={universalCommissionInput}
-                onChange={(e) => setUniversalCommissionInput(e.target.value)}
-                className="w-full px-3 py-2 font-mono font-bold bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D] pr-8"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-xs text-[#52607D]">
-                %
-              </span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1] space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="overwriteExisting"
-                checked={overwriteExisting}
-                onChange={(e) => setOverwriteExisting(e.target.checked)}
-                className="rounded border-[#E4E1D8] text-[#2F6F5E] focus:ring-[#2F6F5E] cursor-pointer"
-              />
-              <label htmlFor="overwriteExisting" className="font-semibold text-[#14213D] cursor-pointer">
-                Overwrite dealers with existing custom commission %
-              </label>
-            </div>
-            <div className="text-[11px] text-[#52607D]">
-              {overwriteExisting
-                ? `Will update all active dealers to ${universalCommissionInput || 0}%.`
-                : `Will only assign ${universalCommissionInput || 0}% to dealers who currently have no commission percentage set.`}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setBulkCommissionModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              loading={applyingBulkCommission}
-              icon={CheckCircle2}
-            >
-              Apply to All Dealers
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}
@@ -711,6 +897,77 @@ export function DealersPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Universal Date Policy Rule Modal */}
+      <Modal
+        isOpen={policyModalOpen}
+        onClose={() => setPolicyModalOpen(false)}
+        title="Apply Date-Effective Commission Rule to All Dealers"
+      >
+        <form onSubmit={handleApplyUniversalPolicy} className="space-y-4 text-xs">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-[#14213D] mb-1">
+                Effective From Date <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                required
+                value={policyEffectiveFrom}
+                onChange={(e) => setPolicyEffectiveFrom(e.target.value)}
+                className="w-full px-3 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              />
+              <span className="text-[10px] text-[#52607D] block mt-0.5">
+                Projects invoiced on or after this date will use this rate.
+              </span>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-[#14213D] mb-1">
+                New Commission Rate (%) <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  required
+                  placeholder="e.g. 15.0"
+                  value={policyCommission}
+                  onChange={(e) => setPolicyCommission(e.target.value)}
+                  className="w-full pl-3 pr-8 py-2 bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#52607D] font-bold">
+                  %
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setPolicyModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              loading={applyingPolicy}
+              icon={CheckCircle2}
+            >
+              Apply Policy to All Dealers
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+
     </div>
   );
 }

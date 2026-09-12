@@ -411,6 +411,8 @@ export async function getStockReceiptById(id) {
 export async function createProductionEntry({
   production_date = new Date().toISOString().split("T")[0],
   reference_number = null,
+  wastage_quantity = 0,
+  notes = null,
   materials = [],
   outputs = [],
 }) {
@@ -420,6 +422,11 @@ export async function createProductionEntry({
 
   if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
     throw new AppError("At least one finished good output is required for production", 400);
+  }
+
+  const parsedWastage = parseFloat(wastage_quantity || 0);
+  if (isNaN(parsedWastage) || parsedWastage < 0) {
+    throw new AppError("Batch wastage quantity cannot be negative", 400);
   }
 
   return await db.transaction(async (transaction) => {
@@ -455,12 +462,7 @@ export async function createProductionEntry({
         throw new AppError(`Quantity used must be greater than 0 for raw material "${item.name}"`, 400);
       }
 
-      const qtyWastage = parseFloat(mat.wastage_quantity || 0);
-      if (isNaN(qtyWastage) || qtyWastage < 0) {
-        throw new AppError(`Wastage quantity cannot be negative for raw material "${item.name}"`, 400);
-      }
-
-      const totalRequired = parseFloat((qtyUsed + qtyWastage).toFixed(3));
+      const totalRequired = qtyUsed;
 
       // Acquire exclusive row lock on InventoryStock to prevent concurrent over-consumption race condition (Point 8)
       const stockRecord = await InventoryStock.findOne({
@@ -473,7 +475,7 @@ export async function createProductionEntry({
 
       if (totalRequired > availableStock) {
         throw new AppError(
-          `Insufficient stock for raw material "${item.name}". Required: ${totalRequired} ${item.unit?.symbol || "NOS"} (Used: ${qtyUsed} + Wastage: ${qtyWastage}), Available on hand: ${availableStock} ${item.unit?.symbol || "NOS"}`,
+          `Insufficient stock for raw material "${item.name}". Required: ${totalRequired} ${item.unit?.symbol || "NOS"}, Available on hand: ${availableStock} ${item.unit?.symbol || "NOS"}`,
           400
         );
       }
@@ -481,8 +483,6 @@ export async function createProductionEntry({
       validatedMaterials.push({
         item,
         quantity_used: qtyUsed,
-        wastage_quantity: qtyWastage,
-        total_required: totalRequired,
         unit_id: item.unit_id,
       });
     }
@@ -526,16 +526,18 @@ export async function createProductionEntry({
       });
     }
 
-    // 3. Create Production Entry record
+    // 3. Create Production Entry record with common batch-level wastage
     const productionEntry = await ProductionEntry.create(
       {
         production_date,
         reference_number: reference_number ? reference_number.trim() : null,
+        wastage_quantity: parsedWastage,
+        notes: notes ? notes.trim() : null,
       },
       { transaction }
     );
 
-    // 4. Create ProductionMaterial records & Movements (PRODUCTION_OUT & PRODUCTION_WASTAGE)
+    // 4. Create ProductionMaterial records & Movement (PRODUCTION_OUT for raw materials consumed)
     for (const mat of validatedMaterials) {
       await ProductionMaterial.create(
         {
@@ -543,12 +545,13 @@ export async function createProductionEntry({
           item_id: mat.item.id,
           unit_id: mat.unit_id,
           quantity_used: mat.quantity_used,
-          wastage_quantity: mat.wastage_quantity,
+          wastage_quantity: 0,
         },
         { transaction }
       );
 
-      // Atomic Stock Movement OUT (PRODUCTION_OUT)
+      // Atomic Stock Movement OUT (PRODUCTION_OUT) for materials used
+      // Note: Wastage is generated from these consumed materials and is NOT deducted again.
       await applyStockMovement({
         itemId: mat.item.id,
         movementType: "PRODUCTION_OUT",
@@ -559,20 +562,6 @@ export async function createProductionEntry({
         movementDate: production_date,
         transaction,
       });
-
-      // Atomic Stock Movement OUT for wastage (if any)
-      if (mat.wastage_quantity > 0) {
-        await applyStockMovement({
-          itemId: mat.item.id,
-          movementType: "PRODUCTION_WASTAGE",
-          quantity: mat.wastage_quantity,
-          unitId: mat.unit_id,
-          referenceType: "PRODUCTION_ENTRY",
-          referenceId: productionEntry.id,
-          movementDate: production_date,
-          transaction,
-        });
-      }
     }
 
     // 5. Create ProductionOutput records & Movement (PRODUCTION_IN)
@@ -665,9 +654,18 @@ export async function listProductionEntries({
   let totalFinishedProduced = 0;
 
   for (const entry of rows) {
+    // Common batch wastage (with legacy fallback to sum of materials if entry has 0)
+    const entryWaste = parseFloat(entry.wastage_quantity || 0);
+    if (entryWaste > 0) {
+      totalWastage += entryWaste;
+    } else {
+      for (const m of entry.materials || []) {
+        totalWastage += parseFloat(m.wastage_quantity || 0);
+      }
+    }
+
     for (const m of entry.materials || []) {
       totalMaterialsUsed += parseFloat(m.quantity_used || 0);
-      totalWastage += parseFloat(m.wastage_quantity || 0);
     }
     for (const o of entry.outputs || []) {
       totalFinishedProduced += parseFloat(o.quantity_produced || 0);

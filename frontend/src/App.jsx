@@ -45,6 +45,7 @@ import PlastSuppliersPage from "./pages/plast/PlastSuppliersPage.jsx";
 import PlastSalesPage from "./pages/plast/PlastSalesPage.jsx";
 import PlastCreateSalePage from "./pages/plast/PlastCreateSalePage.jsx";
 import PlastReportsPage from "./pages/plast/PlastReportsPage.jsx";
+import PlastUnitsPage from "./pages/plast/PlastUnitsPage.jsx";
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -62,6 +63,11 @@ function ProtectedLayout() {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  const role = (user?.role || "USER").toUpperCase();
+  if (role === "PLAST") {
+    return <Navigate to="/plast/sales" replace />;
   }
 
   return <Layout />;
@@ -86,11 +92,39 @@ function PlastProtectedLayout() {
   }
 
   const role = (user?.role || "USER").toUpperCase();
-  if (role !== "ADMIN") {
+  if (role !== "ADMIN" && role !== "PLAST") {
     return <Navigate to="/" replace />;
   }
 
   return <PlastLayout />;
+}
+
+/**
+ * Route guard for Admin-only Plast pages (blocks PLAST role from production, stock, units, etc.)
+ */
+function PlastAdminRoute({ children }) {
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+
+  if (role !== "ADMIN") {
+    return <Navigate to="/plast/sales" replace />;
+  }
+
+  return children;
+}
+
+/**
+ * Plast Index Route: Admin gets Dashboard, PLAST role lands on Sales & Billing
+ */
+function PlastIndexRoute() {
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+
+  if (role === "PLAST") {
+    return <Navigate to="/plast/sales" replace />;
+  }
+
+  return <PlastDashboardPage />;
 }
 
 /**
@@ -373,19 +407,69 @@ export function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
 
-        {/* Cheran Plast Routes (Isolated 2nd Company - Admin Only) */}
+        {/* Cheran Plast Routes (Admin has full access; PLAST role limited to Sales & Customers) */}
         <Route path="/plast" element={<PlastProtectedLayout />}>
-          <Route index element={<PlastDashboardPage />} />
-          <Route path="items" element={<PlastItemsPage />} />
-          <Route path="stock" element={<PlastStockPage />} />
-          <Route path="purchases" element={<PlastPurchasesPage />} />
-          <Route path="suppliers" element={<PlastSuppliersPage />} />
+          <Route index element={<PlastIndexRoute />} />
+          <Route
+            path="items"
+            element={
+              <PlastAdminRoute>
+                <PlastItemsPage />
+              </PlastAdminRoute>
+            }
+          />
+          <Route
+            path="units"
+            element={
+              <PlastAdminRoute>
+                <PlastUnitsPage />
+              </PlastAdminRoute>
+            }
+          />
+          <Route
+            path="stock"
+            element={
+              <PlastAdminRoute>
+                <PlastStockPage />
+              </PlastAdminRoute>
+            }
+          />
+          <Route
+            path="purchases"
+            element={
+              <PlastAdminRoute>
+                <PlastPurchasesPage />
+              </PlastAdminRoute>
+            }
+          />
+          <Route
+            path="suppliers"
+            element={
+              <PlastAdminRoute>
+                <PlastSuppliersPage />
+              </PlastAdminRoute>
+            }
+          />
           <Route path="vendors" element={<Navigate to="/plast/suppliers" replace />} />
-          <Route path="production" element={<PlastProductionPage />} />
+          <Route
+            path="production"
+            element={
+              <PlastAdminRoute>
+                <PlastProductionPage />
+              </PlastAdminRoute>
+            }
+          />
           <Route path="customers" element={<PlastCustomersPage />} />
           <Route path="sales" element={<PlastSalesPage />} />
           <Route path="sales/new" element={<PlastCreateSalePage />} />
-          <Route path="reports" element={<PlastReportsPage />} />
+          <Route
+            path="reports"
+            element={
+              <PlastAdminRoute>
+                <PlastReportsPage />
+              </PlastAdminRoute>
+            }
+          />
         </Route>
       </Routes>
     </AuthProvider>

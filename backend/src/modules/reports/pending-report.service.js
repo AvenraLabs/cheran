@@ -273,9 +273,9 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     const matPendCount = Math.max(0, woCount - invCount);
     const matPendHa = Math.max(0, parseFloat((woHa - invHa).toFixed(4)));
 
-    // Work completion pendency = Material Supplied - Work Completed
-    const wcPendCount = Math.max(0, invCount - wcCount);
-    const wcPendHa = Math.max(0, parseFloat((invHa - wcHa).toFixed(4)));
+    // Work completion pendency = Work Orders Issued - Work Completed
+    const wcPendCount = Math.max(0, woCount - wcCount);
+    const wcPendHa = Math.max(0, parseFloat((woHa - wcHa).toFixed(4)));
 
     // Joint verification pendency = Fund1 Credited - JV Completed
     const jvrPendCount = Math.max(0, fund1Count - jvCount);
@@ -512,16 +512,18 @@ export async function getPendingProjectsList(filters = {}) {
 
   // Pendency Type Logic
   if (pendency_type === "PENDING_WORK_COMPLETION") {
-    // Invoiced (Material Supplied) but Dealer has NOT completed work (sequence < 26)
-    whereConditions.push(`(
-      (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED')
-      AND COALESCE(gs.sequence_order, 0) < 26
-    )`);
-  } else if (pendency_type === "PENDING_MATERIAL_SUPPLY") {
-    // Work Order Issued but Material NOT supplied (sequence < 26)
+    // Work Order Issued but Dealer has NOT completed work (sequence < 26)
     whereConditions.push(`(
       (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21)
       AND COALESCE(gs.sequence_order, 0) < 26
+    )`);
+  } else if (pendency_type === "PENDING_MATERIAL_SUPPLY") {
+    // Show ONLY projects with status Issue Work Order AND not yet invoiced (without invoice number and date)
+    whereConditions.push(`(
+      (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%')
+      AND gp.current_status != 'INVOICED'
+      AND gp.invoice_date IS NULL
+      AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
     )`);
   } else if (pendency_type === "PENDING_JVR_COMPLETION") {
     // First Fund Credited but Dealer has NOT completed Joint Verification (sequence < 52)
@@ -531,9 +533,15 @@ export async function getPendingProjectsList(filters = {}) {
     )`);
   } else if (pendency_type === "ALL_PENDING") {
     whereConditions.push(`(
-      ((gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26)
+      (
+        (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21)
+        AND COALESCE(gs.sequence_order, 0) < 26
+      )
       OR
-      ((gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed')))
+      (
+        (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed'))
+        AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
+      )
     )`);
   }
 
@@ -545,9 +553,9 @@ export async function getPendingProjectsList(filters = {}) {
         CASE 
           WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
             THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
-          WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED') AND COALESCE(gs.sequence_order, 0) < 26 
-            THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
-          WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) 
+          WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26 
+            THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.invoice_date, gp.current_status_date))
+          WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%') AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
             THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
           ELSE (CURRENT_DATE - gp.current_status_date)
         END
@@ -634,18 +642,18 @@ export async function getPendingProjectsList(filters = {}) {
       CASE 
         WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
           THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
-        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED') AND COALESCE(gs.sequence_order, 0) < 26 
-          THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
-        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) 
+        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26 
+          THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.invoice_date, gp.current_status_date))
+        WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%') AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
           THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
         ELSE (CURRENT_DATE - gp.current_status_date)
       END::integer as days_pending,
       CASE 
         WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
           THEN 'PENDING_JVR_COMPLETION'
-        WHEN (gp.invoice_date IS NOT NULL OR gp.invoice_number IS NOT NULL OR gp.current_status = 'INVOICED') AND COALESCE(gs.sequence_order, 0) < 26 
-          THEN 'PENDING_WORK_COMPLETION'
         WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26 
+          THEN 'PENDING_WORK_COMPLETION'
+        WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%') AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
           THEN 'PENDING_MATERIAL_SUPPLY'
         ELSE 'OTHER'
       END as pendency_stage

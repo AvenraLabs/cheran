@@ -17,8 +17,10 @@ export const plastApi = {
   getReports: (type, params) => api.get("/plast/reports", { params: { type, ...params } }).then(unwrapData),
 
   // Units
-  getUnits: () => api.get("/plast/units").then(unwrapList),
+  getUnits: (params) => api.get("/plast/units", { params }).then(unwrapList),
   createUnit: (data) => api.post("/plast/units", data).then(unwrapData),
+  updateUnit: (id, data) => api.put(`/plast/units/${id}`, data).then(unwrapData),
+  deleteUnit: (id) => api.delete(`/plast/units/${id}`).then(unwrapData),
 
   // Items
   getItems: (params) => api.get("/plast/items", { params }).then(unwrapList),

@@ -1022,15 +1022,20 @@ export function ImportsPage() {
                 />
               </div>
               <div>
-                <label className="font-semibold text-[#14213D]">Commission % (Optional)</label>
+                <label className="font-semibold text-[#14213D]">Initial Commission Rate % (Optional)</label>
                 <input
                   type="number"
                   step="0.01"
-                  placeholder="e.g. 10.0"
+                  min="0"
+                  max="100"
+                  placeholder="e.g. 15.0"
                   value={newDealerCommission}
                   onChange={(e) => setNewDealerCommission(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1"
+                  className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:ring-2 focus:ring-[#2F6F5E] mt-1 font-mono"
                 />
+                <p className="text-[10px] text-[#52607D] mt-0.5">
+                  Creates date-based commission slab starting 2026-06-01. Can be customized in Dealers Directory.
+                </p>
               </div>
             </div>
           )}

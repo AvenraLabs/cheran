@@ -18,6 +18,15 @@ const ProductionEntry = db.define(
       type: DataTypes.STRING(100),
       allowNull: true,
     },
+    wastage_quantity: {
+      type: DataTypes.DECIMAL(12, 3),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
   },
   {
     tableName: "production_entries",

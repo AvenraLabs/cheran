@@ -4,46 +4,48 @@ import { authorize } from "../../shared/middlewares/authMiddleware.js";
 
 const router = Router();
 
-// Only ADMIN can access Plast module
-router.use(authorize("ADMIN"));
+// Allow ADMIN and PLAST into Plast router
+router.use(authorize("ADMIN", "PLAST"));
 
-// Dashboard & Reports
-router.get("/dashboard", controller.getDashboardStats);
-router.get("/reports", controller.getReports);
+// Dashboard & Reports (ADMIN only)
+router.get("/dashboard", authorize("ADMIN"), controller.getDashboardStats);
+router.get("/reports", authorize("ADMIN"), controller.getReports);
 
-// Units
+// Units (Read accessible to PLAST for sales dropdowns; Write is ADMIN only)
 router.get("/units", controller.getUnits);
-router.post("/units", controller.createUnit);
+router.post("/units", authorize("ADMIN"), controller.createUnit);
+router.put("/units/:id", authorize("ADMIN"), controller.updateUnit);
+router.delete("/units/:id", authorize("ADMIN"), controller.deleteUnit);
 
-// Items
+// Items (Read accessible to PLAST for sales dropdowns; Write is ADMIN only)
 router.get("/items", controller.getItems);
 router.get("/items/:id", controller.getItemById);
-router.post("/items", controller.createItem);
-router.put("/items/:id", controller.updateItem);
-router.delete("/items/:id", controller.deleteItem);
+router.post("/items", authorize("ADMIN"), controller.createItem);
+router.put("/items/:id", authorize("ADMIN"), controller.updateItem);
+router.delete("/items/:id", authorize("ADMIN"), controller.deleteItem);
 
-// Suppliers (Vendors)
-router.get("/suppliers", controller.getSuppliers);
-router.post("/suppliers", controller.createSupplier);
-router.put("/suppliers/:id", controller.updateSupplier);
+// Suppliers (Vendors) (ADMIN only)
+router.get("/suppliers", authorize("ADMIN"), controller.getSuppliers);
+router.post("/suppliers", authorize("ADMIN"), controller.createSupplier);
+router.put("/suppliers/:id", authorize("ADMIN"), controller.updateSupplier);
 
-// Customers
+// Customers (Accessible to both ADMIN and PLAST for billing)
 router.get("/customers", controller.getCustomers);
 router.post("/customers", controller.createCustomer);
 router.put("/customers/:id", controller.updateCustomer);
 
-// Stock On-Hand
-router.get("/inventory/stock", controller.getStockOnHand);
+// Stock On-Hand (ADMIN only)
+router.get("/inventory/stock", authorize("ADMIN"), controller.getStockOnHand);
 
-// Purchases (Raw Material Receipts from Vendors)
-router.get("/purchases", controller.getPurchases);
-router.post("/purchases", controller.createPurchase);
+// Purchases (Raw Material Receipts from Vendors) (ADMIN only)
+router.get("/purchases", authorize("ADMIN"), controller.getPurchases);
+router.post("/purchases", authorize("ADMIN"), controller.createPurchase);
 
-// Production (Daily Raw Material Consumption + Wastage -> Finished Goods)
-router.get("/production", controller.getProductionEntries);
-router.post("/production", controller.createProductionEntry);
+// Production (Daily Raw Material Consumption + Wastage -> Finished Goods) (ADMIN only)
+router.get("/production", authorize("ADMIN"), controller.getProductionEntries);
+router.post("/production", authorize("ADMIN"), controller.createProductionEntry);
 
-// Sales & Billing (Per-item discount & 0/5/18 GST)
+// Sales & Billing (Accessible to both ADMIN and PLAST)
 router.get("/sales", controller.getSales);
 router.get("/sales/:id", controller.getSaleById);
 router.post("/sales", controller.createSale);

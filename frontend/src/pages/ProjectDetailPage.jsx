@@ -578,7 +578,7 @@ export function ProjectDetailPage() {
             <div className="p-6 text-center bg-[#FAFAF8] border border-dashed border-[#E4E1D8] rounded-[8px] space-y-1">
               <p className="text-xs font-semibold text-[#14213D]">No Dealer Assigned to this Government Project</p>
               <p className="text-[11px] text-[#52607D]">
-                Dealer commission is strictly calculated based on the assigned dealer's commission percentage in the Dealer Master.
+                Dealer commission is strictly calculated based on the assigned dealer's date-effective commission slabs in the Dealer Master.
               </p>
             </div>
           ) : (
@@ -604,14 +604,18 @@ export function ProjectDetailPage() {
               {/* Overview KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="p-3.5 bg-[#FAFAF8] border border-[#EDEAE1] rounded-[8px] space-y-1">
-                  <div className="text-[11px] font-medium text-[#52607D]">Dealer Base Rate</div>
+                  <div className="text-[11px] font-medium text-[#52607D]">Effective Dealer Rate</div>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-base font-bold text-[#14213D]">
                       {commissionData.base_percentage !== null && commissionData.base_percentage !== undefined
                         ? `${commissionData.base_percentage}%`
                         : "0.00%"}
                     </span>
-                    <span className="text-[10px] text-[#8C97AB]">Configured Rate</span>
+                    <span className="text-[10px] text-[#8C97AB]">
+                      {commissionData?.rate_resolution?.source === "SLAB"
+                        ? "Date Slab Matched"
+                        : "Invoice Date Rate"}
+                    </span>
                   </div>
                 </div>
 

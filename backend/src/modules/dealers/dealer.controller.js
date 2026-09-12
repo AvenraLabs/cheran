@@ -87,3 +87,47 @@ export const setUniversalCommission = asyncHandler(async (req, res) => {
     data: result,
   });
 });
+
+export const getDealerCommissionSlabs = asyncHandler(async (req, res) => {
+  const result = await dealerService.getDealerCommissionSlabs(req.params.id);
+  res.status(200).json({
+    status: "success",
+    data: result,
+  });
+});
+
+export const createDealerCommissionSlab = asyncHandler(async (req, res) => {
+  const result = await dealerService.createDealerCommissionSlab(req.params.id, req.body);
+  res.status(201).json({
+    status: "success",
+    message: "Commission slab created successfully",
+    data: result,
+  });
+});
+
+export const updateDealerCommissionSlab = asyncHandler(async (req, res) => {
+  const result = await dealerService.updateDealerCommissionSlab(req.params.slabId, req.body);
+  res.status(200).json({
+    status: "success",
+    message: "Commission slab updated successfully",
+    data: result,
+  });
+});
+
+export const deleteDealerCommissionSlab = asyncHandler(async (req, res) => {
+  const result = await dealerService.deleteDealerCommissionSlab(req.params.slabId);
+  res.status(200).json({
+    status: "success",
+    message: "Commission slab removed",
+    data: result,
+  });
+});
+
+export const applyUniversalCommissionPolicy = asyncHandler(async (req, res) => {
+  const result = await dealerService.applyUniversalCommissionPolicy(req.body);
+  res.status(200).json({
+    status: "success",
+    message: `Universal policy applied! Updated ${result.dealers_updated} dealers to ${result.commission_percentage}% starting ${result.effective_from}.`,
+    data: result,
+  });
+});

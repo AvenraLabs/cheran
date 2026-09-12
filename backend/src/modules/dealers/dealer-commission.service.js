@@ -4,6 +4,8 @@ import GovernmentProject from "../projects/project.model.js";
 import GovernmentProjectStatusHistory from "../projects/project-history.model.js";
 import Dealer from "./dealer.model.js";
 import DealerCommission from "./dealer-commission.model.js";
+import DealerCommissionSlab from "./dealer-commission-slab.model.js";
+import { resolveEffectiveDealerCommission } from "./dealer.service.js";
 import Invoice from "../invoices/invoice.model.js";
 import AppError from "../../shared/appError.js";
 import { calculateDaysBetween } from "../../utils/dates.js";
@@ -31,6 +33,12 @@ export async function calculateProjectDealerCommission(projectId) {
     {
       model: Dealer,
       as: "dealer",
+      include: [
+        {
+          model: DealerCommissionSlab,
+          as: "commission_slabs",
+        },
+      ],
     },
     {
       model: Invoice,
@@ -56,7 +64,14 @@ export async function calculateProjectDealerCommission(projectId) {
   // If project has dealer_id but dealer association didn't populate, load dealer directly
   let dealer = project.dealer;
   if (!dealer && project.dealer_id) {
-    dealer = await Dealer.findByPk(project.dealer_id);
+    dealer = await Dealer.findByPk(project.dealer_id, {
+      include: [
+        {
+          model: DealerCommissionSlab,
+          as: "commission_slabs",
+        },
+      ],
+    });
   }
 
   const invoices = project.invoices || [];
@@ -117,12 +132,6 @@ export async function calculateProjectDealerCommission(projectId) {
     };
   }
 
-  // Base Commission Percentage strictly from dealer record
-  const basePercentage =
-    dealer.commission_percentage !== null && dealer.commission_percentage !== undefined
-      ? parseFloat(dealer.commission_percentage)
-      : 20.0;
-
   // Fetch status history in chronological order
   const histories = await GovernmentProjectStatusHistory.findAll({
     where: { project_id: project.id },
@@ -135,6 +144,14 @@ export async function calculateProjectDealerCommission(projectId) {
   // 1. Phase 1: INVOICED date -> Work Completion Approved date
   const invoicedHistory = histories.find((h) => h.status?.toUpperCase() === "INVOICED");
   const invoiceDate = invoicedHistory?.status_date || project.invoice_date || null;
+
+  // Base Commission Percentage resolved via date-based slabs matched against project's invoice date
+  const rateResolution = resolveEffectiveDealerCommission(
+    dealer,
+    invoiceDate,
+    dealer.commission_slabs || []
+  );
+  const basePercentage = rateResolution.rate;
 
   const workCompletionHistory = histories.find(
     (h) => h.status?.toUpperCase() === "WORK COMPLETION APPROVED" || h.status?.toUpperCase() === "WORK COMPLETED"
@@ -234,6 +251,7 @@ export async function calculateProjectDealerCommission(projectId) {
   const breakdownJson = {
     originalTotalCommission,
     invoiceDate,
+    rate_resolution: rateResolution,
     workCompletionDate,
     phase1DelayDays,
     phase1Cycles,
@@ -322,6 +340,7 @@ export async function calculateProjectDealerCommission(projectId) {
     base_amount: baseAmount,
     fittings_amount: fittingsAmount,
     base_percentage: basePercentage,
+    rate_resolution: rateResolution,
     original_commission_amount: originalTotalCommission,
     fixed_penalty_per_cycle: 1.0,
     penalty_percentage: totalPenaltyPoints,

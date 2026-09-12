@@ -22,6 +22,11 @@ export const PlastProductionEntry = db.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    wastage_quantity: {
+      type: DataTypes.DECIMAL(12, 3),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
   },
   {
     tableName: "plast_production_entries",

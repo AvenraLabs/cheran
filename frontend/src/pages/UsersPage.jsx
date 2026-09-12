@@ -12,6 +12,7 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  Factory,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../api/client.js";
@@ -250,6 +251,10 @@ export function UsersPage() {
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20">
                               <Shield size={12} /> Admin (Full Access)
                             </span>
+                          ) : u.role === "PLAST" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                              <Factory size={12} /> Plast (Sales & Customers)
+                            </span>
                           ) : u.role === "DEALER" ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                               <UsersIcon size={12} /> Dealer (Projects & Imports)
@@ -392,9 +397,10 @@ export function UsersPage() {
                 value={formData.role}
                 onChange={(val) => setFormData({ ...formData, role: val })}
                 options={[
-                  { value: "ADMIN", label: "Admin" },
-                  { value: "USER", label: "User" },
-                  { value: "DEALER", label: "Dealer" },
+                  { value: "ADMIN", label: "Admin (Full Access)" },
+                  { value: "USER", label: "User (Govt & Operations)" },
+                  { value: "DEALER", label: "Dealer (Projects & Imports)" },
+                  { value: "PLAST", label: "Plast (Sales & Customers Only)" },
                 ]}
               />
             </div>

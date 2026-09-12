@@ -332,9 +332,18 @@ export function PlastSalesPage() {
               {/* Summary Row */}
               <div className="flex justify-end pt-2 border-t border-[#EDEAE1]">
                 <div className="w-64 space-y-1">
+                  <div className="flex justify-between text-[#52607D]">
+                    <span>Subtotal:</span>
+                    <span>{formatCurrency(selectedSale.subtotal)}</span>
+                  </div>
                   {Number(selectedSale.discount_amount) > 0 && (
-                    <div className="flex justify-between text-[#52607D]">
-                      <span>Bill Discount:</span>
+                    <div className="flex justify-between text-amber-800 font-medium">
+                      <span>
+                        Bill Discount
+                        {selectedSale.discount_type === "PERCENTAGE" && Number(selectedSale.discount_value) > 0
+                          ? ` (${selectedSale.discount_value}%)`
+                          : ""}:
+                      </span>
                       <span>- {formatCurrency(selectedSale.discount_amount)}</span>
                     </div>
                   )}

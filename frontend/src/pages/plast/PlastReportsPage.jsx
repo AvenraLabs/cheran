@@ -128,9 +128,14 @@ export function PlastReportsPage() {
         csvContent += `"${p.receipt_date}","${p.supplier_name || p.supplier?.name || ""}","${p.reference_number || ""}","${p.items_count || 0}","${p.total_amount}"\n`;
       });
     } else if (activeTab === "production") {
-      csvContent += "Date,Reference,Materials Consumed Count,Finished Produced Count,Notes\n";
+      csvContent += "Date,Batch Reference,Raw Materials Consumed,Total Raw Qty (Kg),Common Wastage (Kg),Finished Outputs,Total Finished Qty,Notes\n";
       list.forEach((e) => {
-        csvContent += `"${e.production_date}","${e.reference_number || ""}","${e.materials?.length || 0}","${e.outputs?.length || 0}","${e.notes || ""}"\n`;
+        const rawDesc = (e.materials || []).map((m) => `${m.item?.name || "Raw"}: ${m.quantity_used} ${m.unit?.symbol || "Kg"}`).join("; ");
+        const totalRaw = (e.materials || []).reduce((acc, m) => acc + Number(m.quantity_used || 0), 0);
+        const wasteQty = Number(e.wastage_quantity || 0);
+        const outDesc = (e.outputs || []).map((o) => `${o.item?.name || "Fin"}: ${o.quantity_produced} ${o.unit?.symbol || "Nos"}`).join("; ");
+        const totalOut = (e.outputs || []).reduce((acc, o) => acc + Number(o.quantity_produced || 0), 0);
+        csvContent += `"${e.production_date}","${e.reference_number || ""}","${rawDesc}","${totalRaw}","${wasteQty}","${outDesc}","${totalOut}","${(e.notes || "").replace(/"/g, '""')}"\n`;
       });
     } else if (activeTab === "stock") {
       csvContent += "Item Name,Type,Category,Unit Price,Quantity On Hand,Stock Value\n";
@@ -337,6 +342,35 @@ export function PlastReportsPage() {
           </div>
         )}
 
+        {activeTab === "production" && (
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <MetricCard
+              title="Production Runs"
+              value={`${summary.total_production_runs || summary.total_entries || 0} Batches`}
+              subtitle="Completed production entries"
+              icon={Factory}
+            />
+            <MetricCard
+              title="Raw Consumed"
+              value={`${(summary.total_raw_used || 0).toLocaleString()} Kg`}
+              subtitle="Inventory deducted (Quantity Used)"
+              icon={Boxes}
+            />
+            <MetricCard
+              title="Common Wastage"
+              value={`${(summary.total_wastage || 0).toLocaleString()} Kg`}
+              subtitle="Batch scrap (No extra stock deduction)"
+              icon={TrendingUp}
+            />
+            <MetricCard
+              title="Finished Produced"
+              value={`${(summary.total_produced || 0).toLocaleString()} Units`}
+              subtitle="Inventory added (Finished output)"
+              icon={TrendingUp}
+            />
+          </div>
+        )}
+
         {activeTab === "stock" && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <MetricCard
@@ -440,24 +474,37 @@ export function PlastReportsPage() {
                         <th className="py-3 px-4">Date</th>
                         <th className="py-3 px-3">Batch / Ref</th>
                         <th className="py-3 px-4">Raw Materials Consumed</th>
+                        <th className="py-3 px-3">Common Wastage</th>
                         <th className="py-3 px-4">Finished Outputs</th>
                         <th className="py-3 px-3">Notes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1]">
-                      {safeDataList.map((e) => (
-                        <tr key={e.id} className="hover:bg-[#FAFAF8] transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">{e.production_date}</td>
-                          <td className="py-3 px-3 text-[#52607D] font-mono">{e.reference_number || "—"}</td>
-                          <td className="py-3 px-4 text-[#52607D]">
-                            {(e.materials || []).map((m) => `${m.item?.name || "Raw"}: ${m.quantity_used}${m.unit?.symbol || "Kg"}`).join(", ") || "None"}
-                          </td>
-                          <td className="py-3 px-4 font-bold text-[#14213D]">
-                            {(e.outputs || []).map((o) => `${o.item?.name || "Fin"}: +${o.quantity_produced}${o.unit?.symbol || "Nos"}`).join(", ") || "None"}
-                          </td>
-                          <td className="py-3 px-3 text-[#52607D] italic">{e.notes || "—"}</td>
-                        </tr>
-                      ))}
+                      {safeDataList.map((e) => {
+                        const wasteQty = Number(e.wastage_quantity || 0);
+                        return (
+                          <tr key={e.id} className="hover:bg-[#FAFAF8] transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">{e.production_date}</td>
+                            <td className="py-3 px-3 text-[#52607D] font-mono">{e.reference_number || "—"}</td>
+                            <td className="py-3 px-4 text-[#52607D]">
+                              {(e.materials || []).map((m) => `${m.item?.name || "Raw"}: ${m.quantity_used} ${m.unit?.symbol || "Kg"}`).join(", ") || "None"}
+                            </td>
+                            <td className="py-3 px-3">
+                              {wasteQty > 0 ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                  {wasteQty} Kg
+                                </span>
+                              ) : (
+                                <span className="text-[#52607D]">0 Kg</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 font-bold text-[#14213D]">
+                              {(e.outputs || []).map((o) => `${o.item?.name || "Fin"}: +${o.quantity_produced} ${o.unit?.symbol || "Nos"}`).join(", ") || "None"}
+                            </td>
+                            <td className="py-3 px-3 text-[#52607D] italic">{e.notes || "—"}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </>
                 )}

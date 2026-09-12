@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Search,
@@ -194,6 +194,106 @@ export function ProjectsPage() {
       setHistoryLoading(false);
     }
   };
+
+  // Prepare status timeline for modal, matching ProjectDetailPage lifecycle logic exactly
+  const modalStages = useMemo(() => {
+    if (!selectedProject) return [];
+
+    const MILESTONE_MAP = [
+      { field: "application_received_date", status: "Application Received" },
+      { field: "quotation_date", status: "Quotation Prepared by MI Company" },
+      { field: "work_order_date", status: "Issued Work Order" },
+      { field: "earlier_jv_completed_date", status: "Earlier JV Completed" },
+      { field: "first_fund_utr_date", status: "First Fund Credited (UTR Updated)" },
+      { field: "treasury_fund_utr_date", status: "Iamwarm Fund Credited (UTR Updated)" },
+      { field: "final_fund_utr_date", status: "Final Fund Credited (UTR Updated)" },
+    ];
+
+    const historyMap = new Map();
+
+    // 1. Seed milestones from project date columns
+    MILESTONE_MAP.forEach(({ field, status }) => {
+      if (selectedProject[field]) {
+        historyMap.set(status.trim().toUpperCase(), {
+          status,
+          status_date: selectedProject[field],
+        });
+      }
+    });
+
+    // 2. Overlay explicit history records from database audit logs
+    (historyData || []).forEach((h) => {
+      if (h.status) {
+        historyMap.set(h.status.trim().toUpperCase(), h);
+      }
+    });
+
+    // 3. Current active status from Govt Excel takes priority
+    if (selectedProject.current_status) {
+      const key = selectedProject.current_status.trim().toUpperCase();
+      const existing = historyMap.get(key);
+      historyMap.set(key, {
+        status: selectedProject.current_status,
+        status_date: selectedProject.current_status_date || existing?.status_date || null,
+      });
+    }
+
+    // Sort chronologically by status_date
+    const stages = Array.from(historyMap.values()).sort((a, b) => {
+      const dateA = a.status_date ? new Date(a.status_date).getTime() : 0;
+      const dateB = b.status_date ? new Date(b.status_date).getTime() : 0;
+      if (dateA && dateB && dateA !== dateB) return dateA - dateB;
+      if (dateA && !dateB) return -1;
+      if (!dateA && dateB) return 1;
+      return 0;
+    });
+
+    // Calculate elapsed duration for each stage:
+    // - If next recorded stage exists: diff between this stage date and next stage date (+X days)
+    // - If latest stage / current active: diff between this stage date and today (or invoice date if WO) (X days active)
+    return stages.map((step, idx) => {
+      let daysElapsed = null;
+      let isCurrentActive = false;
+
+      if (step.status_date) {
+        const currentDate = new Date(step.status_date);
+        const nextStage = stages.slice(idx + 1).find((s) => s.status_date);
+
+        if (nextStage && nextStage.status_date) {
+          const nextDate = new Date(nextStage.status_date);
+          const diffTime = nextDate.getTime() - currentDate.getTime();
+          daysElapsed = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+        } else {
+          isCurrentActive = true;
+          const isWOStage =
+            step.status === "Issued Work Order" ||
+            step.status === "Issue Work Order (Auto Quotation)" ||
+            step.status === "Quotation Prepared by Block (Auto Quotation)" ||
+            step.status === "Auto Quotation Prepared";
+
+          if (isWOStage && selectedProject.invoice_date) {
+            const invDate = new Date(selectedProject.invoice_date);
+            const diffTime = invDate.getTime() - currentDate.getTime();
+            daysElapsed = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+          } else {
+            const today = new Date();
+            const diffTime = today.getTime() - currentDate.getTime();
+            daysElapsed = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+          }
+        }
+      }
+
+      const isCurrent =
+        Boolean(selectedProject?.current_status) &&
+        selectedProject.current_status.trim().toUpperCase() === step.status?.trim().toUpperCase();
+
+      return {
+        ...step,
+        days_in_stage: daysElapsed !== null ? daysElapsed : step.days_in_stage ?? null,
+        is_current: isCurrent || isCurrentActive,
+      };
+    });
+  }, [selectedProject, historyData]);
 
   const hasInvoicedInStatuses = statuses.some((s) => s.name === "INVOICED");
   const statusOptions = [
@@ -576,7 +676,7 @@ export function ProjectsPage() {
                 <div className="py-4">
                   <SkeletonLoader rows={4} />
                 </div>
-              ) : historyData.length === 0 ? (
+              ) : modalStages.length === 0 ? (
                 <div className="p-6 text-center text-xs text-[#52607D] bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]">
                   No status transition history recorded for this project yet.
                 </div>
@@ -588,15 +688,22 @@ export function ProjectsPage() {
                         <th className="py-2.5 px-3 w-10">#</th>
                         <th className="py-2.5 px-3 min-w-[220px]">Status</th>
                         <th className="py-2.5 px-3 w-36 whitespace-nowrap">Status Date</th>
-                        <th className="py-2.5 px-3 w-44 whitespace-nowrap">Days in Prior Stage</th>
+                        <th className="py-2.5 px-3 w-44 whitespace-nowrap">Stage Duration</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1] text-[#14213D]">
-                      {historyData.map((item, idx) => (
+                      {modalStages.map((item, idx) => (
                         <tr key={item.id || idx} className="hover:bg-[#FAFAF8] transition-colors">
                           <td className="py-2.5 px-3 font-mono text-[#8C97AB]">{idx + 1}</td>
                           <td className="py-2.5 px-3">
-                            <StatusBadge status={item.status} size="sm" />
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={item.status} size="sm" />
+                              {item.is_current && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500 text-white uppercase tracking-wider">
+                                  Current
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 font-mono font-medium">
                             <div className="flex items-center gap-1.5">
@@ -605,12 +712,16 @@ export function ProjectsPage() {
                             </div>
                           </td>
                           <td className="py-2.5 px-3">
-                            {idx === 0 ? (
-                              <span className="text-[#8C97AB] font-mono">Initial Stage</span>
-                            ) : item.days_since_previous !== null ? (
-                              <span className="font-mono font-semibold text-[#14213D] bg-white border border-[#E4E1D8] px-2 py-0.5 rounded-full text-[11px]">
-                                +{item.days_since_previous} days
-                              </span>
+                            {item.days_in_stage !== null && item.days_in_stage !== undefined ? (
+                              item.is_current ? (
+                                <span className="font-mono font-semibold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full text-[11px]">
+                                  {item.days_in_stage} days active
+                                </span>
+                              ) : (
+                                <span className="font-mono font-semibold text-[#14213D] bg-white border border-[#E4E1D8] px-2 py-0.5 rounded-full text-[11px]">
+                                  +{item.days_in_stage} days
+                                </span>
+                              )
                             ) : (
                               <span className="text-[#8C97AB] font-mono">—</span>
                             )}
