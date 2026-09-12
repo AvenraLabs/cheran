@@ -808,16 +808,33 @@ export function ProjectDetailPage() {
           }
 
           const rawStatuses = masterStatuses && masterStatuses.length > 0 ? masterStatuses : [];
+
+          // Find the highest sequence milestone that has occurred or matches current_status
+          const currentStatusSeq = rawStatuses.find(
+            (s) => s.name.trim().toUpperCase() === project?.current_status?.trim().toUpperCase()
+          )?.sequence_order || 0;
+
+          let maxRecordedSeq = currentStatusSeq;
+          rawStatuses.forEach((st) => {
+            if (historyMap.has(st.name.trim().toUpperCase())) {
+              const seq = st.sequence_order || 0;
+              if (seq > maxRecordedSeq) {
+                maxRecordedSeq = seq;
+              }
+            }
+          });
+
           const fullRoadmap = rawStatuses.map((st, idx) => {
+            const sequence = st.sequence_order || idx + 1;
             const statusName = st.name;
             const historyEntry = historyMap.get(statusName.trim().toUpperCase());
-            const isCurrent =
-              project?.current_status &&
-              project.current_status.trim().toUpperCase() === statusName.trim().toUpperCase();
             const hasOccurred = Boolean(historyEntry);
+            const isCurrent = maxRecordedSeq > 0
+              ? sequence === maxRecordedSeq
+              : Boolean(project?.current_status && project.current_status.trim().toUpperCase() === statusName.trim().toUpperCase());
 
             return {
-              sequence: st.sequence_order || idx + 1,
+              sequence,
               name: statusName,
               isCurrent,
               hasOccurred,

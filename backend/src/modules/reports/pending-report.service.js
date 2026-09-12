@@ -118,11 +118,18 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
           THEN 1 ELSE 0 
         END as is_wo_issued,
         CASE 
-          WHEN COALESCE(gs.sequence_order, 0) >= 26 
+          WHEN gp.invoice_date IS NOT NULL OR (gp.invoice_number IS NOT NULL AND TRIM(gp.invoice_number) != '') OR gp.current_status = 'INVOICED' OR COALESCE(gs.sequence_order, 0) >= 23 
           THEN 1 ELSE 0 
         END as is_invoiced,
         CASE 
           WHEN COALESCE(gs.sequence_order, 0) >= 26 
+            OR gp.current_status IN ('Work Completed', 'Work Completion Approved')
+            OR gp.current_status ILIKE '%Fund Release%'
+            OR gp.current_status ILIKE '%Fund Credited%'
+            OR gp.current_status ILIKE '%Proceeding%'
+            OR gp.current_status ILIKE '%Joint Verification%'
+            OR gp.current_status ILIKE '%JV%'
+            OR gp.first_fund_utr_date IS NOT NULL
           THEN 1 ELSE 0 
         END as is_work_completed,
         CASE 
@@ -259,8 +266,12 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     const overrideKey = `${catKey}_${row.year}`;
     const manualOverride = overridesMap[overrideKey];
 
-    const invCount = manualOverride ? parseInt(manualOverride.supplied_count, 10) || 0 : 0;
-    const invHa = manualOverride ? parseFloat(manualOverride.supplied_ha) || 0 : 0.0;
+    const invCount = manualOverride
+      ? parseInt(manualOverride.supplied_count, 10) || 0
+      : parseInt(row.invoiced_count, 10) || 0;
+    const invHa = manualOverride
+      ? parseFloat(manualOverride.supplied_ha) || 0
+      : parseFloat(row.invoiced_ha) || 0.0;
 
     const wcCount = parseInt(row.wc_count, 10) || 0;
     const wcHa = parseFloat(row.wc_ha) || 0;
@@ -512,18 +523,30 @@ export async function getPendingProjectsList(filters = {}) {
 
   // Pendency Type Logic
   if (pendency_type === "PENDING_WORK_COMPLETION") {
-    // Work Order Issued but Dealer has NOT completed work (sequence < 26)
+    // Show ONLY projects that ARE INVOICED and NOT YET WORK COMPLETED
+    // Exclude projects that reached Work Completed (seq >= 26) or any post-work-completion status
     whereConditions.push(`(
-      (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21)
+      (gp.invoice_date IS NOT NULL OR (gp.invoice_number IS NOT NULL AND TRIM(gp.invoice_number) != '') OR gp.current_status = 'INVOICED' OR gs.sequence_order = 23)
       AND COALESCE(gs.sequence_order, 0) < 26
+      AND gp.current_status NOT IN ('Work Completed', 'Work Completion Approved')
+      AND gp.current_status NOT ILIKE '%Fund Release%'
+      AND gp.current_status NOT ILIKE '%Fund Credited%'
+      AND gp.current_status NOT ILIKE '%Proceeding%'
+      AND gp.current_status NOT ILIKE '%Joint Verification%'
+      AND gp.current_status NOT ILIKE '%JV%'
+      AND gp.first_fund_utr_date IS NULL
+      AND gp.final_fund_utr_date IS NULL
     )`);
   } else if (pendency_type === "PENDING_MATERIAL_SUPPLY") {
     // Show ONLY projects with status Issue Work Order AND not yet invoiced (without invoice number and date)
     whereConditions.push(`(
-      (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%')
+      (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%' OR gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21)
       AND gp.current_status != 'INVOICED'
       AND gp.invoice_date IS NULL
       AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
+      AND COALESCE(gs.sequence_order, 0) < 23
+      AND COALESCE(gs.sequence_order, 0) < 26
+      AND gp.first_fund_utr_date IS NULL
     )`);
   } else if (pendency_type === "PENDING_JVR_COMPLETION") {
     // First Fund Credited but Dealer has NOT completed Joint Verification (sequence < 52)
@@ -534,8 +557,24 @@ export async function getPendingProjectsList(filters = {}) {
   } else if (pendency_type === "ALL_PENDING") {
     whereConditions.push(`(
       (
-        (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21)
+        (gp.invoice_date IS NOT NULL OR (gp.invoice_number IS NOT NULL AND TRIM(gp.invoice_number) != '') OR gp.current_status = 'INVOICED' OR gs.sequence_order = 23)
         AND COALESCE(gs.sequence_order, 0) < 26
+        AND gp.current_status NOT IN ('Work Completed', 'Work Completion Approved')
+        AND gp.current_status NOT ILIKE '%Fund Release%'
+        AND gp.current_status NOT ILIKE '%Fund Credited%'
+        AND gp.current_status NOT ILIKE '%Proceeding%'
+        AND gp.current_status NOT ILIKE '%Joint Verification%'
+        AND gp.current_status NOT ILIKE '%JV%'
+        AND gp.first_fund_utr_date IS NULL
+        AND gp.final_fund_utr_date IS NULL
+      )
+      OR
+      (
+        (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%' OR gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21)
+        AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
+        AND COALESCE(gs.sequence_order, 0) < 23
+        AND COALESCE(gs.sequence_order, 0) < 26
+        AND gp.first_fund_utr_date IS NULL
       )
       OR
       (
@@ -553,9 +592,9 @@ export async function getPendingProjectsList(filters = {}) {
         CASE 
           WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
             THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
-          WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26 
-            THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.invoice_date, gp.current_status_date))
-          WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%') AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
+          WHEN (gp.invoice_date IS NOT NULL OR (gp.invoice_number IS NOT NULL AND TRIM(gp.invoice_number) != '') OR gp.current_status = 'INVOICED' OR gs.sequence_order = 23) AND (COALESCE(gs.sequence_order, 0) < 26 AND gp.current_status NOT IN ('Work Completed', 'Work Completion Approved') AND gp.current_status NOT ILIKE '%Fund Release%')
+            THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
+          WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%' OR gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
             THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
           ELSE (CURRENT_DATE - gp.current_status_date)
         END
@@ -604,10 +643,11 @@ export async function getPendingProjectsList(filters = {}) {
 
   // Pagination
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.max(1, Math.min(50000, parseInt(limit, 10) || 25));
-  const offsetNum = (pageNum - 1) * limitNum;
+  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 25));
+  const offset = (pageNum - 1) * limitNum;
+
   replacements.limit = limitNum;
-  replacements.offset = offsetNum;
+  replacements.offset = offset;
 
   // Main Data Query
   const dataQuery = `
@@ -642,18 +682,18 @@ export async function getPendingProjectsList(filters = {}) {
       CASE 
         WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
           THEN (CURRENT_DATE - COALESCE(gp.first_fund_utr_date, gp.current_status_date))
-        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26 
-          THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.invoice_date, gp.current_status_date))
-        WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%') AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
+        WHEN (gp.invoice_date IS NOT NULL OR (gp.invoice_number IS NOT NULL AND TRIM(gp.invoice_number) != '') OR gp.current_status = 'INVOICED' OR gs.sequence_order = 23) AND (COALESCE(gs.sequence_order, 0) < 26 AND gp.current_status NOT IN ('Work Completed', 'Work Completion Approved') AND gp.current_status NOT ILIKE '%Fund Release%')
+          THEN (CURRENT_DATE - COALESCE(gp.invoice_date, gp.current_status_date))
+        WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%' OR gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '') AND COALESCE(gs.sequence_order, 0) < 27
           THEN (CURRENT_DATE - COALESCE(gp.work_order_date, gp.current_status_date))
         ELSE (CURRENT_DATE - gp.current_status_date)
       END::integer as days_pending,
       CASE 
         WHEN (gp.first_fund_utr_date IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 48 OR gp.current_status IN ('First Fund Credited (UTR Updated)', 'District First Fund Credited (UTR Updated)', 'First Fund Proceeding Completed')) AND (COALESCE(gs.sequence_order, 0) < 52 AND gp.current_status NOT IN ('Joint Verification Completed', 'Earlier JV Completed'))
           THEN 'PENDING_JVR_COMPLETION'
-        WHEN (gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR COALESCE(gs.sequence_order, 0) >= 21) AND COALESCE(gs.sequence_order, 0) < 26 
+        WHEN (gp.invoice_date IS NOT NULL OR (gp.invoice_number IS NOT NULL AND TRIM(gp.invoice_number) != '') OR gp.current_status = 'INVOICED' OR gs.sequence_order = 23) AND (COALESCE(gs.sequence_order, 0) < 26 AND gp.current_status NOT IN ('Work Completed', 'Work Completion Approved') AND gp.current_status NOT ILIKE '%Fund Release%')
           THEN 'PENDING_WORK_COMPLETION'
-        WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%') AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '')
+        WHEN (gp.current_status IN ('Issued Work Order', 'Issue Work Order (Auto Quotation)') OR gp.current_status ILIKE '%Work Order%' OR gp.work_order_date IS NOT NULL OR gp.work_order_no IS NOT NULL OR COALESCE(gs.sequence_order, 0) >= 21) AND gp.invoice_date IS NULL AND (gp.invoice_number IS NULL OR TRIM(gp.invoice_number) = '') AND COALESCE(gs.sequence_order, 0) < 27
           THEN 'PENDING_MATERIAL_SUPPLY'
         ELSE 'OTHER'
       END as pendency_stage

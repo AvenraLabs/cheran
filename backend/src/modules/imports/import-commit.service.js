@@ -99,6 +99,20 @@ export async function commitImport(importId) {
     // Helper for non-destructive updates (preserves existing DB value if Excel cell is null/undefined)
     const updateVal = (newVal, existingVal) => (newVal !== null && newVal !== undefined ? newVal : existingVal);
 
+    // Load authoritative status sequence map for progression checks
+    const allGovStatuses = await GovernmentStatus.findAll({
+      attributes: ["name", "sequence_order"],
+      raw: true,
+    });
+    const statusSeqMap = new Map();
+    allGovStatuses.forEach((s) => {
+      statusSeqMap.set(s.name.trim().toUpperCase(), s.sequence_order);
+    });
+    const getStatusSeq = (name) => {
+      if (!name) return 0;
+      return statusSeqMap.get(String(name).trim().toUpperCase()) || 0;
+    };
+
     // 2. Process in fast transactional batches of 250 rows to prevent statement timeout
     const batchSize = 250;
 
@@ -225,8 +239,26 @@ export async function commitImport(importId) {
               ae_restricted_amount: rowData.ae_restricted_amount || null,
               bank_guarantee_deducted_pct: rowData.bank_guarantee_deducted_pct || null,
               bank_guarantee_deducted_amount: rowData.bank_guarantee_deducted_amount || null,
-              current_status: importedStatus || "Application Received",
-              current_status_date: importedStatusDate || rowData.application_received_date || null,
+              current_status: (() => {
+                const cands = [];
+                if (importedStatus) cands.push({ status: importedStatus, date: importedStatusDate || null, seq: getStatusSeq(importedStatus) });
+                if (rowData.invoice_date || cleanImportedInvoiceNo) cands.push({ status: "INVOICED", date: rowData.invoice_date || null, seq: getStatusSeq("INVOICED") });
+                if (rowData.first_fund_utr_date) cands.push({ status: "First Fund Credited (UTR Updated)", date: rowData.first_fund_utr_date, seq: getStatusSeq("First Fund Credited (UTR Updated)") });
+                if (rowData.treasury_fund_utr_date) cands.push({ status: "Iamwarm Fund Credited (UTR Updated)", date: rowData.treasury_fund_utr_date, seq: getStatusSeq("Iamwarm Fund Credited (UTR Updated)") });
+                if (rowData.final_fund_utr_date) cands.push({ status: "Final Fund Credited (UTR Updated)", date: rowData.final_fund_utr_date, seq: getStatusSeq("Final Fund Credited (UTR Updated)") });
+                cands.sort((a, b) => b.seq - a.seq);
+                return cands[0]?.status || importedStatus || "Application Received";
+              })(),
+              current_status_date: (() => {
+                const cands = [];
+                if (importedStatus) cands.push({ status: importedStatus, date: importedStatusDate || null, seq: getStatusSeq(importedStatus) });
+                if (rowData.invoice_date || cleanImportedInvoiceNo) cands.push({ status: "INVOICED", date: rowData.invoice_date || null, seq: getStatusSeq("INVOICED") });
+                if (rowData.first_fund_utr_date) cands.push({ status: "First Fund Credited (UTR Updated)", date: rowData.first_fund_utr_date, seq: getStatusSeq("First Fund Credited (UTR Updated)") });
+                if (rowData.treasury_fund_utr_date) cands.push({ status: "Iamwarm Fund Credited (UTR Updated)", date: rowData.treasury_fund_utr_date, seq: getStatusSeq("Iamwarm Fund Credited (UTR Updated)") });
+                if (rowData.final_fund_utr_date) cands.push({ status: "Final Fund Credited (UTR Updated)", date: rowData.final_fund_utr_date, seq: getStatusSeq("Final Fund Credited (UTR Updated)") });
+                cands.sort((a, b) => b.seq - a.seq);
+                return cands[0]?.date || importedStatusDate || rowData.application_received_date || null;
+              })(),
               current_status_remarks: rowData.current_status_remarks || "Created via Government Annexure Import",
               no_of_days_pending: rowData.no_of_days_pending || null,
               fund_type: rowData.fund_type || null,
@@ -284,13 +316,60 @@ export async function commitImport(importId) {
               historyCreatedCount++;
             }
           } else {
-            // Project exists: Authoritative status update from latest Excel
-            const statusDiffers = project.current_status !== importedStatus;
-            const shouldUpdateStatus = statusDiffers && !(importedStatus === "INVOICED" && project.current_status !== "INVOICED");
-
             // Preserve existing verified invoice_number and invoice_date
             const targetInvoiceNo = project.invoice_number || cleanImportedInvoiceNo;
             const targetInvoiceDate = project.invoice_date || updateVal(rowData.invoice_date, project.invoice_date);
+
+            // Calculate candidate statuses to ensure monotonic progression (never downgrade)
+            const statusCandidates = [
+              { status: project.current_status, date: project.current_status_date, seq: getStatusSeq(project.current_status) },
+            ];
+            if (importedStatus) {
+              statusCandidates.push({ status: importedStatus, date: importedStatusDate || null, seq: getStatusSeq(importedStatus) });
+            }
+            if (targetInvoiceDate || targetInvoiceNo) {
+              statusCandidates.push({ status: "INVOICED", date: targetInvoiceDate || null, seq: getStatusSeq("INVOICED") });
+            }
+            if (rowData.first_fund_utr_date || project.first_fund_utr_date) {
+              statusCandidates.push({
+                status: "First Fund Credited (UTR Updated)",
+                date: rowData.first_fund_utr_date || project.first_fund_utr_date,
+                seq: getStatusSeq("First Fund Credited (UTR Updated)"),
+              });
+            }
+            if (rowData.treasury_fund_utr_date || project.treasury_fund_utr_date) {
+              statusCandidates.push({
+                status: "Iamwarm Fund Credited (UTR Updated)",
+                date: rowData.treasury_fund_utr_date || project.treasury_fund_utr_date,
+                seq: getStatusSeq("Iamwarm Fund Credited (UTR Updated)"),
+              });
+            }
+            if (rowData.final_fund_utr_date || project.final_fund_utr_date) {
+              statusCandidates.push({
+                status: "Final Fund Credited (UTR Updated)",
+                date: rowData.final_fund_utr_date || project.final_fund_utr_date,
+                seq: getStatusSeq("Final Fund Credited (UTR Updated)"),
+              });
+            }
+
+            const isReversion = importedStatus && (
+              importedStatus.includes("Revert") ||
+              importedStatus.includes("Reject")
+            );
+
+            let bestStatus = project.current_status;
+            let bestStatusDate = project.current_status_date;
+
+            if (isReversion) {
+              bestStatus = importedStatus;
+              bestStatusDate = importedStatusDate || project.current_status_date;
+            } else {
+              statusCandidates.sort((a, b) => b.seq - a.seq);
+              if (statusCandidates[0] && statusCandidates[0].seq >= getStatusSeq(project.current_status)) {
+                bestStatus = statusCandidates[0].status;
+                bestStatusDate = statusCandidates[0].date || project.current_status_date;
+              }
+            }
 
             const updatePayload = {
               year: updateVal(rowData.year, project.year),
@@ -352,8 +431,8 @@ export async function commitImport(importId) {
               ae_restricted_amount: updateVal(rowData.ae_restricted_amount, project.ae_restricted_amount),
               bank_guarantee_deducted_pct: updateVal(rowData.bank_guarantee_deducted_pct, project.bank_guarantee_deducted_pct),
               bank_guarantee_deducted_amount: updateVal(rowData.bank_guarantee_deducted_amount, project.bank_guarantee_deducted_amount),
-              current_status: shouldUpdateStatus ? importedStatus : project.current_status,
-              current_status_date: shouldUpdateStatus ? (importedStatusDate || project.current_status_date) : (importedStatusDate || project.current_status_date),
+              current_status: bestStatus,
+              current_status_date: bestStatusDate,
               current_status_remarks: updateVal(rowData.current_status_remarks, project.current_status_remarks),
               no_of_days_pending: updateVal(rowData.no_of_days_pending, project.no_of_days_pending),
               fund_type: updateVal(rowData.fund_type, project.fund_type),
