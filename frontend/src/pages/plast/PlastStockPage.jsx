@@ -6,11 +6,13 @@ import {
   TrendingUp,
   Package,
   AlertTriangle,
+  Sliders,
 } from "lucide-react";
 import { plastApi } from "../../api/plastApi.js";
 import Navbar from "../../components/layout/Navbar.jsx";
 import MetricCard from "../../components/common/MetricCard.jsx";
 import Button from "../../components/common/Button.jsx";
+import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
 import { toast } from "sonner";
@@ -27,6 +29,13 @@ export function PlastStockPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState("");
   const [search, setSearch] = useState("");
+
+  // Adjustment Modal State
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [selectedItemForAdjust, setSelectedItemForAdjust] = useState(null);
+  const [newQuantity, setNewQuantity] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjusting, setAdjusting] = useState(false);
 
   const fetchStock = async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -52,6 +61,46 @@ export function PlastStockPage() {
     return () => clearTimeout(timer);
   }, [filterType, search]);
 
+  const openAdjustModal = (item = null) => {
+    const targetItem = item || safeStockList[0] || null;
+    setSelectedItemForAdjust(targetItem);
+    setNewQuantity(targetItem ? String(targetItem.quantity_on_hand ?? "") : "");
+    setAdjustReason(targetItem && Number(targetItem.quantity_on_hand || 0) === 0 ? "Opening stock entry" : "");
+    setIsAdjustModalOpen(true);
+  };
+
+  const handleSaveAdjustment = async (e) => {
+    e.preventDefault();
+    if (!selectedItemForAdjust) {
+      toast.error("Please select an item to adjust");
+      return;
+    }
+
+    const parsed = parseFloat(newQuantity);
+    if (isNaN(parsed) || parsed < 0) {
+      toast.error("Please enter a valid non-negative stock quantity");
+      return;
+    }
+
+    setAdjusting(true);
+    try {
+      await plastApi.adjustStock({
+        item_id: selectedItemForAdjust.id,
+        new_quantity: parsed,
+        reason: adjustReason.trim() || undefined,
+      });
+      toast.success(
+        `Stock for "${selectedItemForAdjust.name}" set to ${parsed} ${selectedItemForAdjust.unit || "Units"}`
+      );
+      setIsAdjustModalOpen(false);
+      fetchStock();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || "Failed to adjust stock");
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
   const formatCurrency = (val) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -72,15 +121,25 @@ export function PlastStockPage() {
         title="Stock On-Hand"
         subtitle="Live inventory balances, valuations, and stock level tracking"
         actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            loading={refreshing}
-            onClick={() => fetchStock(true)}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RefreshCw}
+              loading={refreshing}
+              onClick={() => fetchStock(true)}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Sliders}
+              onClick={() => openAdjustModal(null)}
+            >
+              + Adjust Stock
+            </Button>
+          </div>
         }
       />
 
@@ -159,6 +218,7 @@ export function PlastStockPage() {
                     <th className="py-3 px-4 text-right">Available Qty</th>
                     <th className="py-3 px-4 text-right">Stock Value</th>
                     <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EDEAE1]">
@@ -189,7 +249,7 @@ export function PlastStockPage() {
                             {item.quantity_on_hand || 0}
                           </span>{" "}
                           <span className="text-[10px] text-[#52607D] font-normal">
-                            {item.unit?.symbol || "Units"}
+                            {typeof item.unit === "object" ? (item.unit?.symbol || item.unit?.name || "Units") : (item.unit || "Units")}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
@@ -207,6 +267,17 @@ export function PlastStockPage() {
                             </span>
                           )}
                         </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openAdjustModal(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-[6px] text-[#2F6F5E] bg-[#EAF3F0] hover:bg-[#D3E6E0] border border-[#D3E6E0] transition-colors cursor-pointer"
+                            title="Adjust Stock Balance"
+                          >
+                            <Sliders size={12} />
+                            <span>Adjust</span>
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -216,6 +287,117 @@ export function PlastStockPage() {
           )}
         </div>
       </main>
+
+      {/* Stock Adjustment Modal */}
+      <Modal
+        isOpen={isAdjustModalOpen}
+        onClose={() => {
+          if (!adjusting) setIsAdjustModalOpen(false);
+        }}
+        title="Adjust Stock Balance"
+        size="md"
+      >
+        <form onSubmit={handleSaveAdjustment} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Select Item *
+            </label>
+            <CustomSelect
+              value={selectedItemForAdjust?.id || ""}
+              onChange={(val) => {
+                const found = safeStockList.find((it) => it.id === val);
+                if (found) {
+                  setSelectedItemForAdjust(found);
+                  setNewQuantity(String(found.quantity_on_hand ?? ""));
+                }
+              }}
+              options={safeStockList.map((it) => ({
+                value: it.id,
+                label: `${it.name} (${it.item_type === "RAW_MATERIAL" ? "Raw Material" : "Finished Good"} - Current: ${it.quantity_on_hand} ${it.unit || "Units"})`,
+              }))}
+            />
+          </div>
+
+          {selectedItemForAdjust && (
+            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] p-3 text-xs space-y-1">
+              <div className="flex justify-between text-[#52607D]">
+                <span>Category:</span>
+                <span className="font-medium text-[#14213D]">{selectedItemForAdjust.category || "—"}</span>
+              </div>
+              <div className="flex justify-between text-[#52607D]">
+                <span>Current Stock On-Hand:</span>
+                <span className="font-bold text-[#14213D]">
+                  {selectedItemForAdjust.quantity_on_hand} {selectedItemForAdjust.unit || "Units"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              New Stock Balance ({selectedItemForAdjust?.unit || "Units"}) *
+            </label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              required
+              placeholder="e.g. 150 or 0"
+              value={newQuantity}
+              onChange={(e) => setNewQuantity(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono font-bold focus:outline-none focus:border-[#2F6F5E]"
+            />
+            {selectedItemForAdjust && newQuantity !== "" && !isNaN(parseFloat(newQuantity)) && (
+              <p className="mt-1 text-[11px] text-[#52607D]">
+                {parseFloat(newQuantity) === Number(selectedItemForAdjust.quantity_on_hand || 0) ? (
+                  <span>No change to existing balance</span>
+                ) : parseFloat(newQuantity) > Number(selectedItemForAdjust.quantity_on_hand || 0) ? (
+                  <span className="text-emerald-700 font-semibold">
+                    Stock increase of +{(parseFloat(newQuantity) - Number(selectedItemForAdjust.quantity_on_hand || 0)).toFixed(2)} {selectedItemForAdjust.unit || "Units"}
+                  </span>
+                ) : (
+                  <span className="text-amber-700 font-semibold">
+                    Stock decrease of -{(Number(selectedItemForAdjust.quantity_on_hand || 0) - parseFloat(newQuantity)).toFixed(2)} {selectedItemForAdjust.unit || "Units"}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Adjustment Reason / Notes
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Opening stock entry, physical audit correction, damaged stock deduction"
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={adjusting}
+              onClick={() => setIsAdjustModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              loading={adjusting}
+            >
+              Save Stock Balance
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

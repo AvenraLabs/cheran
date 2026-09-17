@@ -41,6 +41,7 @@ export const plastApi = {
 
   // Stock On-Hand
   getStockOnHand: (params) => api.get("/plast/inventory/stock", { params }).then(unwrapList),
+  adjustStock: (data) => api.post("/plast/inventory/stock/adjust", data).then(unwrapData),
 
   // Purchases (Raw Material Receipts)
   getPurchases: (params) => api.get("/plast/purchases", { params }).then(unwrapList),
@@ -54,6 +55,11 @@ export const plastApi = {
   getSales: (params) => api.get("/plast/sales", { params }).then(unwrapList),
   getSaleById: (id) => api.get(`/plast/sales/${id}`).then(unwrapData),
   createSale: (data) => api.post("/plast/sales", data).then(unwrapData),
+
+  // Payments
+  recordPayment: (saleId, data) => api.post(`/plast/sales/${saleId}/payments`, data).then(unwrapData),
+  getSalePayments: (saleId) => api.get(`/plast/sales/${saleId}/payments`).then(unwrapList),
+  getPaymentsSummary: (params) => api.get("/plast/payments/summary", { params }).then(unwrapData),
 };
 
 export default plastApi;

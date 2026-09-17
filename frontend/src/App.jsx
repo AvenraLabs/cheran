@@ -44,6 +44,7 @@ import PlastCustomersPage from "./pages/plast/PlastCustomersPage.jsx";
 import PlastSuppliersPage from "./pages/plast/PlastSuppliersPage.jsx";
 import PlastSalesPage from "./pages/plast/PlastSalesPage.jsx";
 import PlastCreateSalePage from "./pages/plast/PlastCreateSalePage.jsx";
+import PlastPaymentsPage from "./pages/plast/PlastPaymentsPage.jsx";
 import PlastReportsPage from "./pages/plast/PlastReportsPage.jsx";
 import PlastUnitsPage from "./pages/plast/PlastUnitsPage.jsx";
 
@@ -462,6 +463,7 @@ export function App() {
           <Route path="customers" element={<PlastCustomersPage />} />
           <Route path="sales" element={<PlastSalesPage />} />
           <Route path="sales/new" element={<PlastCreateSalePage />} />
+          <Route path="payments" element={<PlastPaymentsPage />} />
           <Route
             path="reports"
             element={

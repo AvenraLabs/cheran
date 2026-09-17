@@ -78,7 +78,7 @@ export const updateItem = async (req, res, next) => {
 export const deleteItem = async (req, res, next) => {
   try {
     await plastService.deleteItem(req.params.id);
-    res.status(200).json({ status: "success", message: "Item deactivated successfully" });
+    res.status(200).json({ status: "success", message: "Item and stock deleted successfully" });
   } catch (err) {
     next(err);
   }
@@ -153,6 +153,15 @@ export const getStockOnHand = async (req, res, next) => {
   }
 };
 
+export const adjustStock = async (req, res, next) => {
+  try {
+    const data = await plastService.adjustItemStock(req.body);
+    res.status(200).json({ status: "success", message: "Stock adjusted successfully", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ==========================================
 // Purchases (Raw Material Receipts)
 // ==========================================
@@ -220,6 +229,36 @@ export const createSale = async (req, res, next) => {
   try {
     const data = await plastService.createSale(req.body);
     res.status(201).json({ status: "success", message: "Sale invoice created and stock updated.", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const recordSalePayment = async (req, res, next) => {
+  try {
+    const data = await plastService.recordSalePayment(req.params.id, {
+      ...req.body,
+      user_id: req.user?.id,
+    });
+    res.status(200).json({ status: "success", message: "Payment recorded successfully", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getSalePayments = async (req, res, next) => {
+  try {
+    const data = await plastService.getSalePayments(req.params.id);
+    res.status(200).json({ status: "success", count: data.length, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getPaymentsSummary = async (req, res, next) => {
+  try {
+    const data = await plastService.getPaymentsSummary(req.query);
+    res.status(200).json({ status: "success", data });
   } catch (err) {
     next(err);
   }

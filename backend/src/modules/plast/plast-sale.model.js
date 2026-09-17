@@ -70,6 +70,16 @@ const PlastSale = db.define(
       allowNull: false,
       defaultValue: 0.0,
     },
+    paid_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
+    balance_amount: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
     payment_status: {
       type: DataTypes.STRING(50),
       allowNull: false,

@@ -36,6 +36,7 @@ import Modal from "../components/common/Modal.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
 import { SkeletonLoader } from "../components/common/SkeletonLoader.jsx";
 import Pagination from "../components/common/Pagination.jsx";
+import { toast } from "sonner";
 
 export function CommissionProceedingsPage() {
   const navigate = useNavigate();
@@ -278,7 +279,7 @@ export function CommissionProceedingsPage() {
       const projectsToExport = res?.projects || res?.data?.projects || statementProjects || [];
 
       if (!projectsToExport || projectsToExport.length === 0) {
-        alert("No projects available to export with current filters.");
+        toast.warning("No projects available to export with current filters.");
         return;
       }
 
@@ -489,7 +490,7 @@ export function CommissionProceedingsPage() {
     doc.save(`Dealer_Statement_${safeDealerName}_${new Date().toISOString().split("T")[0]}.pdf`);
   } catch (err) {
     console.error("PDF export error:", err);
-    alert("Failed to export PDF: " + (err?.message || "Unknown error"));
+    toast.error("Failed to export PDF: " + (err?.message || "Unknown error"));
   } finally {
     setExportingPDF(false);
   }
@@ -706,7 +707,7 @@ export function CommissionProceedingsPage() {
       setBankReceiptModalOpen(false);
       fetchBatches(pagination.page);
     } catch (err) {
-      alert(err?.message || err?.response?.data?.message || "Failed to update payment receipt date");
+      toast.error(err?.message || err?.response?.data?.message || "Failed to update payment receipt date");
     } finally {
       setSavingBankReceipt(false);
     }
@@ -737,7 +738,7 @@ export function CommissionProceedingsPage() {
       fetchBatches(pagination.page);
       fetchDealerStatement(1, statementPagination.limit);
     } catch (err) {
-      alert(err?.message || err?.response?.data?.message || "Failed to recalculate all batches");
+      toast.error(err?.message || err?.response?.data?.message || "Failed to recalculate all batches");
     } finally {
       setRecalculatingAll(false);
     }

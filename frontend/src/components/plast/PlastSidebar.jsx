@@ -15,6 +15,7 @@ import {
   X,
   ArrowLeftRight,
   Scale,
+  CreditCard,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -30,6 +31,7 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
             title: "Operations & Sales",
             items: [
               { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
+              { label: "Payments", path: "/plast/payments", icon: CreditCard },
               { label: "Customers", path: "/plast/customers", icon: Users },
             ],
           },
@@ -40,6 +42,7 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
             items: [
               { label: "Dashboard", path: "/plast", icon: LayoutDashboard },
               { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
+              { label: "Payments", path: "/plast/payments", icon: CreditCard },
               { label: "Customers", path: "/plast/customers", icon: Users },
             ],
           },

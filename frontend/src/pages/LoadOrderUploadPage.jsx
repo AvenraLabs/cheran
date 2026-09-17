@@ -38,6 +38,7 @@ import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 import { formatDate, formatDateTime } from "../utils/dates.js";
+import { toast } from "sonner";
 
 export function LoadOrderUploadPage() {
   const [activeTab, setActiveTab] = useState("upload"); // 'upload' or 'history'
@@ -127,7 +128,7 @@ export function LoadOrderUploadPage() {
       }
       loadBatchHistory(historyPagination.page);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || "Failed to cancel batch");
+      toast.error(err.response?.data?.message || err.message || "Failed to cancel batch");
     } finally {
       setCancelling(false);
     }

@@ -39,12 +39,17 @@ export function PlastItemsPage() {
   });
   const [saving, setSaving] = useState(false);
 
+  // Delete Modal State
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   const fetchItems = async (isManual = false) => {
     if (isManual) setRefreshing(true);
     else setLoading(true);
     try {
+      // Fetch all items (search-filtered) so counts across all tabs remain consistent
       const data = await plastApi.getItems({
-        item_type: filterType === "ALL" ? undefined : filterType,
         search: search || undefined,
       });
       setItems(Array.isArray(data) ? data : data?.data || []);
@@ -76,7 +81,7 @@ export function PlastItemsPage() {
       fetchItems();
     }, 200);
     return () => clearTimeout(timer);
-  }, [filterType, search]);
+  }, [search]);
 
   const openAddModal = (type = "FINISHED_GOOD") => {
     setEditingItem(null);
@@ -142,14 +147,24 @@ export function PlastItemsPage() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm("Are you sure you want to deactivate this item?")) return;
+  const handlePromptDelete = (item) => {
+    setItemToDelete(item);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setDeleting(true);
     try {
-      await plastApi.deleteItem(id);
-      toast.success("Item deactivated");
+      await plastApi.deleteItem(itemToDelete.id);
+      toast.success(`Item "${itemToDelete.name}" and its stock deleted successfully`);
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
       fetchItems();
     } catch (err) {
-      toast.error("Failed to delete item");
+      toast.error(err.response?.data?.message || err.message || "Failed to delete item");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -162,8 +177,14 @@ export function PlastItemsPage() {
   };
 
   const safeItems = Array.isArray(items) ? items : [];
+  const totalCount = safeItems.length;
   const rawCount = safeItems.filter((i) => i.item_type === "RAW_MATERIAL").length;
   const finishedCount = safeItems.filter((i) => i.item_type === "FINISHED_GOOD").length;
+
+  const displayedItems = safeItems.filter((i) => {
+    if (filterType === "ALL") return true;
+    return i.item_type === filterType;
+  });
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -198,7 +219,7 @@ export function PlastItemsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard
             title="Total Catalog Items"
-            value={safeItems.length}
+            value={totalCount}
             subtitle="Active SKUs in Master"
             icon={Package}
           />
@@ -229,7 +250,7 @@ export function PlastItemsPage() {
                   : "text-[#52607D] hover:text-[#14213D]"
               }`}
             >
-              All Items ({safeItems.length})
+              All Items ({totalCount})
             </button>
             <button
               type="button"
@@ -273,7 +294,7 @@ export function PlastItemsPage() {
             <div className="p-6">
               <SkeletonLoader count={5} />
             </div>
-          ) : safeItems.length === 0 ? (
+          ) : displayedItems.length === 0 ? (
             <EmptyState
               icon={Package}
               title="No items found"
@@ -294,7 +315,7 @@ export function PlastItemsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EDEAE1]">
-                  {safeItems.map((item) => {
+                  {displayedItems.map((item) => {
                     const isRaw = item.item_type === "RAW_MATERIAL";
                     return (
                       <tr key={item.id} className="hover:bg-[#FAFAF8] transition-colors">
@@ -330,9 +351,9 @@ export function PlastItemsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDelete(item.id)}
+                              onClick={() => handlePromptDelete(item)}
                               className="p-1 text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                              title="Deactivate"
+                              title="Delete Item"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -454,6 +475,52 @@ export function PlastItemsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Item Confirmation Modal */}
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          if (!deleting) {
+            setDeleteModalOpen(false);
+            setItemToDelete(null);
+          }
+        }}
+        title="Delete Item"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-[#52607D] leading-relaxed">
+            Are you sure you want to permanently delete item{" "}
+            <strong className="text-[#14213D] font-bold">"{itemToDelete?.name}"</strong>?
+          </p>
+          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-[7px] text-[11px] text-rose-800 leading-relaxed">
+            This will permanently remove the item from the catalog and clear its on-hand inventory stock.
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-[#EDEAE1]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={deleting}
+              onClick={() => {
+                setDeleteModalOpen(false);
+                setItemToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              loading={deleting}
+              onClick={handleConfirmDelete}
+            >
+              Delete Item
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

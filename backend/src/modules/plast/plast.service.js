@@ -14,6 +14,7 @@ import {
 } from "./plast-production.model.js";
 import PlastSale from "./plast-sale.model.js";
 import PlastSaleItem from "./plast-sale-item.model.js";
+import PlastSalePayment from "./plast-sale-payment.model.js";
 import AppError from "../../shared/appError.js";
 
 // =========================================================================
@@ -126,6 +127,8 @@ export const getItems = async (filters = {}) => {
   }
   if (filters.is_active !== undefined) {
     where.is_active = filters.is_active === "true" || filters.is_active === true;
+  } else {
+    where.is_active = true;
   }
 
   const items = await PlastItem.findAll({
@@ -175,7 +178,29 @@ export const updateItem = async (id, data) => {
 export const deleteItem = async (id) => {
   const item = await PlastItem.findByPk(id);
   if (!item) throw new AppError("Item not found", 404);
-  return await item.update({ is_active: false });
+
+  // Check if this item is used in any transactions (sales, purchases, or production)
+  const [salesCount, receiptCount, prodMatCount, prodOutCount] = await Promise.all([
+    PlastSaleItem.count({ where: { item_id: id } }),
+    PlastStockReceiptItem.count({ where: { item_id: id } }),
+    PlastProductionMaterial.count({ where: { item_id: id } }),
+    PlastProductionOutput.count({ where: { item_id: id } }),
+  ]);
+
+  if (salesCount > 0 || receiptCount > 0 || prodMatCount > 0 || prodOutCount > 0) {
+    throw new AppError(
+      "Cannot delete this item because it has existing transaction records (purchases, production, or sales invoices).",
+      400
+    );
+  }
+
+  return await db.transaction(async (t) => {
+    // Delete associated inventory stock record
+    await PlastInventoryStock.destroy({ where: { item_id: id }, transaction: t });
+    // Cleanly delete item
+    await item.destroy({ transaction: t });
+    return { success: true, id };
+  });
 };
 
 // =========================================================================
@@ -278,6 +303,45 @@ const adjustStock = async (itemId, deltaQuantity, transaction) => {
   const newQty = Number(stock.quantity_on_hand) + Number(deltaQuantity);
   await stock.update({ quantity_on_hand: newQty }, { transaction });
   return newQty;
+};
+
+/**
+ * Direct stock adjustment (for opening stock or physical stock count reconciliation)
+ */
+export const adjustItemStock = async ({ item_id, new_quantity, reason }) => {
+  if (!item_id) throw new AppError("Item ID is required", 400);
+
+  const item = await PlastItem.findByPk(item_id, {
+    include: [{ model: PlastUnit, as: "unit" }],
+  });
+  if (!item) throw new AppError("Item not found", 404);
+
+  const parsedQty = parseFloat(new_quantity);
+  if (isNaN(parsedQty) || parsedQty < 0) {
+    throw new AppError("A valid non-negative stock quantity is required", 400);
+  }
+
+  let stock = await PlastInventoryStock.findOne({ where: { item_id } });
+  const oldQty = stock ? Number(stock.quantity_on_hand || 0) : 0;
+
+  if (!stock) {
+    stock = await PlastInventoryStock.create({
+      item_id,
+      quantity_on_hand: parsedQty,
+    });
+  } else {
+    await stock.update({ quantity_on_hand: parsedQty });
+  }
+
+  return {
+    item_id,
+    item_name: item.name,
+    previous_quantity: oldQty,
+    quantity_on_hand: parsedQty,
+    difference: parsedQty - oldQty,
+    unit: item.unit?.symbol || item.unit?.name || "Units",
+    reason: reason || "Manual stock adjustment",
+  };
 };
 
 // =========================================================================
@@ -503,8 +567,18 @@ export const getSales = async (filters = {}) => {
   if (filters.customer_id) {
     where.customer_id = filters.customer_id;
   }
+  if (filters.payment_mode) {
+    where.payment_mode = filters.payment_mode;
+  }
   if (filters.payment_status) {
-    where.payment_status = filters.payment_status;
+    const statusUpper = String(filters.payment_status).toUpperCase();
+    if (statusUpper === "PAID") {
+      where.payment_status = "PAID";
+    } else if (statusUpper === "PARTIAL") {
+      where.payment_status = "PARTIAL";
+    } else if (statusUpper === "UNPAID" || statusUpper === "PENDING") {
+      where.payment_status = { [Op.in]: ["UNPAID", "PENDING"] };
+    }
   }
   if (filters.search) {
     where[Op.or] = [
@@ -526,6 +600,10 @@ export const getSales = async (filters = {}) => {
           { model: PlastUnit, as: "unit" },
         ],
       },
+      {
+        model: PlastSalePayment,
+        as: "payments",
+      },
     ],
     order: [["created_at", "DESC"]],
   });
@@ -543,7 +621,12 @@ export const getSaleById = async (id) => {
           { model: PlastUnit, as: "unit" },
         ],
       },
+      {
+        model: PlastSalePayment,
+        as: "payments",
+      },
     ],
+    order: [[{ model: PlastSalePayment, as: "payments" }, "payment_date", "ASC"]],
   });
   if (!sale) throw new AppError("Sale invoice not found", 404);
   return sale;
@@ -678,6 +761,25 @@ export const createSale = async (data) => {
 
     const saleNumber = await generateNextSaleNumber(t);
 
+    // Calculate paid_amount and balance_amount
+    let initialPaid = 0;
+    if (data.paid_amount !== undefined && data.paid_amount !== null && data.paid_amount !== "") {
+      initialPaid = Number(data.paid_amount);
+    } else if (payment_status === "PAID") {
+      initialPaid = grandTotal;
+    }
+
+    if (isNaN(initialPaid) || initialPaid < 0) initialPaid = 0;
+    if (initialPaid > grandTotal) initialPaid = grandTotal;
+
+    const initialBalance = Math.max(0, Number((grandTotal - initialPaid).toFixed(2)));
+    let resolvedStatus = "UNPAID";
+    if (initialBalance <= 0.01 && grandTotal > 0) {
+      resolvedStatus = "PAID";
+    } else if (initialPaid > 0) {
+      resolvedStatus = "PARTIAL";
+    }
+
     const sale = await PlastSale.create(
       {
         sale_number: saleNumber,
@@ -693,12 +795,28 @@ export const createSale = async (data) => {
         gst_rate: gstPct,
         gst_amount: gstAmount,
         grand_total: grandTotal,
-        payment_status: payment_status || "PAID",
+        paid_amount: initialPaid,
+        balance_amount: initialBalance,
+        payment_status: resolvedStatus,
         payment_mode: payment_mode || "CASH",
         notes: notes || null,
       },
       { transaction: t }
     );
+
+    // Record initial payment ledger if amount paid > 0
+    if (initialPaid > 0) {
+      await PlastSalePayment.create(
+        {
+          sale_id: sale.id,
+          amount: initialPaid,
+          payment_date: sale_date || new Date().toISOString().split("T")[0],
+          payment_mode: payment_mode || "CASH",
+          notes: "Initial payment upon invoice creation",
+        },
+        { transaction: t }
+      );
+    }
 
     for (const it of processedItems) {
       await PlastSaleItem.create(
@@ -715,6 +833,136 @@ export const createSale = async (data) => {
 
     return sale;
   });
+};
+
+/**
+ * Record payment for an existing sale bill
+ */
+export const recordSalePayment = async (saleId, data) => {
+  const { amount, payment_date, payment_mode, reference_number, notes, user_id } = data;
+
+  const numAmount = Number(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    throw new AppError("A valid payment amount greater than 0 is required", 400);
+  }
+
+  return await db.transaction(async (t) => {
+    const sale = await PlastSale.findByPk(saleId, { transaction: t });
+    if (!sale) throw new AppError("Sales invoice not found", 404);
+
+    const currentBalance = Number(sale.balance_amount || 0);
+    if (currentBalance <= 0) {
+      throw new AppError("This invoice is already fully paid", 400);
+    }
+
+    if (numAmount > currentBalance + 0.01) {
+      throw new AppError(
+        `Payment amount (₹${numAmount}) cannot exceed the pending balance (₹${currentBalance})`,
+        400
+      );
+    }
+
+    const actualAmount = Math.min(numAmount, currentBalance);
+    const newPaid = Number((Number(sale.paid_amount || 0) + actualAmount).toFixed(2));
+    const newBalance = Math.max(0, Number((Number(sale.grand_total) - newPaid).toFixed(2)));
+    const newStatus = newBalance <= 0.01 ? "PAID" : "PARTIAL";
+
+    const payment = await PlastSalePayment.create(
+      {
+        sale_id: saleId,
+        amount: actualAmount,
+        payment_date: payment_date || new Date().toISOString().split("T")[0],
+        payment_mode: payment_mode || sale.payment_mode || "CASH",
+        reference_number: reference_number ? reference_number.trim() : null,
+        notes: notes ? notes.trim() : null,
+        created_by: user_id || null,
+      },
+      { transaction: t }
+    );
+
+    await sale.update(
+      {
+        paid_amount: newPaid,
+        balance_amount: newBalance,
+        payment_status: newStatus,
+        payment_mode: payment_mode || sale.payment_mode,
+      },
+      { transaction: t }
+    );
+
+    return {
+      sale,
+      payment,
+    };
+  });
+};
+
+/**
+ * Get payment history for a sale bill
+ */
+export const getSalePayments = async (saleId) => {
+  return await PlastSalePayment.findAll({
+    where: { sale_id: saleId },
+    order: [["payment_date", "ASC"], ["created_at", "ASC"]],
+  });
+};
+
+/**
+ * Summary metrics for payments & balance collections
+ */
+export const getPaymentsSummary = async (filters = {}) => {
+  const where = {};
+  if (filters.from_date && filters.to_date) {
+    where.sale_date = { [Op.between]: [filters.from_date, filters.to_date] };
+  } else if (filters.from_date) {
+    where.sale_date = { [Op.gte]: filters.from_date };
+  } else if (filters.to_date) {
+    where.sale_date = { [Op.lte]: filters.to_date };
+  }
+  if (filters.customer_id) {
+    where.customer_id = filters.customer_id;
+  }
+  if (filters.payment_mode) {
+    where.payment_mode = filters.payment_mode;
+  }
+
+  const sales = await PlastSale.findAll({ where });
+
+  let totalBilled = 0;
+  let totalPaid = 0;
+  let totalBalance = 0;
+  let paidCount = 0;
+  let partialCount = 0;
+  let unpaidCount = 0;
+
+  for (const s of sales) {
+    const grand = Number(s.grand_total || 0);
+    const paid = Number(s.paid_amount || 0);
+    const bal = Number(s.balance_amount || 0);
+
+    totalBilled += grand;
+    totalPaid += paid;
+    totalBalance += bal;
+
+    if (s.payment_status === "PAID" || bal <= 0.01) {
+      paidCount++;
+    } else if (paid > 0) {
+      partialCount++;
+    } else {
+      unpaidCount++;
+    }
+  }
+
+  return {
+    total_billed: Number(totalBilled.toFixed(2)),
+    total_paid: Number(totalPaid.toFixed(2)),
+    total_balance: Number(totalBalance.toFixed(2)),
+    total_invoices: sales.length,
+    paid_count: paidCount,
+    partial_count: partialCount,
+    unpaid_count: unpaidCount,
+    pending_count: partialCount + unpaidCount,
+  };
 };
 
 // =========================================================================
@@ -975,6 +1223,7 @@ export default {
   createCustomer,
   updateCustomer,
   getStockOnHand,
+  adjustItemStock,
   getPurchases,
   createPurchase,
   getProductionEntries,
@@ -982,6 +1231,9 @@ export default {
   getSales,
   getSaleById,
   createSale,
+  recordSalePayment,
+  getSalePayments,
+  getPaymentsSummary,
   getReports,
   getDashboardStats,
 };

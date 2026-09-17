@@ -38,7 +38,7 @@ export function PlastCreateSalePage() {
 
   const [gstRate, setGstRate] = useState(0);
   const [paymentMode, setPaymentMode] = useState("CASH");
-  const [paymentStatus, setPaymentStatus] = useState("PAID");
+  const [paidAmountInput, setPaidAmountInput] = useState("");
   const [notes, setNotes] = useState("");
 
   // Common Bill Discount State
@@ -50,7 +50,6 @@ export function PlastCreateSalePage() {
       item_id: "",
       quantity: "1",
       unit_price: "",
-      discount_percent: "0",
     },
   ]);
 
@@ -76,7 +75,6 @@ export function PlastCreateSalePage() {
             item_id: validItems[0].id,
             quantity: "1",
             unit_price: String(validItems[0].unit_price || "0"),
-            discount_percent: "0",
           },
         ]);
       }
@@ -109,7 +107,6 @@ export function PlastCreateSalePage() {
         item_id: itemsList[0]?.id || "",
         quantity: "1",
         unit_price: String(itemsList[0]?.unit_price || "0"),
-        discount_percent: "0",
       },
     ]);
   };
@@ -140,10 +137,7 @@ export function PlastCreateSalePage() {
   const calculateRowTotal = (row) => {
     const qty = parseFloat(row.quantity) || 0;
     const price = parseFloat(row.unit_price) || 0;
-    const disc = parseFloat(row.discount_percent) || 0;
-    const rowSub = qty * price;
-    const rowDisc = (rowSub * disc) / 100;
-    return Math.max(0, rowSub - rowDisc);
+    return Math.max(0, qty * price);
   };
 
   const subtotal = saleItems.reduce((acc, row) => {
@@ -152,20 +146,24 @@ export function PlastCreateSalePage() {
     return acc + qty * price;
   }, 0);
 
-  const itemDiscounts = saleItems.reduce((acc, row) => {
-    const qty = parseFloat(row.quantity) || 0;
-    const price = parseFloat(row.unit_price) || 0;
-    const disc = parseFloat(row.discount_percent) || 0;
-    return acc + (qty * price * disc) / 100;
-  }, 0);
-
   // Common Bill Discount Calculation
   const rawDiscVal = parseFloat(discountValue) || 0;
   const billDiscountAmt = discountType === "PERCENTAGE" ? (subtotal * rawDiscVal) / 100 : rawDiscVal;
-  const totalDiscount = Math.min(subtotal, Math.max(0, billDiscountAmt + itemDiscounts));
+  const totalDiscount = Math.min(subtotal, Math.max(0, billDiscountAmt));
   const taxableAmount = Math.max(0, subtotal - totalDiscount);
   const gstAmount = (taxableAmount * gstRate) / 100;
   const grandTotal = Math.round(taxableAmount + gstAmount);
+
+  // If not entered or blank, defaults to 0 paid (Unpaid)
+  const numPaid = parseFloat(paidAmountInput) || 0;
+  const effectivePaidAmount = Math.max(0, Math.min(grandTotal, numPaid));
+  const balanceAmount = Math.max(0, grandTotal - effectivePaidAmount);
+
+  // Pure calculation: bill value - paid value
+  const isFullyPaid = balanceAmount <= 0.01 && grandTotal > 0;
+  const isPartial = effectivePaidAmount > 0 && balanceAmount > 0.01;
+  const isUnpaid = effectivePaidAmount === 0;
+  const calculatedPaymentStatus = isFullyPaid ? "PAID" : isPartial ? "PARTIAL" : "UNPAID";
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat("en-IN", {
@@ -201,7 +199,8 @@ export function PlastCreateSalePage() {
         sale_date: saleDate,
         gst_rate: gstRate,
         payment_mode: paymentMode,
-        payment_status: paymentStatus,
+        payment_status: calculatedPaymentStatus,
+        paid_amount: effectivePaidAmount,
         discount_type: discountType,
         discount_value: rawDiscVal,
         bill_discount: billDiscountAmt,
@@ -210,7 +209,7 @@ export function PlastCreateSalePage() {
           item_id: r.item_id,
           quantity: parseFloat(r.quantity),
           unit_price: parseFloat(r.unit_price) || 0,
-          discount_percent: parseFloat(r.discount_percent) || 0,
+          discount_percent: 0,
         })),
       };
 
@@ -243,77 +242,31 @@ export function PlastCreateSalePage() {
 
       <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Customer & Items (8 cols) */}
+          {/* Left Column: Customer & Line Items (8 cols) */}
           <div className="lg:col-span-8 space-y-6">
             {/* Customer Details Card */}
             <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] p-4 sm:p-5 space-y-4">
-              <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-3">
-                <UserCheck size={16} className="text-[#2F6F5E]" />
-                <h2 className="text-xs font-bold uppercase tracking-wider text-[#14213D]">
-                  Customer & Invoice Information
-                </h2>
-              </div>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#14213D] border-b border-[#EDEAE1] pb-2">
+                Customer & Invoice Date
+              </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
                   <CustomSelect
-                    label="Select Customer"
+                    label="Choose Registered Customer"
                     value={customerId}
-                    onChange={(val) => handleCustomerSelect(val)}
-                    placeholder="-- New / Walk-in Customer --"
+                    onChange={handleCustomerSelect}
                     options={[
-                      { value: "", label: "-- New / Walk-in Customer --" },
-                      ...(Array.isArray(customers) ? customers : []).map((c) => ({
+                      { value: "", label: "— Walk-in / Cash Customer —" },
+                      ...customers.map((c) => ({
                         value: c.id,
-                        label: `${c.name} ${c.phone ? `(${c.phone})` : ""}`,
+                        label: `${c.name}${c.phone ? ` (${c.phone})` : ""}`,
                       })),
                     ]}
                   />
                 </div>
 
-                <div className="sm:col-span-1">
-                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                    Customer Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter customer name..."
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-                  />
-                </div>
-
-                <div className="sm:col-span-1">
-                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                    Customer Phone
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="10-digit mobile number"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                    Customer Address / City
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Optional delivery address..."
-                    value={customerAddress}
-                    onChange={(e) => setCustomerAddress(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-                  />
-                </div>
-
-                <div className="sm:col-span-1">
+                <div>
                   <label className="block text-xs font-semibold text-[#14213D] mb-1">
                     Invoice Date *
                   </label>
@@ -322,29 +275,53 @@ export function PlastCreateSalePage() {
                     required
                     value={saleDate}
                     onChange={(e) => setSaleDate(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                    Customer Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramesh Kumar / Sri Agro"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="10-digit mobile number"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Bill Line Items Card */}
+            {/* Sale Items Card */}
             <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] p-4 sm:p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart size={16} className="text-[#2F6F5E]" />
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-[#14213D]">
-                    Bill Items & Quantities
-                  </h2>
-                </div>
+              <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-[#14213D]">
+                  Billed Products & Items
+                </h2>
                 <Button
                   type="button"
-                  variant="outline"
-                  size="xs"
+                  variant="secondary"
+                  size="sm"
                   icon={Plus}
                   onClick={addItemRow}
                 >
-                  Add Row
+                  + Add Item
                 </Button>
               </div>
 
@@ -353,10 +330,10 @@ export function PlastCreateSalePage() {
                   return (
                     <div
                       key={idx}
-                      className="grid grid-cols-12 gap-2.5 items-end p-3 rounded-[8px] bg-[#FAFAF8] border border-[#E4E1D8]"
+                      className="grid grid-cols-12 gap-2 items-center p-2.5 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1]"
                     >
-                      {/* Item Selector */}
-                      <div className="col-span-12 sm:col-span-5">
+                      {/* Item Select */}
+                      <div className="col-span-12 sm:col-span-6">
                         <CustomSelect
                           label={`Item #${idx + 1}`}
                           size="sm"
@@ -370,7 +347,7 @@ export function PlastCreateSalePage() {
                       </div>
 
                       {/* Quantity */}
-                      <div className="col-span-4 sm:col-span-2">
+                      <div className="col-span-5 sm:col-span-2">
                         <label className="block text-[10px] font-semibold text-[#52607D] mb-0.5">
                           Qty
                         </label>
@@ -386,7 +363,7 @@ export function PlastCreateSalePage() {
                       </div>
 
                       {/* Unit Price */}
-                      <div className="col-span-4 sm:col-span-2">
+                      <div className="col-span-5 sm:col-span-3">
                         <label className="block text-[10px] font-semibold text-[#52607D] mb-0.5">
                           Price (₹)
                         </label>
@@ -401,25 +378,8 @@ export function PlastCreateSalePage() {
                         />
                       </div>
 
-                      {/* Item Disc % */}
-                      <div className="col-span-3 sm:col-span-2">
-                        <label className="block text-[10px] font-semibold text-emerald-800 mb-0.5">
-                          Disc %
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          max="100"
-                          placeholder="0"
-                          value={row.discount_percent}
-                          onChange={(e) => updateItemRow(idx, "discount_percent", e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-[6px] text-xs text-emerald-900 font-mono font-bold focus:outline-none focus:border-emerald-600"
-                        />
-                      </div>
-
                       {/* Remove Button */}
-                      <div className="col-span-1 text-right">
+                      <div className="col-span-2 sm:col-span-1 text-right flex items-end justify-end pb-1">
                         {saleItems.length > 1 && (
                           <button
                             type="button"
@@ -524,8 +484,8 @@ export function PlastCreateSalePage() {
                 </div>
               </div>
 
-              {/* Payment Mode & Status */}
-              <div className="grid grid-cols-2 gap-2">
+              {/* Payment Mode & Amount Received */}
+              <div className="space-y-3">
                 <div>
                   <CustomSelect
                     label="Payment Mode"
@@ -534,23 +494,77 @@ export function PlastCreateSalePage() {
                     onChange={(val) => setPaymentMode(val)}
                     options={[
                       { value: "CASH", label: "Cash" },
-                      { value: "UPI", label: "UPI / GPay" },
-                      { value: "BANK_TRANSFER", label: "Bank NEFT" },
-                      { value: "CREDIT", label: "Credit / Due" },
+                      { value: "UPI", label: "UPI / GPay / PhonePe" },
+                      { value: "BANK_TRANSFER", label: "Bank Transfer / NEFT" },
+                      { value: "CHEQUE", label: "Cheque" },
                     ]}
                   />
                 </div>
-                <div>
-                  <CustomSelect
-                    label="Payment Status"
-                    size="sm"
-                    value={paymentStatus}
-                    onChange={(val) => setPaymentStatus(val)}
-                    options={[
-                      { value: "PAID", label: "Paid" },
-                      { value: "PENDING", label: "Pending" },
-                    ]}
-                  />
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-semibold text-[#14213D]">
+                      Amount Received (₹)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPaidAmountInput(String(grandTotal))}
+                        className="text-[10px] font-semibold text-[#2F6F5E] hover:underline bg-[#E8F3EE] px-2 py-0.5 rounded-[4px] transition-colors"
+                      >
+                        Full Paid (₹{grandTotal})
+                      </button>
+                      {paidAmountInput && (
+                        <button
+                          type="button"
+                          onClick={() => setPaidAmountInput("")}
+                          className="text-[10px] font-semibold text-[#8C97AB] hover:underline bg-slate-100 px-1.5 py-0.5 rounded-[4px] transition-colors"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#8C97AB] font-bold">
+                      ₹
+                    </span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      max={grandTotal}
+                      placeholder="0.00 (Unpaid if not entered)"
+                      value={paidAmountInput}
+                      onChange={(e) => setPaidAmountInput(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 bg-white border border-[#E4E1D8] rounded-[6px] text-xs font-mono font-bold text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                    />
+                  </div>
+
+                  {/* Dynamic Status / Balance Preview Badge */}
+                  <div className="flex items-center justify-between text-[11px] px-0.5 pt-0.5">
+                    <span className="text-[#52607D]">
+                      {isFullyPaid
+                        ? "Payment Status:"
+                        : isPartial
+                        ? "Partial Payment:"
+                        : "Balance Due:"}
+                    </span>
+                    <span
+                      className={`font-bold px-2 py-0.5 rounded-[4px] ${
+                        isFullyPaid
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : isPartial
+                          ? "bg-amber-50 text-amber-800 border border-amber-200"
+                          : "bg-rose-50 text-rose-700 border border-rose-200"
+                      }`}
+                    >
+                      {isFullyPaid && "✓ Fully Paid"}
+                      {isPartial && `Pending: ${formatCurrency(balanceAmount)}`}
+                      {isUnpaid && `Pending: ${formatCurrency(grandTotal)} (Unpaid)`}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -570,13 +584,6 @@ export function PlastCreateSalePage() {
                   </div>
                 )}
 
-                {itemDiscounts > 0 && (
-                  <div className="flex justify-between text-emerald-700">
-                    <span>Item Discounts:</span>
-                    <span className="font-mono">-{formatCurrency(itemDiscounts)}</span>
-                  </div>
-                )}
-
                 <div className="flex justify-between text-[#52607D] border-t border-[#EDEAE1] pt-1.5">
                   <span>Taxable Value:</span>
                   <span className="font-mono font-semibold text-[#14213D]">{formatCurrency(taxableAmount)}</span>
@@ -591,6 +598,28 @@ export function PlastCreateSalePage() {
                   <span>Grand Total:</span>
                   <span className="text-[#2F6F5E] font-mono text-base font-black">
                     {formatCurrency(grandTotal)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs font-semibold text-emerald-800 pt-1">
+                  <span>Amount Paid:</span>
+                  <span className="font-mono font-bold">
+                    {formatCurrency(effectivePaidAmount)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs font-semibold border-t border-dashed border-[#EDEAE1] pt-1.5">
+                  <span className={balanceAmount > 0 ? "text-rose-700" : "text-emerald-700"}>
+                    {balanceAmount > 0 ? "Balance Pending:" : "Status:"}
+                  </span>
+                  <span
+                    className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] ${
+                      balanceAmount > 0
+                        ? "bg-rose-100 text-rose-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {balanceAmount > 0 ? formatCurrency(balanceAmount) : "Fully Paid"}
                   </span>
                 </div>
               </div>
@@ -667,6 +696,16 @@ export function PlastCreateSalePage() {
                 <span>GST ({createdSale.gst_rate}%):</span>
                 <span className="font-mono">+{formatCurrency(createdSale.gst_amount)}</span>
               </div>
+              <div className="flex justify-between text-emerald-700 font-semibold border-t border-[#EDEAE1] pt-1">
+                <span>Amount Paid:</span>
+                <span className="font-mono">{formatCurrency(createdSale.paid_amount)}</span>
+              </div>
+              {Number(createdSale.balance_amount) > 0 && (
+                <div className="flex justify-between text-rose-700 font-semibold">
+                  <span>Balance Due:</span>
+                  <span className="font-mono">{formatCurrency(createdSale.balance_amount)}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-center gap-2 pt-2 border-t border-[#EDEAE1]">

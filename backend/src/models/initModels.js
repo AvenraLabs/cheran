@@ -64,6 +64,7 @@ import {
 } from "../modules/plast/plast-production.model.js";
 import PlastSale from "../modules/plast/plast-sale.model.js";
 import PlastSaleItem from "../modules/plast/plast-sale-item.model.js";
+import PlastSalePayment from "../modules/plast/plast-sale-payment.model.js";
 
 // ==========================================
 // 1. Government Module Associations
@@ -601,6 +602,17 @@ PlastSaleItem.belongsTo(PlastUnit, {
   as: "unit",
 });
 
+// Plast Sale <-> Payments
+PlastSale.hasMany(PlastSalePayment, {
+  foreignKey: "sale_id",
+  as: "payments",
+  onDelete: "CASCADE",
+});
+PlastSalePayment.belongsTo(PlastSale, {
+  foreignKey: "sale_id",
+  as: "sale",
+});
+
 export {
   Dealer,
   GovernmentStatus,
@@ -648,5 +660,6 @@ export {
   PlastProductionOutput,
   PlastSale,
   PlastSaleItem,
+  PlastSalePayment,
 };
 
