@@ -23,9 +23,11 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
   const { user, logout, setActiveCompany } = useAuth();
   const navigate = useNavigate();
   const role = (user?.role || "ADMIN").toUpperCase();
+  const isPlastPayments = role === "PLAST_PAYMENTS";
+  const isPlastUser = role === "PLAST" || role === "PLAST_USER";
 
   const navigationSections =
-    role === "PLAST"
+    isPlastPayments
       ? [
           {
             title: "Operations & Sales",
@@ -33,6 +35,20 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
               { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
               { label: "Payments", path: "/plast/payments", icon: CreditCard },
               { label: "Customers", path: "/plast/customers", icon: Users },
+              { label: "Items", path: "/plast/items", icon: Package },
+              { label: "Daily Production", path: "/plast/production", icon: Factory },
+            ],
+          },
+        ]
+      : isPlastUser
+      ? [
+          {
+            title: "Operations & Sales",
+            items: [
+              { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
+              { label: "Customers", path: "/plast/customers", icon: Users },
+              { label: "Items", path: "/plast/items", icon: Package },
+              { label: "Daily Production", path: "/plast/production", icon: Factory },
             ],
           },
         ]
@@ -186,8 +202,12 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
                 <div className="text-xs font-bold text-[#14213D] truncate">
                   {user?.name || user?.username || "Administrator"}
                 </div>
-                <div className="text-[10px] text-[#52607D] truncate uppercase font-mono font-medium">
-                  {role} • PLAST
+                <div className="text-[10px] text-[#52607D] truncate font-medium">
+                  {role === "PLAST_PAYMENTS"
+                    ? "Plast (Payments)"
+                    : role === "PLAST" || role === "PLAST_USER"
+                    ? "Plast (User)"
+                    : role} • Cheran Plast
                 </div>
               </div>
             </div>

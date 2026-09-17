@@ -251,9 +251,13 @@ export function UsersPage() {
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EAF3F0] text-[#2F6F5E] border border-[#2F6F5E]/20">
                               <Shield size={12} /> Admin (Full Access)
                             </span>
-                          ) : u.role === "PLAST" ? (
+                          ) : u.role === "PLAST_PAYMENTS" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              <Factory size={12} /> Plast (Payments)
+                            </span>
+                          ) : u.role === "PLAST_USER" || u.role === "PLAST" ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
-                              <Factory size={12} /> Plast (Sales & Customers)
+                              <Factory size={12} /> Plast (User)
                             </span>
                           ) : u.role === "DEALER" ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
@@ -400,7 +404,8 @@ export function UsersPage() {
                   { value: "ADMIN", label: "Admin (Full Access)" },
                   { value: "USER", label: "User (Govt & Operations)" },
                   { value: "DEALER", label: "Dealer (Projects & Imports)" },
-                  { value: "PLAST", label: "Plast (Sales & Customers Only)" },
+                  { value: "PLAST_USER", label: "Plast (User) - Sales, Items & Production" },
+                  { value: "PLAST_PAYMENTS", label: "Plast (Payments) - Sales, Payments, Items & Production" },
                 ]}
               />
             </div>

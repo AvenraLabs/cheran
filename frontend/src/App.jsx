@@ -67,7 +67,7 @@ function ProtectedLayout() {
   }
 
   const role = (user?.role || "USER").toUpperCase();
-  if (role === "PLAST") {
+  if (role === "PLAST" || role === "PLAST_USER" || role === "PLAST_PAYMENTS") {
     return <Navigate to="/plast/sales" replace />;
   }
 
@@ -93,7 +93,8 @@ function PlastProtectedLayout() {
   }
 
   const role = (user?.role || "USER").toUpperCase();
-  if (role !== "ADMIN" && role !== "PLAST") {
+  const isPlastAllowed = ["ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"].includes(role);
+  if (!isPlastAllowed) {
     return <Navigate to="/" replace />;
   }
 
@@ -101,7 +102,7 @@ function PlastProtectedLayout() {
 }
 
 /**
- * Route guard for Admin-only Plast pages (blocks PLAST role from production, stock, units, etc.)
+ * Route guard for Admin-only Plast pages (stock, purchases, suppliers, units, reports)
  */
 function PlastAdminRoute({ children }) {
   const { user } = useAuth();
@@ -115,13 +116,27 @@ function PlastAdminRoute({ children }) {
 }
 
 /**
- * Plast Index Route: Admin gets Dashboard, PLAST role lands on Sales & Billing
+ * Route guard for Payments page (ADMIN and PLAST_PAYMENTS only)
+ */
+function PlastPaymentsRoute({ children }) {
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+
+  if (role !== "ADMIN" && role !== "PLAST_PAYMENTS") {
+    return <Navigate to="/plast/sales" replace />;
+  }
+
+  return children;
+}
+
+/**
+ * Plast Index Route: Admin gets Dashboard, Plast roles land on Sales & Billing
  */
 function PlastIndexRoute() {
   const { user } = useAuth();
   const role = (user?.role || "USER").toUpperCase();
 
-  if (role === "PLAST") {
+  if (role === "PLAST" || role === "PLAST_USER" || role === "PLAST_PAYMENTS") {
     return <Navigate to="/plast/sales" replace />;
   }
 
@@ -411,14 +426,7 @@ export function App() {
         {/* Cheran Plast Routes (Admin has full access; PLAST role limited to Sales & Customers) */}
         <Route path="/plast" element={<PlastProtectedLayout />}>
           <Route index element={<PlastIndexRoute />} />
-          <Route
-            path="items"
-            element={
-              <PlastAdminRoute>
-                <PlastItemsPage />
-              </PlastAdminRoute>
-            }
-          />
+          <Route path="items" element={<PlastItemsPage />} />
           <Route
             path="units"
             element={
@@ -452,18 +460,18 @@ export function App() {
             }
           />
           <Route path="vendors" element={<Navigate to="/plast/suppliers" replace />} />
-          <Route
-            path="production"
-            element={
-              <PlastAdminRoute>
-                <PlastProductionPage />
-              </PlastAdminRoute>
-            }
-          />
+          <Route path="production" element={<PlastProductionPage />} />
           <Route path="customers" element={<PlastCustomersPage />} />
           <Route path="sales" element={<PlastSalesPage />} />
           <Route path="sales/new" element={<PlastCreateSalePage />} />
-          <Route path="payments" element={<PlastPaymentsPage />} />
+          <Route
+            path="payments"
+            element={
+              <PlastPaymentsRoute>
+                <PlastPaymentsPage />
+              </PlastPaymentsRoute>
+            }
+          />
           <Route
             path="reports"
             element={

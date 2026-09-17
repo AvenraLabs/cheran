@@ -98,7 +98,7 @@ export function LoginPage() {
     try {
       const authUser = await login(username, password, selectedCompany);
       const userRole = (authUser?.role || "").toUpperCase();
-      if (userRole === "PLAST") {
+      if (userRole === "PLAST" || userRole === "PLAST_USER" || userRole === "PLAST_PAYMENTS") {
         navigate("/plast/sales");
       } else if (selectedCompany === "plast") {
         navigate("/plast");
