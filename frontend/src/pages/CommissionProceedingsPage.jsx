@@ -99,6 +99,14 @@ export function CommissionProceedingsPage() {
   const [savingProceedingDate, setSavingProceedingDate] = useState(false);
   const [editDateError, setEditDateError] = useState("");
 
+  // Recalculate All Batches state
+  const [recalculateAllModalOpen, setRecalculateAllModalOpen] = useState(false);
+  const [recalculatingAll, setRecalculatingAll] = useState(false);
+  const [recalculateAllResult, setRecalculateAllResult] = useState(null);
+
+  // PDF Exporting loading state
+  const [exportingPDF, setExportingPDF] = useState(false);
+
   // Delete modal state
   const [batchToDelete, setBatchToDelete] = useState(null);
   const [deletingBatch, setDeletingBatch] = useState(false);
@@ -180,6 +188,7 @@ export function CommissionProceedingsPage() {
         ...(endDate ? { end_date: endDate } : {}),
         ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
         ...(payoutStatus ? { payout_status: payoutStatus } : {}),
+        ...(selectedFundPct ? { fund_percentage_value: selectedFundPct } : {}),
       };
 
       const res = await api.get("/proceedings/dealer-statement", { params });
@@ -249,127 +258,155 @@ export function CommissionProceedingsPage() {
   };
 
   // Export Dealer Statement PDF
-  const handleExportDealerPDF = () => {
-    if (!statementProjects || statementProjects.length === 0) return;
+  const handleExportDealerPDF = async () => {
+    try {
+      setExportingPDF(true);
 
-    const doc = new jsPDF({
-      orientation: "landscape",
-      unit: "pt",
-      format: "a4",
-    });
+      // Fetch ALL projects matching current statement filters (not just current paginated page)
+      const params = {
+        page: 1,
+        limit: "all",
+        ...(search ? { search: search.trim() } : {}),
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(endDate ? { end_date: endDate } : {}),
+        ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
+        ...(payoutStatus ? { payout_status: payoutStatus } : {}),
+        ...(selectedFundPct ? { fund_percentage_value: selectedFundPct } : {}),
+      };
 
-    const pageWidth = doc.internal.pageSize.getWidth();
+      const res = await api.get("/proceedings/dealer-statement", { params });
+      const projectsToExport = res?.projects || res?.data?.projects || statementProjects || [];
 
-    const currentDealerName =
-      dealers.find((d) => d.id === selectedDealer)?.name ||
-      statementSelectedDealer?.name ||
-      "All Dealers";
+      if (!projectsToExport || projectsToExport.length === 0) {
+        alert("No projects available to export with current filters.");
+        return;
+      }
 
-    const periodText =
-      startDate && endDate
-        ? `${formatDate(startDate)} to ${formatDate(endDate)}`
-        : startDate
-        ? `From ${formatDate(startDate)}`
-        : endDate
-        ? `Until ${formatDate(endDate)}`
-        : "All Historical Proceedings";
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
 
-    // Brand Header
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(20, 33, 61);
-    doc.text("CHERAN IRRIGATION", 30, 36);
+      const pageWidth = doc.internal.pageSize.getWidth();
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(82, 96, 125);
-    doc.text("Dealer Commission & Payout Statement", 30, 50);
+      const currentDealerName =
+        dealers.find((d) => d.id === selectedDealer)?.name ||
+        statementSelectedDealer?.name ||
+        "All Assigned Dealers";
 
-    // Meta Header Information
-    doc.setFontSize(8.5);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(20, 33, 61);
-    doc.text(`Dealer: ${currentDealerName}`, 30, 68);
-    doc.text(`Period: ${periodText}`, 220, 68);
-    doc.text(`Status: ${payoutStatus || "ALL PAYOUTS"}`, 440, 68);
-    doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 640, 68);
+      const periodText =
+        startDate && endDate
+          ? `${formatDate(startDate)} to ${formatDate(endDate)}`
+          : startDate
+          ? `From ${formatDate(startDate)}`
+          : endDate
+          ? `Until ${formatDate(endDate)}`
+          : "All Historical Proceedings";
 
-    // Table Headers
-    const headers = [
-      [
-        "#",
-        "Application ID",
-        "Invoice No & Date",
-        "Farmer Name",
-        "Inv Amt (Rs.)",
-        "Subsidy (Rs.)",
-        "Material Cost (Rs.)",
-        "Now Released (Rs.)",
-        "Commission (Rs.)",
-        "Penalty (Rs.)",
-        "Net Comm. (Rs.)",
-        "Fittings 5% (Rs.)",
-        "Net Payout (Rs.)",
-        "Dealer",
-      ],
-    ];
+      const releaseText = selectedFundPct ? `${selectedFundPct}% Release` : "ALL RELEASES";
 
-    let totalInv = 0;
-    let totalSub = 0;
-    let totalMat = 0;
-    let totalRel = 0;
-    let totalComm = 0;
-    let totalPen = 0;
-    let totalNetComm = 0;
-    let totalFit = 0;
-    let totalNet = 0;
+      // Brand Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(20, 33, 61);
+      doc.text("CHERAN IRRIGATION", 30, 36);
 
-    const rows = statementProjects.map((p, index) => {
-      const invAmt = Math.floor(parseFloat(p.invoice_amount || 0));
-      const subAmt = Math.floor(parseFloat(p.subsidy_amount || p.state_restricted_amount || 0));
-      const matCost = Math.floor(parseFloat(p.total_material_cost || 0));
-      const nowRel = Math.floor(parseFloat(p.now_to_be_released_amount || p.fund_share_amount || 0));
-      const commAmt = Math.floor(parseFloat(p.commission_amount || 0));
-      const fitAmt = Math.floor(parseFloat(p.fittings_amount || 0));
-      const penalty = Math.floor(
-        parseFloat(
-          p.adjusted_penalty_amount !== undefined && p.adjusted_penalty_amount !== null
-            ? p.adjusted_penalty_amount
-            : p.penalty_amount || 0
-        )
-      );
-      const netComm = Math.max(0, commAmt - penalty);
-      const netPayable = Math.max(0, netComm + fitAmt);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(82, 96, 125);
+      doc.text("Dealer Commission & Payout Statement", 30, 50);
 
-      totalInv += invAmt;
-      totalSub += subAmt;
-      totalMat += matCost;
-      totalRel += nowRel;
-      totalComm += commAmt;
-      totalPen += penalty;
-      totalNetComm += netComm;
-      totalFit += fitAmt;
-      totalNet += netPayable;
+      // Meta Header Information
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(20, 33, 61);
+      doc.text(`Dealer: ${currentDealerName}`, 30, 68);
+      doc.text(`Period: ${periodText}`, 210, 68);
+      doc.text(`Release: ${releaseText}`, 390, 68);
+      doc.text(`Status: ${payoutStatus || "ALL PAYOUTS"}`, 520, 68);
+      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 670, 68);
 
-      const invNoDateText = `${p.invoice_number && p.invoice_number !== "—" ? `#${p.invoice_number}` : "—"}\n${formatDate(p.invoice_date)}`;
-
-      return [
-        String(index + 1),
-        p.application_id || "—",
-        invNoDateText,
-        p.farmer_name || "—",
-        invAmt ? invAmt.toLocaleString("en-IN") : "—",
-        subAmt ? subAmt.toLocaleString("en-IN") : "—",
-        matCost ? `${matCost.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
-        nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
-        commAmt ? commAmt.toLocaleString("en-IN") : "0",
-        penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
-        netComm.toLocaleString("en-IN"),
-        fitAmt ? fitAmt.toLocaleString("en-IN") : "0",
-        netPayable.toLocaleString("en-IN"),
-        p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned"),
+      // Table Headers
+      const headers = [
+        [
+          "#",
+          "Application ID",
+          "Invoice No & Date",
+          "Farmer Name",
+          "Inv Amt (Rs.)",
+          "Subsidy (Rs.)",
+          "Material Cost (Rs.)",
+          "Now Released (Rs.)",
+          "Commission (Rs.)",
+          "Penalty (Rs.)",
+          "Net Comm. (Rs.)",
+          "Fittings 5% (Rs.)",
+          "Net Payout (Rs.)",
+          "Dealer",
+        ],
       ];
-    });
+
+      let totalInv = 0;
+      let totalSub = 0;
+      let totalMat = 0;
+      let totalRel = 0;
+      let totalComm = 0;
+      let totalPen = 0;
+      let totalNetComm = 0;
+      let totalFit = 0;
+      let totalNet = 0;
+
+      const rows = projectsToExport.map((p, index) => {
+        const invAmt = Math.floor(parseFloat(p.invoice_amount || 0));
+        const farmerContrib = Math.floor(parseFloat(p.farmer_contribution || 0));
+        const subAmt = Math.floor(parseFloat(p.subsidy_amount || p.state_restricted_amount || 0));
+        const matCost = Math.floor(parseFloat(p.total_material_cost || 0));
+        const nowRel = Math.floor(parseFloat(p.now_to_be_released_amount || p.fund_share_amount || 0));
+        const commAmt = Math.floor(parseFloat(p.commission_amount || 0));
+        const fitAmt = Math.floor(parseFloat(p.fittings_amount || 0));
+        const penalty = Math.floor(
+          parseFloat(
+            p.adjusted_penalty_amount !== undefined && p.adjusted_penalty_amount !== null
+              ? p.adjusted_penalty_amount
+              : p.penalty_amount || 0
+          )
+        );
+        const netComm = Math.max(0, commAmt - penalty);
+        const netPayable = Math.max(0, netComm + fitAmt);
+
+        totalInv += invAmt;
+        totalSub += subAmt;
+        totalMat += matCost;
+        totalRel += nowRel;
+        totalComm += commAmt;
+        totalPen += penalty;
+        totalNetComm += netComm;
+        totalFit += fitAmt;
+        totalNet += netPayable;
+
+        const invNoDateText = `${p.invoice_number && p.invoice_number !== "—" ? `#${p.invoice_number}` : "—"}\n${formatDate(p.invoice_date)}`;
+        const invCellText = invAmt
+          ? `${invAmt.toLocaleString("en-IN")}${farmerContrib > 0 ? `\n(FC: ${farmerContrib.toLocaleString("en-IN")})` : ""}`
+          : "—";
+
+        return [
+          String(index + 1),
+          p.application_id || "—",
+          invNoDateText,
+          p.farmer_name || "—",
+          invCellText,
+          subAmt ? subAmt.toLocaleString("en-IN") : "—",
+          matCost ? `${matCost.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
+          nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
+          commAmt ? commAmt.toLocaleString("en-IN") : "0",
+          penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
+          netComm.toLocaleString("en-IN"),
+          fitAmt ? fitAmt.toLocaleString("en-IN") : "0",
+          netPayable.toLocaleString("en-IN"),
+          p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned"),
+        ];
+      });
 
     // Summary Footer Row
     const footers = [
@@ -450,7 +487,13 @@ export function CommissionProceedingsPage() {
 
     const safeDealerName = (currentDealerName || "Statement").replace(/[/\\?%*:|"<> ]/g, "_");
     doc.save(`Dealer_Statement_${safeDealerName}_${new Date().toISOString().split("T")[0]}.pdf`);
-  };
+  } catch (err) {
+    console.error("PDF export error:", err);
+    alert("Failed to export PDF: " + (err?.message || "Unknown error"));
+  } finally {
+    setExportingPDF(false);
+  }
+};
 
   // Handle File Select & Preview
   const handleFileChange = async (file, overrideFittings = null) => {
@@ -685,6 +728,21 @@ export function CommissionProceedingsPage() {
     }
   };
 
+  // Recalculate All Proceeding Batches
+  const handleRecalculateAll = async () => {
+    try {
+      setRecalculatingAll(true);
+      const res = await api.post("/proceedings/recalculate-all");
+      setRecalculateAllResult(res?.data || res);
+      fetchBatches(pagination.page);
+      fetchDealerStatement(1, statementPagination.limit);
+    } catch (err) {
+      alert(err?.message || err?.response?.data?.message || "Failed to recalculate all batches");
+    } finally {
+      setRecalculatingAll(false);
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "—";
     const d = new Date(dateStr);
@@ -746,11 +804,24 @@ export function CommissionProceedingsPage() {
                     icon={Download}
                     onClick={handleExportDealerPDF}
                     disabled={statementProjects.length === 0}
-                    title="Download Dealer Commission Statement PDF"
+                    loading={exportingPDF}
+                    title="Download Dealer Commission Statement PDF (All filtered records)"
                   >
                     Download PDF
                   </Button>
                 )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={RefreshCw}
+                  onClick={() => {
+                    setRecalculateAllResult(null);
+                    setRecalculateAllModalOpen(true);
+                  }}
+                  title="Recalculate all batches with latest formulas and farmer contributions"
+                >
+                  Recalculate All Batches
+                </Button>
                 <Button
                   variant="primary"
                   size="sm"
@@ -1747,7 +1818,7 @@ export function CommissionProceedingsPage() {
                 <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
                     {/* Dealer Dropdown */}
-                    <div className="lg:col-span-3">
+                    <div className="lg:col-span-2">
                       <CustomSelect
                         options={[
                           { value: "", label: "All Assigned Dealers" },
@@ -1759,6 +1830,22 @@ export function CommissionProceedingsPage() {
                         value={selectedDealer}
                         onChange={(val) => setSelectedDealer(val)}
                         placeholder="Select Dealer"
+                        size="sm"
+                      />
+                    </div>
+
+                    {/* Fund Release % Filter */}
+                    <div className="lg:col-span-2">
+                      <CustomSelect
+                        options={[
+                          { value: "", label: "All Release %" },
+                          { value: "55", label: "55% Release" },
+                          { value: "45", label: "45% Release" },
+                          { value: "40", label: "40% Release" },
+                        ]}
+                        value={selectedFundPct}
+                        onChange={(val) => setSelectedFundPct(val)}
+                        placeholder="Fund Release %"
                         size="sm"
                       />
                     </div>
@@ -1800,27 +1887,26 @@ export function CommissionProceedingsPage() {
                       />
                     </div>
 
-                    {/* Search Input */}
-                    <div className="relative lg:col-span-2">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52607D]" />
-                      <input
-                        type="text"
-                        placeholder="Search App ID / Farmer / Batch..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
-                      />
-                    </div>
-
-                    {/* Clear Filters */}
-                    <div className="lg:col-span-1 flex justify-end">
+                    {/* Search Input & Clear Filters */}
+                    <div className="lg:col-span-2 flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#52607D]" />
+                        <input
+                          type="text"
+                          placeholder="Search App ID / Farmer..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                        />
+                      </div>
                       {hasActiveFilters && (
                         <Button
                           type="button"
                           variant="secondary"
                           size="sm"
                           onClick={handleResetFilters}
-                          className="w-full text-xs"
+                          className="shrink-0 text-xs py-2 px-2.5"
+                          title="Clear all filters"
                         >
                           Clear
                         </Button>
@@ -1845,7 +1931,8 @@ export function CommissionProceedingsPage() {
                       icon={Download}
                       onClick={handleExportDealerPDF}
                       disabled={statementProjects.length === 0}
-                      title="Download Dealer Commission Statement PDF"
+                      loading={exportingPDF}
+                      title="Download Dealer Commission Statement PDF (All filtered records)"
                     >
                       Download PDF Statement
                     </Button>
@@ -1958,7 +2045,12 @@ export function CommissionProceedingsPage() {
                                   </td>
 
                                   <td className="py-3 px-3 text-right font-mono text-[#52607D]">
-                                    {invAmt ? formatRupees(invAmt) : "—"}
+                                    <div>{invAmt ? formatRupees(invAmt) : "—"}</div>
+                                    {parseFloat(p.farmer_contribution || 0) > 0 && (
+                                      <div className="text-[10px] text-amber-700 font-medium font-sans">
+                                        (incl. FC: {formatRupees(p.farmer_contribution)})
+                                      </div>
+                                    )}
                                   </td>
 
                                   <td className="py-3 px-3 text-right font-mono font-medium text-[#14213D]">
@@ -2260,6 +2352,80 @@ export function CommissionProceedingsPage() {
               Delete Batch
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Recalculate All Batches Confirmation & Progress */}
+      <Modal
+        isOpen={recalculateAllModalOpen}
+        onClose={() => {
+          if (!recalculatingAll) {
+            setRecalculateAllModalOpen(false);
+            setRecalculateAllResult(null);
+          }
+        }}
+        title="Recalculate All Proceeding Batches"
+      >
+        <div className="space-y-4">
+          {recalculateAllResult ? (
+            <div className="space-y-3">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-[8px] text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                <span>
+                  Successfully recalculated {recalculateAllResult.success_count} of {recalculateAllResult.total_batches} batches!
+                  {recalculateAllResult.failure_count > 0 && ` (${recalculateAllResult.failure_count} failed)`}
+                </span>
+              </div>
+              <p className="text-xs text-[#52607D]">
+                All proceeding batches and dealer statements have been refreshed with the latest formulas, tax slabs, and farmer contributions.
+              </p>
+              <div className="flex justify-end pt-3 border-t border-[#EDEAE1]">
+                <Button
+                  variant="primary"
+                  type="button"
+                  onClick={() => {
+                    setRecalculateAllModalOpen(false);
+                    setRecalculateAllResult(null);
+                  }}
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-[#52607D]">
+                This will recalculate all existing proceeding batches across the system. It will apply:
+              </p>
+              <ul className="text-xs text-[#14213D] list-disc list-inside space-y-1 bg-[#FAFAF8] p-3 rounded-[8px] border border-[#EDEAE1]">
+                <li>Addition of <strong>Farmer Contribution</strong> into Invoice Amount & Material Cost base for 55% / 1st fund releases.</li>
+                <li>Latest effective scheme tax slabs (GST & Fittings 5%).</li>
+                <li>Milestone SLA delay penalties and net dealer payable amounts.</li>
+              </ul>
+              <p className="text-xs text-amber-700 font-medium">
+                Are you sure you want to proceed with recalculating all batches?
+              </p>
+              <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
+                <Button
+                  variant="secondary"
+                  type="button"
+                  disabled={recalculatingAll}
+                  onClick={() => setRecalculateAllModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  type="button"
+                  loading={recalculatingAll}
+                  icon={RefreshCw}
+                  onClick={handleRecalculateAll}
+                >
+                  {recalculatingAll ? "Recalculating..." : "Start Recalculation"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

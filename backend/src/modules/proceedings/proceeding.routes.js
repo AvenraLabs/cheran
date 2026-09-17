@@ -11,6 +11,7 @@ router.post("/import-excel", uploadExcel.single("file"), controller.importProcee
 // Proceeding Batches History & Details
 router.get("/", controller.listProceedingBatches);
 router.get("/dealer-statement", controller.getDealerCommissionStatement);
+router.post("/recalculate-all", controller.recalculateAllProceedingBatches);
 router.get("/:id", controller.getProceedingBatchById);
 router.post("/:id/recalculate", controller.recalculateProceedingBatch);
 router.patch("/:id/proceeding-date", controller.updateProceedingDate);

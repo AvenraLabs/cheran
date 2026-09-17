@@ -128,6 +128,14 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
   const proceedingNoCol = findCol(["proceeding no.", "proceeding no", "proceeding number", "proceedings no"]);
   const utrNoCol = findCol(["utr no", "utr number", "treasury utr no"]);
   const utrDateCol = findCol(["utr date", "first fund utr date", "treasury utr date"]);
+  const farmerContribCol = findCol([
+    "farmer contribution (in rs)",
+    "farmer contribution rs",
+    "farmer contribution",
+    "farmer share amount",
+    "farmer share",
+    "beneficiary contribution",
+  ]);
 
   let firstProceedingNo = null;
 
@@ -147,6 +155,7 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
     const releasedAmt = releasedCol ? parseFloat(r[releasedCol]) || 0 : 0;
     const subsidyEligibleAmt = subsidyEligibleCol ? parseFloat(r[subsidyEligibleCol]) || 0 : 0;
     const invoiceAmt = invoiceAmtCol ? parseFloat(r[invoiceAmtCol]) || 0 : 0;
+    const farmerContribAmt = farmerContribCol ? parseFloat(r[farmerContribCol]) || 0 : 0;
     const gstAmt = gstAmtCol ? parseFloat(r[gstAmtCol]) || 0 : 0;
     const goiShare = goiShareCol ? parseFloat(r[goiShareCol]) || 0 : 0;
     const stateShare = stateShareCol ? parseFloat(r[stateShareCol]) || 0 : 0;
@@ -172,6 +181,7 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
       invoice_date: parsedInvDate,
       subsidy_eligible_amount: Math.round(subsidyEligibleAmt * 100) / 100,
       invoice_amount: Math.round(invoiceAmt * 100) / 100,
+      farmer_contribution: Math.round(farmerContribAmt * 100) / 100,
       now_to_be_released_amount: Math.round(releasedAmt * 100) / 100,
       excel_gst_amount: Math.round(gstAmt * 100) / 100,
       goi_share_amount: Math.round(goiShare * 100) / 100,

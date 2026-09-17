@@ -128,6 +128,22 @@ export async function recalculateProceedingBatch(req, res, next) {
 }
 
 /**
+ * POST /api/proceedings/recalculate-all
+ */
+export async function recalculateAllProceedingBatches(req, res, next) {
+  try {
+    const result = await proceedingService.recalculateAllProceedingBatches();
+    res.json({
+      status: "success",
+      message: `Recalculated ${result.success_count} batches successfully${result.failure_count > 0 ? ` (${result.failure_count} failed)` : ""}.`,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * PATCH /api/proceedings/:id/proceeding-date
  */
 export async function updateProceedingDate(req, res, next) {

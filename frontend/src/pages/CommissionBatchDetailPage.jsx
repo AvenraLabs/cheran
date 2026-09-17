@@ -369,7 +369,9 @@ export function CommissionBatchDetailPage() {
         p.application_id || "—",
         invNoDateText,
         p.farmer_name || "—",
-        invAmt ? invAmt.toLocaleString("en-IN") : "—",
+        invAmt
+          ? `${invAmt.toLocaleString("en-IN")}${parseFloat(p.farmer_contribution || 0) > 0 ? `\n(FC: ${Math.floor(parseFloat(p.farmer_contribution)).toLocaleString("en-IN")})` : ""}`
+          : "—",
         subAmt ? subAmt.toLocaleString("en-IN") : "—",
         matCost ? `${matCost.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
         nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
@@ -982,7 +984,12 @@ export function CommissionBatchDetailPage() {
                         </td>
 
                         <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
-                          {formatRupees(p.invoice_amount)}
+                          <div>{formatRupees(p.invoice_amount)}</div>
+                          {parseFloat(p.farmer_contribution || 0) > 0 && (
+                            <div className="text-[10px] text-amber-700 font-medium font-sans">
+                              (incl. FC: {formatRupees(p.farmer_contribution)})
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">

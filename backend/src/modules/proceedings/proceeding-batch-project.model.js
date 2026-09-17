@@ -57,6 +57,10 @@ export const ProceedingBatchProject = sequelize.define(
       type: DataTypes.DECIMAL(14, 2),
       defaultValue: 0,
     },
+    farmer_contribution: {
+      type: DataTypes.DECIMAL(14, 2),
+      defaultValue: 0,
+    },
     subsidy_amount: {
       type: DataTypes.DECIMAL(14, 2),
       defaultValue: 0,

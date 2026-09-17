@@ -94,6 +94,7 @@ export async function previewProceedingExcel(
       : isFirstFund;
 
   let totalSubsidyEligible = 0;
+  let totalFarmerContributionSum = 0;
   let totalMaterialCostSum = 0;
   let totalNowReleasedSum = 0;
   let totalDealerCommissionSum = 0;
@@ -121,14 +122,27 @@ export async function previewProceedingExcel(
     const invoiceDate = proj?.invoice_date || row.invoice_date || null;
     const rawInvoiceAmount = Math.floor(parseFloat(row.invoice_amount || proj?.invoice_amount || 0));
 
+    // Farmer contribution (from Excel or DB)
+    const rawFarmerContribution = Math.floor(parseFloat(row.farmer_contribution || proj?.farmer_contribution || 0));
+
+    // Rule: Add farmer contribution to invoice amount ONLY on first fund release (>= 50%, e.g. 55%)
+    const effectiveInvoiceAmount = isFirstFund && rawFarmerContribution > 0
+      ? rawInvoiceAmount + rawFarmerContribution
+      : rawInvoiceAmount;
+
     // Subsidy Eligible Amount (from Excel or DB)
-    const subsidyEligible = Math.floor(
+    const rawSubsidyEligible = Math.floor(
       row.subsidy_eligible_amount > 0
         ? row.subsidy_eligible_amount
         : parseFloat(proj?.state_restricted_amount || proj?.quotation_subsidy_amount || rawInvoiceAmount || 0)
     );
 
-    const stateRestricted = Math.floor(parseFloat(proj?.state_restricted_amount || subsidyEligible || 0));
+    // Rule: When calculating material cost, gross base includes farmer contribution on first fund release
+    const calculationGrossBase = isFirstFund && rawFarmerContribution > 0
+      ? rawSubsidyEligible + rawFarmerContribution
+      : rawSubsidyEligible;
+
+    const stateRestricted = Math.floor(parseFloat(proj?.state_restricted_amount || rawSubsidyEligible || 0));
     const nowToBeReleased = Math.floor(row.now_to_be_released_amount || 0);
     const excelGst = Math.floor(row.excel_gst_amount || 0);
 
@@ -138,14 +152,14 @@ export async function previewProceedingExcel(
     const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);
     const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
 
-    // 1. Total Project Material Cost (Calculated from Subsidy Eligible Amount 100%)
+    // 1. Total Project Material Cost (Calculated from Gross Calculation Base)
     // Sequentially back out GST percentage (/ 1 + GST%), then back out 5% fittings (/ 1 + Fittings%)
-    const taxableEligible = subsidyEligible > 0 ? subsidyEligible / (1 + gstPct / 100) : 0;
+    const taxableEligible = calculationGrossBase > 0 ? calculationGrossBase / (1 + gstPct / 100) : 0;
     const totalMaterialCost = taxableEligible > 0 ? Math.floor(taxableEligible / (1 + fittingsPct / 100)) : 0;
     const totalFittings5pct = Math.floor(taxableEligible - totalMaterialCost);
 
     // Fittings Amount:
-    // If includeFittings is true (First fund / checked): full 5% fittings cost calculated from 100% subsidy eligible amount
+    // If includeFittings is true (First fund / checked): full 5% fittings cost calculated from 100% eligible amount
     // If includeFittings is false (Second fund / unchecked): 0
     const fittingsAmount = includeFittings ? totalFittings5pct : 0;
 
@@ -153,7 +167,7 @@ export async function previewProceedingExcel(
     // Net Material Base for this milestone tranche = (Total Material Cost * Fund Release %) / 100
     const fundPct = detected_fund_percentage || 55.0;
     const releasedNetMaterial = Math.floor((totalMaterialCost * fundPct) / 100.0);
-    const calculatedGst = Math.floor(subsidyEligible - taxableEligible);
+    const calculatedGst = Math.floor(calculationGrossBase - taxableEligible);
 
     // Dealer Rate resolved by project invoice date
     const dealer = proj?.dealer || null;
@@ -226,7 +240,8 @@ export async function previewProceedingExcel(
     const penaltyAmount = Math.floor(releasedNetMaterial * (penaltyPoints / 100));
     const netDealerPayout = Math.max(0, commissionAmount + fittingsAmount - penaltyAmount);
 
-    totalSubsidyEligible += subsidyEligible;
+    totalSubsidyEligible += rawSubsidyEligible;
+    totalFarmerContributionSum += rawFarmerContribution;
     totalMaterialCostSum += totalMaterialCost;
     totalNowReleasedSum += nowToBeReleased;
     totalDealerCommissionSum += commissionAmount;
@@ -249,8 +264,9 @@ export async function previewProceedingExcel(
       village,
       invoice_number: invoiceNumber,
       invoice_date: invoiceDate,
-      subsidy_eligible_amount: subsidyEligible,
-      invoice_amount: rawInvoiceAmount,
+      subsidy_eligible_amount: rawSubsidyEligible,
+      invoice_amount: effectiveInvoiceAmount,
+      farmer_contribution: rawFarmerContribution,
       state_restricted_amount: stateRestricted,
       total_material_cost: totalMaterialCost,
       now_to_be_released_amount: nowToBeReleased,
@@ -287,6 +303,7 @@ export async function previewProceedingExcel(
     unmatched_ids: unmatchedIds,
     summary: {
       total_subsidy_eligible: totalSubsidyEligible,
+      total_farmer_contribution: totalFarmerContributionSum,
       total_material_cost: totalMaterialCostSum,
       total_now_released: totalNowReleasedSum,
       total_dealer_commission: totalDealerCommissionSum,
@@ -382,6 +399,7 @@ export async function importProceedingBatch({
       invoice_number: r.invoice_number,
       invoice_date: r.invoice_date,
       invoice_amount: r.invoice_amount,
+      farmer_contribution: r.farmer_contribution || 0,
       subsidy_amount: r.subsidy_eligible_amount,
       state_restricted_amount: r.state_restricted_amount,
       total_material_cost: r.total_material_cost,
@@ -594,6 +612,7 @@ export async function getProceedingBatchById(id) {
         dealer_district: item.district || "—",
         projects_count: 0,
         total_invoice_amount: 0,
+        total_farmer_contribution: 0,
         total_subsidy_amount: 0,
         total_material_cost: 0,
         total_now_to_be_released: 0,
@@ -612,6 +631,7 @@ export async function getProceedingBatchById(id) {
     const d = dealerMap.get(dKey);
     d.projects_count += 1;
     d.total_invoice_amount += Math.floor(parseFloat(item.invoice_amount || 0));
+    d.total_farmer_contribution += Math.floor(parseFloat(item.farmer_contribution || 0));
     d.total_subsidy_amount += Math.floor(parseFloat(item.subsidy_amount || item.state_restricted_amount || 0));
     d.total_material_cost += Math.floor(parseFloat(item.total_material_cost || 0));
     d.total_now_to_be_released += Math.floor(parseFloat(item.now_to_be_released_amount || item.fund_share_amount || 0));
@@ -725,16 +745,30 @@ export async function recalculateProceedingBatch(id) {
       const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);
       const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
 
-      const subsidyEligible = Math.floor(
+      // Farmer contribution from item or linked DB project
+      const rawFarmerContribution = Math.floor(parseFloat(item.farmer_contribution || proj?.farmer_contribution || 0));
+
+      const rawInvoiceAmount = Math.floor(parseFloat(proj?.invoice_amount || item.invoice_amount || 0));
+      const effectiveInvoiceAmount = isFirstFund && rawFarmerContribution > 0
+        ? rawInvoiceAmount + rawFarmerContribution
+        : rawInvoiceAmount;
+
+      const rawSubsidyEligible = Math.floor(
         parseFloat(item.subsidy_amount || item.state_restricted_amount || proj?.state_restricted_amount || 0)
       );
+
+      // Rule: In first fund release (55% / >= 50%), gross calculation base includes farmer contribution
+      const calculationGrossBase = isFirstFund && rawFarmerContribution > 0
+        ? rawSubsidyEligible + rawFarmerContribution
+        : rawSubsidyEligible;
+
       const nowToBeReleased = Math.floor(parseFloat(item.now_to_be_released_amount || item.fund_share_amount || 0));
 
       const fundPct = batch.fund_percentage_value || 55.0;
 
       // 1. Total Project Material Cost
       // Sequentially back out GST percentage (/ 1 + GST%), then back out 5% fittings (/ 1 + Fittings%)
-      const taxableEligible = subsidyEligible > 0 ? subsidyEligible / (1 + gstPct / 100) : 0;
+      const taxableEligible = calculationGrossBase > 0 ? calculationGrossBase / (1 + gstPct / 100) : 0;
       const totalMaterialCost = taxableEligible > 0 ? Math.floor(taxableEligible / (1 + fittingsPct / 100)) : 0;
       const totalFittings5pct = Math.floor(taxableEligible - totalMaterialCost);
       const fittingsAmt = includeFittings ? totalFittings5pct : 0;
@@ -798,6 +832,8 @@ export async function recalculateProceedingBatch(id) {
       const commissionAmt = Math.floor(releasedNetMaterial * (dealerBaseRate / 100));
       const penaltyAmt = Math.floor(releasedNetMaterial * (penaltyPoints / 100));
 
+      item.invoice_amount = effectiveInvoiceAmount;
+      item.farmer_contribution = rawFarmerContribution;
       item.total_material_cost = totalMaterialCost;
       item.gst_percentage = gstPct;
       item.fittings_percentage = fittingsPct;
@@ -828,6 +864,38 @@ export async function recalculateProceedingBatch(id) {
 
   return getProceedingBatchById(id);
 }
+
+/**
+ * Recalculate financial amounts for ALL saved proceeding batches
+ */
+export async function recalculateAllProceedingBatches() {
+  const batches = await ProceedingBatch.findAll({
+    attributes: ["id", "proceeding_no", "proceeding_date"],
+    order: [["proceeding_date", "ASC"], ["created_at", "ASC"]],
+  });
+
+  const results = [];
+  for (const b of batches) {
+    try {
+      await recalculateProceedingBatch(b.id);
+      results.push({ id: b.id, proceeding_no: b.proceeding_no, success: true });
+    } catch (err) {
+      console.error(`Failed to recalculate batch ${b.proceeding_no} (${b.id}):`, err);
+      results.push({ id: b.id, proceeding_no: b.proceeding_no, success: false, error: err.message });
+    }
+  }
+
+  const successCount = results.filter((r) => r.success).length;
+  const failureCount = results.filter((r) => !r.success).length;
+
+  return {
+    total_batches: batches.length,
+    success_count: successCount,
+    failure_count: failureCount,
+    details: results,
+  };
+}
+
 
 /**
  * Update project-level penalty amount
@@ -983,6 +1051,7 @@ export async function getDealerCommissionStatement(query = {}) {
     end_date,
     payout_status,
     search,
+    fund_percentage_value,
   } = query;
 
   const projectWhere = {};
@@ -996,6 +1065,10 @@ export async function getDealerCommissionStatement(query = {}) {
     projectWhere.is_paid_to_dealer = true;
   } else if (payout_status === "PENDING" || payout_status === "UNPAID") {
     projectWhere.is_paid_to_dealer = false;
+  }
+
+  if (fund_percentage_value && fund_percentage_value !== "all") {
+    batchWhere.fund_percentage_value = parseFloat(fund_percentage_value);
   }
 
   if (start_date && end_date) {
@@ -1018,7 +1091,10 @@ export async function getDealerCommissionStatement(query = {}) {
     ];
   }
 
-  const offset = (page - 1) * limit;
+  const isAll = limit === "all" || parseInt(limit, 10) >= 10000;
+  const parsedLimit = isAll ? null : Math.max(1, parseInt(limit, 10) || 50);
+  const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+  const offset = parsedLimit ? (parsedPage - 1) * parsedLimit : 0;
 
   const { rows, count } = await ProceedingBatchProject.findAndCountAll({
     where: projectWhere,
@@ -1039,8 +1115,8 @@ export async function getDealerCommissionStatement(query = {}) {
       [{ model: ProceedingBatch, as: "batch" }, "proceeding_date", "DESC"],
       ["created_at", "DESC"],
     ],
-    limit: parseInt(limit, 10),
-    offset: parseInt(offset, 10),
+    limit: parsedLimit || undefined,
+    offset: parsedLimit ? offset : undefined,
     distinct: true,
   });
 
