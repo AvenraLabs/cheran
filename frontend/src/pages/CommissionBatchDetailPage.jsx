@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   Layers,
   Download,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -47,6 +49,16 @@ export function CommissionBatchDetailPage() {
   const [editProceedingDate, setEditProceedingDate] = useState("");
   const [savingDate, setSavingDate] = useState(false);
   const [editDateError, setEditDateError] = useState("");
+
+  // Accordion state for expandable dealer rows
+  const [expandedDealers, setExpandedDealers] = useState({});
+
+  const toggleDealerExpand = (dealerKey) => {
+    setExpandedDealers((prev) => ({
+      ...prev,
+      [dealerKey]: !prev[dealerKey],
+    }));
+  };
 
   // Search filter for individual projects table
   const [projectSearch, setProjectSearch] = useState("");
@@ -273,9 +285,10 @@ export function CommissionBatchDetailPage() {
     }
   };
 
-  // Export Proceeding Line Items Table to PDF
-  const handleExportPDF = () => {
-    if (!batch || !filteredProjects || filteredProjects.length === 0) return;
+  // Export Proceeding Line Items Table to PDF (Full Batch or Dealer-Specific)
+  const handleExportPDF = (targetProjects = null, targetDealerName = null) => {
+    const projectsToExport = targetProjects || filteredProjects;
+    if (!batch || !projectsToExport || projectsToExport.length === 0) return;
 
     const doc = new jsPDF({
       orientation: "landscape",
@@ -294,7 +307,13 @@ export function CommissionBatchDetailPage() {
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(82, 96, 125);
-    doc.text("Government Proceeding Batch - Project Line Items Report", 30, 50);
+    doc.text(
+      targetDealerName
+        ? `Government Proceeding Batch - Dealer Statement: ${targetDealerName}`
+        : "Government Proceeding Batch - Project Line Items Report",
+      30,
+      50
+    );
 
     // Meta Header Information
     doc.setFontSize(8.5);
@@ -304,6 +323,11 @@ export function CommissionBatchDetailPage() {
     doc.text(`Proceeding Date: ${formatDate(batch.proceeding_date)}`, 200, 68);
     doc.text(`Fund Type: ${batch.fund_percentage_value}% Fund Release`, 380, 68);
     doc.text(`5% Fittings Cost: ${hasFittings ? "Included" : "Excluded"}`, 560, 68);
+
+    if (targetDealerName) {
+      doc.text(`Dealer: ${targetDealerName}`, 30, 82);
+      doc.text(`Dealer Projects Count: ${projectsToExport.length}`, 380, 82);
+    }
 
     // Table Headers
     const headers = [
@@ -441,7 +465,7 @@ export function CommissionBatchDetailPage() {
       head: headers,
       body: rows,
       foot: footers,
-      startY: 80,
+      startY: targetDealerName ? 96 : 80,
       margin: { left: 28, right: 28 },
       theme: "grid",
       styles: {
@@ -480,7 +504,10 @@ export function CommissionBatchDetailPage() {
     });
 
     const safeProcNo = (batch.proceeding_no || "Batch").replace(/[/\\?%*:|"<>]/g, "_");
-    doc.save(`Proceeding_Line_Items_${safeProcNo}.pdf`);
+    const safeDealer = targetDealerName
+      ? `_${targetDealerName.replace(/[/\\?%*:|"<>]/g, "_").replace(/\s+/g, "_")}`
+      : "";
+    doc.save(`Proceeding_Line_Items_${safeProcNo}${safeDealer}.pdf`);
   };
 
   if (loading && !batch) {
@@ -766,88 +793,335 @@ export function CommissionBatchDetailPage() {
                   </tr>
                 ) : (
                   dealerSummaries.map((d) => {
+                    const dKey = d.dealer_id || "unassigned";
+                    const isExpanded = Boolean(expandedDealers[dKey]);
                     const comm = d.total_commission_amount || 0;
                     const pen = d.total_penalty_amount || 0;
                     const netComm = Math.max(0, comm - pen);
+                    const dealerProjects = (batch?.projects || []).filter((p) =>
+                      d.dealer_id ? p.dealer_id === d.dealer_id : !p.dealer_id
+                    );
 
                     return (
-                      <tr key={d.dealer_id || "unassigned"} className="hover:bg-[#FAFAF8]">
-                        <td className="py-3 px-3">
-                          <div className="font-semibold text-[#14213D] text-xs">{d.dealer_name}</div>
-                          {d.dealer_district && d.dealer_district !== "—" && (
-                            <div className="text-[10px] text-[#52607D]">{d.dealer_district}</div>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-center font-mono font-bold text-[#14213D]">
-                          {d.projects_count}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono text-[#52607D]">
-                          {formatRupees(d.total_subsidy_amount || d.total_state_restricted)}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono text-[#14213D] font-medium">
-                          {formatRupees(d.total_material_cost)}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
-                          {formatRupees(d.total_now_to_be_released)}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
-                          {formatRupees(d.total_commission_amount)}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono">
-                          {pen > 0 ? (
-                            <span className="text-rose-600 font-bold font-mono">
-                              -{formatRupees(pen)}
-                            </span>
-                          ) : (
-                            <span className="text-[#8C97AB]">₹0</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-[#14213D]">
-                          {formatRupees(netComm)}
-                        </td>
-                        {hasFittings && (
-                          <td className="py-3 px-3 text-right font-mono text-[#7C3AED] font-semibold">
-                            {formatRupees(d.total_fittings_amount)}
-                          </td>
-                        )}
-                        <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
-                          {formatRupees(d.total_net_payable)}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          {d.is_paid ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
-                              ✓ Paid
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-bold">
-                              Pending
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          {d.is_paid ? (
-                            <div className="text-[10px] text-[#52607D]">
-                              {d.paid_date ? formatDate(d.paid_date) : "Settled"}
+                      <React.Fragment key={dKey}>
+                        <tr
+                          onClick={() => toggleDealerExpand(dKey)}
+                          className={`cursor-pointer transition-colors ${
+                            isExpanded ? "bg-[#F0F7F4] border-l-4 border-l-[#2F6F5E]" : "hover:bg-[#FAFAF8]"
+                          }`}
+                          title={`Click to ${isExpanded ? "hide" : "view"} ${dealerProjects.length} projects`}
+                        >
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className="p-1 rounded hover:bg-black/5 text-[#2F6F5E] transition-colors">
+                                {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                              </span>
+                              <div>
+                                <div className="font-semibold text-[#14213D] text-xs flex items-center gap-1.5">
+                                  {d.dealer_name}
+                                </div>
+                                {d.dealer_district && d.dealer_district !== "—" && (
+                                  <div className="text-[10px] text-[#52607D]">{d.dealer_district}</div>
+                                )}
+                              </div>
                             </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                setActiveDealerForPay(d);
-                                setDealerPayDate(new Date().toISOString().split("T")[0]);
-                                setDealerPayRef("Direct Bank Transfer / NEFT");
-                                setDealerPayPenalty(d.total_penalty_amount || 0);
-                                setDealerPayError("");
-                                setDealerPayModalOpen(true);
-                              }}
-                              className="text-[11px] py-1 px-2.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                            >
-                              Record Payout
-                            </Button>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold text-xs">
+                              {d.projects_count}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-[#52607D]">
+                            {formatRupees(d.total_subsidy_amount || d.total_state_restricted)}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-[#14213D] font-medium">
+                            {formatRupees(d.total_material_cost)}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                            {formatRupees(d.total_now_to_be_released)}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                            {formatRupees(d.total_commission_amount)}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono">
+                            {pen > 0 ? (
+                              <span className="text-rose-600 font-bold font-mono">
+                                -{formatRupees(pen)}
+                              </span>
+                            ) : (
+                              <span className="text-[#8C97AB]">₹0</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-[#14213D]">
+                            {formatRupees(netComm)}
+                          </td>
+                          {hasFittings && (
+                            <td className="py-3 px-3 text-right font-mono text-[#7C3AED] font-semibold">
+                              {formatRupees(d.total_fittings_amount)}
+                            </td>
                           )}
-                        </td>
-                      </tr>
+                          <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
+                            {formatRupees(d.total_net_payable)}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            {d.is_paid ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                                ✓ Paid
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-bold">
+                                Pending
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExportPDF(dealerProjects, d.dealer_name);
+                                }}
+                                className="p-1.5 text-[#52607D] hover:text-emerald-800 hover:bg-emerald-50 rounded border border-[#EDEAE1] transition-colors"
+                                title={`Download PDF for ${d.dealer_name}`}
+                              >
+                                <Download size={13} />
+                              </button>
+                              {d.is_paid ? (
+                                <div className="text-[10px] text-[#52607D]">
+                                  {d.paid_date ? formatDate(d.paid_date) : "Settled"}
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setActiveDealerForPay(d);
+                                    setDealerPayDate(new Date().toISOString().split("T")[0]);
+                                    setDealerPayRef("Direct Bank Transfer / NEFT");
+                                    setDealerPayPenalty(d.total_penalty_amount || 0);
+                                    setDealerPayError("");
+                                    setDealerPayModalOpen(true);
+                                  }}
+                                  className="text-[11px] py-1 px-2.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                >
+                                  Record Payout
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Expanded Projects Sub-Table */}
+                        {isExpanded && (
+                          <tr className="bg-[#F8FAF9] border-y border-[#E4E1D8]">
+                            <td colSpan={hasFittings ? 12 : 11} className="p-4 pl-6 pr-6">
+                              <div className="space-y-3 bg-white border border-[#EDEAE1] rounded-[10px] p-4 shadow-sm">
+                                {/* Header banner */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#EDEAE1] pb-3">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-sm text-[#14213D] flex items-center gap-1.5">
+                                      <Building2 size={16} className="text-[#2F6F5E]" />
+                                      {d.dealer_name}
+                                    </span>
+                                    <span className="text-xs text-[#52607D] font-medium">
+                                      ({dealerProjects.length} Projects)
+                                    </span>
+                                    <span className="text-[11px] font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-semibold">
+                                      Net Payout: {formatRupees(d.total_net_payable)}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    icon={Download}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleExportPDF(dealerProjects, d.dealer_name);
+                                    }}
+                                    className="text-xs font-semibold bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300 shadow-xs shrink-0"
+                                  >
+                                    Download {d.dealer_name} PDF
+                                  </Button>
+                                </div>
+
+                                {/* Table of projects */}
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-left text-xs min-w-[1200px]">
+                                    <thead className="bg-[#FAFAF8] border-b border-[#E4E1D8] text-[#52607D] uppercase font-semibold">
+                                      <tr>
+                                        <th className="py-2 px-2.5 text-center">#</th>
+                                        <th className="py-2 px-2.5">Application ID & Invoice</th>
+                                        <th className="py-2 px-2.5">Farmer & Location</th>
+                                        <th className="py-2 px-2.5 text-right">Invoice Amount</th>
+                                        <th className="py-2 px-2.5 text-right">Subsidy Eligible</th>
+                                        <th className="py-2 px-2.5 text-right">Total Material Cost</th>
+                                        <th className="py-2 px-2.5 text-right font-bold text-[#2F6F5E]">Now Released</th>
+                                        <th className="py-2 px-2.5">Delay</th>
+                                        <th className="py-2 px-2.5 text-right font-bold text-[#2F6F5E]">Commission</th>
+                                        <th className="py-2 px-2.5 text-right text-rose-600">Penalty</th>
+                                        <th className="py-2 px-2.5 text-right font-bold text-[#14213D]">Net Commission</th>
+                                        {hasFittings && <th className="py-2 px-2.5 text-right text-[#7C3AED]">Fittings (5%)</th>}
+                                        <th className="py-2 px-2.5 text-right font-bold text-emerald-800">Net Payable</th>
+                                        <th className="py-2 px-2.5 text-center">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#EDEAE1]">
+                                      {dealerProjects.length === 0 ? (
+                                        <tr>
+                                          <td colSpan={hasFittings ? 14 : 13} className="py-6 text-center text-xs text-[#8C97AB]">
+                                            No projects found for this dealer in this batch.
+                                          </td>
+                                        </tr>
+                                      ) : (
+                                        dealerProjects.map((p, pIdx) => {
+                                          const penalty = Math.floor(
+                                            parseFloat(
+                                              p.adjusted_penalty_amount !== undefined && p.adjusted_penalty_amount !== null
+                                                ? p.adjusted_penalty_amount
+                                                : p.penalty_amount || 0
+                                            )
+                                          );
+                                          const commAmt = Math.floor(parseFloat(p.commission_amount || 0));
+                                          const fitAmt = Math.floor(parseFloat(p.fittings_amount || 0));
+                                          const itemNetComm = Math.max(0, commAmt - penalty);
+                                          const itemNetPayable = Math.max(0, itemNetComm + fitAmt);
+
+                                          const isFirstFund = batch.fund_percentage_value >= 50.0;
+                                          const startLabel = isFirstFund ? "Invoice Date" : "1st Fund Credited";
+                                          const endLabel = isFirstFund ? "Work Completion" : "Joint Verification";
+
+                                          return (
+                                            <tr key={p.id || pIdx} className="hover:bg-[#FAFAF8]">
+                                              <td className="py-2.5 px-2.5 text-center font-mono text-[#8C97AB]">
+                                                {pIdx + 1}
+                                              </td>
+                                              <td className="py-2.5 px-2.5">
+                                                <div className="font-mono font-bold text-[#14213D] text-xs">
+                                                  {p.application_id}
+                                                </div>
+                                                <div className="mt-1 flex items-center gap-1.5">
+                                                  <span className="text-[10px] text-[#52607D] font-medium">Inv No:</span>
+                                                  {p.invoice_number && p.invoice_number !== "—" ? (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold text-[10px]">
+                                                      #{p.invoice_number}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-[10px] text-[#8C97AB] italic">—</span>
+                                                  )}
+                                                </div>
+                                              </td>
+                                              <td className="py-2.5 px-2.5">
+                                                <div className="font-semibold text-[#14213D]">{p.farmer_name || "—"}</div>
+                                                <div className="text-[10px] text-[#52607D]">
+                                                  {[p.village, p.block, p.district].filter(Boolean).join(", ") || "—"}
+                                                </div>
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-right font-mono text-[#52607D]">
+                                                <div>{formatRupees(p.invoice_amount)}</div>
+                                                {parseFloat(p.farmer_contribution || 0) > 0 && (
+                                                  <div className="text-[10px] text-amber-700 font-medium font-sans">
+                                                    (incl. FC: {formatRupees(p.farmer_contribution)})
+                                                  </div>
+                                                )}
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-right font-mono text-[#52607D]">
+                                                {formatRupees(p.subsidy_amount || p.state_restricted_amount)}
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-right font-mono text-[#14213D] font-medium">
+                                                <div>{formatRupees(p.total_material_cost)}</div>
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-right font-mono font-bold text-[#2F6F5E]">
+                                                <div>{formatRupees(p.now_to_be_released_amount || p.fund_share_amount)}</div>
+                                                <div className="text-[10px] text-[#2F6F5E]/70 font-sans font-medium">
+                                                  GST: {p.gst_percentage || 12}%
+                                                </div>
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-[11px] space-y-0.5 min-w-[160px]">
+                                                {p.milestone_start_date && (
+                                                  <div className="text-[10px] text-[#52607D]">
+                                                    <span className="font-semibold">{startLabel}:</span> {formatDate(p.milestone_start_date)}
+                                                  </div>
+                                                )}
+                                                {p.milestone_end_date && (
+                                                  <div className="text-[10px] text-[#52607D]">
+                                                    <span className="font-semibold">{endLabel}:</span> {formatDate(p.milestone_end_date)}
+                                                  </div>
+                                                )}
+                                                {p.delay_days > 45 ? (
+                                                  <div className="text-[10px] font-bold text-rose-600 font-mono">
+                                                    {p.delay_days}d ({p.penalty_percentage || 0}% penalty)
+                                                  </div>
+                                                ) : (
+                                                  <div className="text-[10px] font-bold text-emerald-700 font-mono">
+                                                    {p.delay_days || 0}d
+                                                  </div>
+                                                )}
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-right font-mono font-bold text-[#2F6F5E]">
+                                                <div>{formatRupees(p.commission_amount)}</div>
+                                                {p.dealer_rate_percentage > 0 && (
+                                                  <span className="text-[9px] text-[#52607D] font-sans">
+                                                    @{p.dealer_rate_percentage}%
+                                                  </span>
+                                                )}
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-right font-mono whitespace-nowrap min-w-[100px]">
+                                                <div className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                                  {penalty > 0 ? (
+                                                    <span className="text-rose-600 font-bold font-mono whitespace-nowrap">
+                                                      -{formatRupees(penalty)}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-[#8C97AB] whitespace-nowrap">₹0</span>
+                                                  )}
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleOpenPenaltyModal(p);
+                                                    }}
+                                                    className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                                                    title="Edit delay penalty amount"
+                                                  >
+                                                    <Pencil size={12} />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-right font-mono font-bold text-[#14213D]">
+                                                {formatRupees(itemNetComm)}
+                                              </td>
+                                              {hasFittings && (
+                                                <td className="py-2.5 px-2.5 text-right font-mono text-[#7C3AED] font-semibold">
+                                                  {formatRupees(p.fittings_amount)}
+                                                </td>
+                                              )}
+                                              <td className="py-2.5 px-2.5 text-right font-mono font-bold text-emerald-800">
+                                                {formatRupees(itemNetPayable)}
+                                              </td>
+                                              <td className="py-2.5 px-2.5 text-center">
+                                                <span
+                                                  className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                                                    p.is_paid_to_dealer
+                                                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                                      : "bg-gray-100 text-gray-700 border border-gray-200"
+                                                  }`}
+                                                >
+                                                  {p.is_paid_to_dealer ? "Paid" : "Unpaid"}
+                                                </span>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}

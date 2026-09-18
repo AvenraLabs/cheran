@@ -1,0 +1,98 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        primary: "#002c18",
+        "primary-container": "#14432b",
+        "on-primary": "#ffffff",
+        "on-primary-container": "#80b091",
+        "primary-fixed": "#bceecc",
+        "primary-fixed-dim": "#a1d2b1",
+        "on-primary-fixed": "#002111",
+        "on-primary-fixed-variant": "#224f36",
+        "inverse-primary": "#a1d2b1",
+
+        secondary: "#1f6b3f",
+        "secondary-container": "#a7f4bb",
+        "on-secondary": "#ffffff",
+        "on-secondary-container": "#277245",
+        "secondary-fixed": "#a7f4bb",
+        "secondary-fixed-dim": "#8cd7a1",
+
+        tertiary: "#3e1c00",
+        "tertiary-container": "#5e2e00",
+        "on-tertiary": "#ffffff",
+        "on-tertiary-container": "#e49151",
+        "tertiary-fixed": "#ffdcc5",
+        "tertiary-fixed-dim": "#ffb783",
+
+        // Core Brand Palette from DESIGN.md
+        "forest-900": "#14432B",
+        "forest-700": "#1F6B3F",
+        "forest-500": "#2E8B57",
+        "sun-500": "#E8B923",
+        "clay-400": "#C97B3D",
+        "paper-50": "#FAF8F1",
+        "paper-100": "#F2EEE2",
+        "line-200": "#E3DFD2",
+        "steel-600": "#4A5A52",
+        ink: "#0F1A12",
+
+        surface: "#fbf9f2",
+        "surface-dim": "#dcdad3",
+        "surface-bright": "#fbf9f2",
+        "surface-container-lowest": "#ffffff",
+        "surface-container-low": "#f5f4ed",
+        "surface-container": "#f0eee7",
+        "surface-container-high": "#eae8e1",
+        "surface-container-highest": "#e4e2dc",
+        "surface-variant": "#e4e2dc",
+        "surface-tint": "#3a684d",
+
+        "on-surface": "#1b1c18",
+        "on-surface-variant": "#414942",
+        "inverse-surface": "#30312c",
+        "inverse-on-surface": "#f3f1ea",
+
+        outline: "#717972",
+        "outline-variant": "#c1c9c0",
+
+        error: "#ba1a1a",
+        "on-error": "#ffffff",
+        "error-container": "#ffdad6",
+        "on-error-container": "#93000a",
+      },
+      fontFamily: {
+        serif: ["Fraunces", "Georgia", "serif"],
+        sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+        headline: ["Fraunces", "serif"],
+        body: ["Inter", "sans-serif"],
+        tamil: ["Noto Sans Tamil", "Catamaran", "sans-serif"],
+      },
+      spacing: {
+        "space-xs": "0.25rem",
+        "space-sm": "0.5rem",
+        "space-md": "1rem",
+        "space-lg": "1.5rem",
+        "space-xl": "2.5rem",
+        gutter: "1.5rem",
+        "gutter-mobile": "1rem",
+        margin: "2.5rem",
+        "margin-mobile": "1.25rem",
+        "section-gap-desktop": "7.5rem",
+        "section-gap-mobile": "4rem",
+      },
+      boxShadow: {
+        subtle: "0 1px 2px rgba(15, 26, 18, 0.04)",
+        card: "0 4px 12px rgba(15, 26, 18, 0.05)",
+      },
+    },
+  },
+  plugins: [],
+};

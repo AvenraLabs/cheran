@@ -56,8 +56,13 @@ jobs:
               exit 1
             fi
 
-            echo "=== [5/5] Building Frontend App ==="
+            echo "=== [5/6] Building Frontend App (ajay.cheranplast.in) ==="
             cd ~/cheran/frontend
+            npm ci --prefer-offline --no-audit
+            npm run build
+
+            echo "=== [6/6] Building Public Website (cheranplast.in) ==="
+            cd ~/cheran/website
             npm ci --prefer-offline --no-audit
             npm run build
 
