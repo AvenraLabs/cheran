@@ -88,9 +88,9 @@ export async function calculateProjectDealerCommission(projectId) {
   const rawQuotationSubsidy = parseFloat(project.quotation_subsidy_amount) || 0;
   const rawFarmerContribution = parseFloat(project.farmer_contribution) || 0;
 
-  // Base Net Amount and Fittings Cost (Sequential Back-Out using State Restricted Amount)
+  // Base Net Amount and Fittings Cost (Sequential Back-Out using State Restricted Amount / Invoice Amount + Farmer Contribution)
   // If state_restricted_amount is 0/null, fallback to invoice_amount
-  const calculationBaseGross = rawStateRestricted > 0 ? rawStateRestricted : rawInvoiceAmount;
+  const calculationBaseGross = (rawStateRestricted > 0 ? rawStateRestricted : rawInvoiceAmount) + rawFarmerContribution;
   let baseAmount = 0;
   let fittingsAmount = 0;
 

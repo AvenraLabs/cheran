@@ -18,46 +18,53 @@ export async function listTaxSlabs() {
 export async function getEffectiveSchemeTaxSlab(projectDate) {
   const targetDate = projectDate
     ? String(projectDate).trim().slice(0, 10)
-    : new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
+    : null;
 
-  const slab = await SchemeTaxSlab.findOne({
-    where: {
-      effective_from: { [Op.lte]: targetDate },
-      [Op.or]: [
-        { effective_to: null },
-        { effective_to: { [Op.gte]: targetDate } },
-      ],
-    },
-    order: [["effective_from", "DESC"]],
-  });
+  if (targetDate) {
+    const slab = await SchemeTaxSlab.findOne({
+      where: {
+        effective_from: { [Op.lte]: targetDate },
+        [Op.or]: [
+          { effective_to: null },
+          { effective_to: { [Op.gte]: targetDate } },
+        ],
+      },
+      order: [["effective_from", "DESC"]],
+    });
 
-  if (slab) {
+    if (slab) {
+      return {
+        gst_percentage: parseFloat(slab.gst_percentage),
+        fittings_percentage: parseFloat(slab.fittings_percentage),
+        description: slab.description,
+        effective_from: slab.effective_from,
+        effective_to: slab.effective_to,
+        matched_date: targetDate,
+      };
+    }
+
+    // Fallback if no matching DB record (22-09-2025 boundary)
+    const isPreSep2025 = targetDate < "2025-09-22";
     return {
-      gst_percentage: parseFloat(slab.gst_percentage),
-      fittings_percentage: parseFloat(slab.fittings_percentage),
-      description: slab.description,
-      effective_from: slab.effective_from,
-      effective_to: slab.effective_to,
+      gst_percentage: isPreSep2025 ? 12.0 : 5.0,
+      fittings_percentage: 5.0,
+      description: isPreSep2025
+        ? "Pre-Sep 2025 Scheme Rate (12% GST)"
+        : "Post-Sep 2025 Scheme Rate (5% GST)",
+      effective_from: isPreSep2025 ? "2000-01-01" : "2025-09-22",
+      effective_to: isPreSep2025 ? "2025-09-21" : null,
       matched_date: targetDate,
     };
   }
 
-  // Fallback if no matching DB record (22-09-2025 boundary)
-  const isPreSep2025 = targetDate < "2025-09-22";
+  // Strictly default to standard scheme rate (12% GST) without falling back to today's date
   return {
-    gst_percentage: isPreSep2025 ? 12.0 : 5.0,
+    gst_percentage: 12.0,
     fittings_percentage: 5.0,
-    description: isPreSep2025
-      ? "Pre-Sep 2025 Scheme Rate (12% GST)"
-      : "Post-Sep 2025 Scheme Rate (5% GST)",
-    effective_from: isPreSep2025 ? "2000-01-01" : "2025-09-22",
-    effective_to: isPreSep2025 ? "2025-09-21" : null,
-    matched_date: targetDate,
+    description: "Default Scheme Rate (12% GST - No Invoice Date)",
+    effective_from: null,
+    effective_to: null,
+    matched_date: null,
   };
 }
 

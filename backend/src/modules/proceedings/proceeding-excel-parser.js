@@ -135,6 +135,9 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
     "farmer share amount",
     "farmer share",
     "beneficiary contribution",
+    "fc amount (in rs)",
+    "fc amount",
+    "fc amt",
   ]);
 
   let firstProceedingNo = null;

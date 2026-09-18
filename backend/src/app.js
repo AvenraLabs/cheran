@@ -54,10 +54,30 @@ app.use("/api", (req, res, next) => {
 app.use(helmet());
 
 // CORS Configuration
+const allowedOrigins =
+  env.CORS_ORIGIN === "*"
+    ? true
+    : env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean);
+
 app.use(
   cors({
-    origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
+    origin: (requestOrigin, callback) => {
+      // Allow requests with no origin (e.g. server-to-server, curl, or reverse proxies like Caddy)
+      if (!requestOrigin || allowedOrigins === true) {
+        return callback(null, true);
+      }
+      if (Array.isArray(allowedOrigins) && allowedOrigins.includes(requestOrigin)) {
+        return callback(null, true);
+      }
+      // Always permit local development ports
+      if (requestOrigin.startsWith("http://localhost:") || requestOrigin.startsWith("http://127.0.0.1:")) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${requestOrigin}`));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
 

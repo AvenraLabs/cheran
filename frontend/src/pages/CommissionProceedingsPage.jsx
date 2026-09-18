@@ -2399,7 +2399,7 @@ export function CommissionProceedingsPage() {
                 This will recalculate all existing proceeding batches across the system. It will apply:
               </p>
               <ul className="text-xs text-[#14213D] list-disc list-inside space-y-1 bg-[#FAFAF8] p-3 rounded-[8px] border border-[#EDEAE1]">
-                <li>Addition of <strong>Farmer Contribution</strong> into Invoice Amount & Material Cost base for 55% / 1st fund releases.</li>
+                <li>Addition of <strong>Farmer Contribution</strong> into Invoice Amount & Material Cost base for all fund releases.</li>
                 <li>Latest effective scheme tax slabs (GST & Fittings 5%).</li>
                 <li>Milestone SLA delay penalties and net dealer payable amounts.</li>
               </ul>

@@ -2,7 +2,7 @@ import axios from "axios";
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? "http://localhost:5000/api" : "https://cheranplast.avenra.org/api");
+  (import.meta.env.DEV ? "http://localhost:5000/api" : "https://ajay.cheranplast.in/api");
 
 const rawAxios = axios.create({
   baseURL,

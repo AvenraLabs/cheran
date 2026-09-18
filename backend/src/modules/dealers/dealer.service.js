@@ -523,10 +523,10 @@ export function resolveEffectiveDealerCommission(dealer, invoiceDate, dealerSlab
 
   const targetDate = invoiceDate
     ? String(invoiceDate).trim().slice(0, 10)
-    : new Date().toISOString().split("T")[0];
+    : null;
 
   // Match slab where effective_from <= targetDate and (effective_to is null or effective_to >= targetDate)
-  if (dealerSlabs && dealerSlabs.length > 0) {
+  if (targetDate && dealerSlabs && dealerSlabs.length > 0) {
     const matchedSlab = dealerSlabs.find((s) => {
       const from = s.effective_from;
       const to = s.effective_to;

@@ -125,8 +125,8 @@ export async function previewProceedingExcel(
     // Farmer contribution (from Excel or DB)
     const rawFarmerContribution = Math.floor(parseFloat(row.farmer_contribution || proj?.farmer_contribution || 0));
 
-    // Rule: Add farmer contribution to invoice amount ONLY on first fund release (>= 50%, e.g. 55%)
-    const effectiveInvoiceAmount = isFirstFund && rawFarmerContribution > 0
+    // Rule: Add farmer contribution to invoice amount across ALL fund releases (not just 55% / 1st fund)
+    const effectiveInvoiceAmount = rawFarmerContribution > 0
       ? rawInvoiceAmount + rawFarmerContribution
       : rawInvoiceAmount;
 
@@ -137,8 +137,8 @@ export async function previewProceedingExcel(
         : parseFloat(proj?.state_restricted_amount || proj?.quotation_subsidy_amount || rawInvoiceAmount || 0)
     );
 
-    // Rule: When calculating material cost, gross base includes farmer contribution on first fund release
-    const calculationGrossBase = isFirstFund && rawFarmerContribution > 0
+    // Rule: When calculating material cost, gross base always includes farmer contribution across all fund releases
+    const calculationGrossBase = rawFarmerContribution > 0
       ? rawSubsidyEligible + rawFarmerContribution
       : rawSubsidyEligible;
 
@@ -146,8 +146,8 @@ export async function previewProceedingExcel(
     const nowToBeReleased = Math.floor(row.now_to_be_released_amount || 0);
     const excelGst = Math.floor(row.excel_gst_amount || 0);
 
-    // Resolve GST & Fittings percentage from settings based on project invoice date
-    const taxDate = invoiceDate || new Date().toISOString().split("T")[0];
+    // Resolve GST & Fittings percentage strictly from project invoice date (no today's date fallback)
+    const taxDate = invoiceDate || null;
     const taxSlab = await getEffectiveSchemeTaxSlab(taxDate);
     const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);
     const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
@@ -740,7 +740,7 @@ export async function recalculateProceedingBatch(id) {
         );
         dealerBaseRate = Math.floor(rateResolution.rate);
       }
-      const taxDate = invoiceDate || new Date().toISOString().split("T")[0];
+      const taxDate = invoiceDate || null;
       const taxSlab = await getEffectiveSchemeTaxSlab(taxDate);
       const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);
       const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
@@ -749,7 +749,7 @@ export async function recalculateProceedingBatch(id) {
       const rawFarmerContribution = Math.floor(parseFloat(item.farmer_contribution || proj?.farmer_contribution || 0));
 
       const rawInvoiceAmount = Math.floor(parseFloat(proj?.invoice_amount || item.invoice_amount || 0));
-      const effectiveInvoiceAmount = isFirstFund && rawFarmerContribution > 0
+      const effectiveInvoiceAmount = rawFarmerContribution > 0
         ? rawInvoiceAmount + rawFarmerContribution
         : rawInvoiceAmount;
 
@@ -757,8 +757,8 @@ export async function recalculateProceedingBatch(id) {
         parseFloat(item.subsidy_amount || item.state_restricted_amount || proj?.state_restricted_amount || 0)
       );
 
-      // Rule: In first fund release (55% / >= 50%), gross calculation base includes farmer contribution
-      const calculationGrossBase = isFirstFund && rawFarmerContribution > 0
+      // Gross calculation base always includes farmer contribution across all fund releases
+      const calculationGrossBase = rawFarmerContribution > 0
         ? rawSubsidyEligible + rawFarmerContribution
         : rawSubsidyEligible;
 
