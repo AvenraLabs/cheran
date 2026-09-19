@@ -805,28 +805,6 @@ export function PlastCreateSalePage() {
                     </div>
                   </>
                 )}
-
-                <div className="flex justify-between items-center text-xs font-semibold text-emerald-800 pt-1">
-                  <span>Amount Paid:</span>
-                  <span className="font-mono font-bold">
-                    {formatCurrency(effectivePaidAmount)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-xs font-semibold border-t border-dashed border-[#EDEAE1] pt-1.5">
-                  <span className={balanceAmount > 0 ? "text-rose-700" : "text-emerald-700"}>
-                    {balanceAmount > 0 ? "Balance Pending:" : "Status:"}
-                  </span>
-                  <span
-                    className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] ${
-                      balanceAmount > 0
-                        ? "bg-rose-100 text-rose-800"
-                        : "bg-emerald-100 text-emerald-800"
-                    }`}
-                  >
-                    {balanceAmount > 0 ? formatCurrency(balanceAmount) : "Paid"}
-                  </span>
-                </div>
               </div>
 
               <Button
