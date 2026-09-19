@@ -27,6 +27,7 @@ import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoad
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { Pagination } from "../../components/common/Pagination.jsx";
 
 
 export function PlastCustomersPage() {
@@ -60,6 +61,8 @@ export function PlastCustomersPage() {
   const [ledgerData, setLedgerData] = useState(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [exportingLedgerPdf, setExportingLedgerPdf] = useState(false);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerLimit, setLedgerLimit] = useState(15);
 
   const fetchCustomers = async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -197,6 +200,7 @@ export function PlastCustomersPage() {
   // Open Statement / Ledger Modal
   const openLedgerModal = async (customer) => {
     setLedgerCustomer(customer);
+    setLedgerPage(1);
     setLoadingLedger(true);
     try {
       const data = await plastApi.getCustomerLedger(customer.id);
@@ -814,56 +818,87 @@ export function PlastCustomersPage() {
               </div>
             </div>
 
-            {/* Ledger Transactions Table */}
-            <div className="max-h-[380px] overflow-y-auto border border-[#E4E1D8] rounded-[8px]">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold sticky top-0">
-                  <tr>
-                    <th className="py-2.5 px-3">Date</th>
-                    <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3 text-right">Debit (+)</th>
-                    <th className="py-2.5 px-3 text-right">Credit (-)</th>
-                    <th className="py-2.5 px-3 text-right">Running Balance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EDEAE1]">
-                  {ledgerData.entries.map((row, idx) => (
-                    <tr
-                      key={idx}
-                      className={
-                        row.type === "OPENING"
-                          ? "bg-amber-50/50 font-medium"
-                          : "hover:bg-[#FAFAF8] transition-colors"
-                      }
-                    >
-                      <td className="py-2 px-3 font-mono text-[#52607D]">{row.date}</td>
-                      <td className="py-2 px-3">
-                        <span
-                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            row.type === "INVOICE"
-                              ? "bg-blue-50 text-blue-700 border border-blue-200"
-                              : row.type === "PAYMENT"
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : "bg-amber-50 text-amber-800 border border-amber-200"
-                          }`}
-                        >
-                          {row.type}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-medium text-[#14213D]">
-                        {row.debit > 0 ? formatCurrency(row.debit) : "—"}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">
-                        {row.credit > 0 ? formatCurrency(row.credit) : "—"}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D]">
-                        {formatCurrency(row.running_balance)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Ledger Transactions Table & Pagination */}
+            {(() => {
+              const allEntries = ledgerData.entries || [];
+              const totalLedgerEntries = allEntries.length;
+              const totalLedgerPages = Math.ceil(totalLedgerEntries / ledgerLimit) || 1;
+              const currentEntries = allEntries.slice(
+                (ledgerPage - 1) * ledgerLimit,
+                ledgerPage * ledgerLimit
+              );
+
+              return (
+                <div className="space-y-2">
+                  <div className="max-h-[360px] overflow-y-auto border border-[#E4E1D8] rounded-[8px]">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold sticky top-0">
+                        <tr>
+                          <th className="py-2.5 px-3">Date</th>
+                          <th className="py-2.5 px-3">Type</th>
+                          <th className="py-2.5 px-3 text-right">Debit (+)</th>
+                          <th className="py-2.5 px-3 text-right">Credit (-)</th>
+                          <th className="py-2.5 px-3 text-right">Running Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#EDEAE1]">
+                        {currentEntries.map((row, idx) => (
+                          <tr
+                            key={idx}
+                            className={
+                              row.type === "OPENING"
+                                ? "bg-amber-50/50 font-medium"
+                                : "hover:bg-[#FAFAF8] transition-colors"
+                            }
+                          >
+                            <td className="py-2 px-3 font-mono text-[#52607D]">{row.date}</td>
+                            <td className="py-2 px-3">
+                              <span
+                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  row.type === "INVOICE"
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                    : row.type === "PAYMENT"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-amber-50 text-amber-800 border border-amber-200"
+                                }`}
+                              >
+                                {row.type}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-medium text-[#14213D]">
+                              {row.debit > 0 ? formatCurrency(row.debit) : "—"}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">
+                              {row.credit > 0 ? formatCurrency(row.credit) : "—"}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D]">
+                              {formatCurrency(row.running_balance)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {totalLedgerEntries > ledgerLimit && (
+                    <div className="pt-1">
+                      <Pagination
+                        page={ledgerPage}
+                        totalPages={totalLedgerPages}
+                        totalItems={totalLedgerEntries}
+                        limit={ledgerLimit}
+                        onPageChange={(p) => setLedgerPage(p)}
+                        onLimitChange={(l) => {
+                          setLedgerLimit(l);
+                          setLedgerPage(1);
+                        }}
+                        limitOptions={[10, 15, 25, 50, 100]}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Modal Actions */}
             <div className="flex justify-between items-center pt-2">
