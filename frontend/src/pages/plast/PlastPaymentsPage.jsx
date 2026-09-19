@@ -27,21 +27,6 @@ import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const PAYMENT_MODES = [
-  { value: "", label: "All Payment Modes" },
-  { value: "CASH", label: "Cash" },
-  { value: "UPI", label: "UPI / GPay / PhonePe" },
-  { value: "BANK_TRANSFER", label: "Bank Transfer (NEFT/RTGS)" },
-  { value: "CHEQUE", label: "Cheque" },
-];
-
-const MODAL_PAYMENT_MODES = [
-  { value: "CASH", label: "Cash" },
-  { value: "UPI", label: "UPI / GPay / PhonePe" },
-  { value: "BANK_TRANSFER", label: "Bank Transfer (NEFT/RTGS/IMPS)" },
-  { value: "CHEQUE", label: "Cheque" },
-];
-
 export function PlastPaymentsPage() {
   const [activeTab, setActiveTab] = useState("COLLECTIONS"); // "COLLECTIONS" or "BALANCES"
   const [payments, setPayments] = useState([]);
@@ -53,7 +38,6 @@ export function PlastPaymentsPage() {
   // Filters
   const [search, setSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [paymentMode, setPaymentMode] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
@@ -63,9 +47,6 @@ export function PlastPaymentsPage() {
     customer_id: "",
     amount: "",
     payment_date: new Date().toISOString().split("T")[0],
-    payment_mode: "CASH",
-    reference_number: "",
-    notes: "",
   });
   const [recording, setRecording] = useState(false);
 
@@ -79,7 +60,6 @@ export function PlastPaymentsPage() {
     try {
       const data = await plastApi.getPaymentsSummary({
         customer_id: customerId || undefined,
-        payment_mode: paymentMode || undefined,
         from_date: fromDate || undefined,
         to_date: toDate || undefined,
       });
@@ -96,7 +76,6 @@ export function PlastPaymentsPage() {
       const [paymentsRes, customersRes] = await Promise.all([
         plastApi.getPayments({
           customer_id: customerId || undefined,
-          payment_mode: paymentMode || undefined,
           from_date: fromDate || undefined,
           to_date: toDate || undefined,
           search: search || undefined,
@@ -120,7 +99,7 @@ export function PlastPaymentsPage() {
       fetchPayments();
     }, 200);
     return () => clearTimeout(timer);
-  }, [search, customerId, paymentMode, fromDate, toDate]);
+  }, [search, customerId, fromDate, toDate]);
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat("en-IN", {
@@ -136,9 +115,6 @@ export function PlastPaymentsPage() {
       customer_id: prefillCustomer?.id || "",
       amount: prefillCustomer?.current_balance > 0 ? String(Math.round(prefillCustomer.current_balance)) : "",
       payment_date: new Date().toISOString().split("T")[0],
-      payment_mode: "CASH",
-      reference_number: "",
-      notes: "",
     });
     setIsRecordModalOpen(true);
   };
@@ -161,9 +137,6 @@ export function PlastPaymentsPage() {
       await plastApi.recordCustomerPayment(recordForm.customer_id, {
         amount: amt,
         payment_date: recordForm.payment_date,
-        payment_mode: recordForm.payment_mode,
-        reference_number: recordForm.reference_number || undefined,
-        notes: recordForm.notes || undefined,
       });
 
       toast.success(`Payment of ${formatCurrency(amt)} recorded successfully!`);
@@ -370,14 +343,6 @@ export function PlastPaymentsPage() {
             >
               Refresh
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={Plus}
-              onClick={() => openRecordModal()}
-            >
-              + Record Payment
-            </Button>
           </>
         }
       />
@@ -411,40 +376,15 @@ export function PlastPaymentsPage() {
           />
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("COLLECTIONS")}
-            className={`px-4 py-2 text-xs font-bold rounded-t-[8px] transition-colors cursor-pointer ${
-              activeTab === "COLLECTIONS"
-                ? "bg-white text-[#2F6F5E] border border-[#E4E1D8] border-b-white -mb-[2px] shadow-xs"
-                : "text-[#52607D] hover:text-[#14213D]"
-            }`}
-          >
-            Collections & Receipts Log ({payments.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("BALANCES")}
-            className={`px-4 py-2 text-xs font-bold rounded-t-[8px] transition-colors cursor-pointer ${
-              activeTab === "BALANCES"
-                ? "bg-white text-[#2F6F5E] border border-[#E4E1D8] border-b-white -mb-[2px] shadow-xs"
-                : "text-[#52607D] hover:text-[#14213D]"
-            }`}
-          >
-            Customer Balances ({customers.length})
-          </button>
-        </div>
 
         {/* Filters */}
         <div className="bg-white p-3 sm:p-4 rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C97AB]" />
               <input
                 type="text"
-                placeholder="Search reference # or notes..."
+                placeholder="Search customer..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
@@ -456,13 +396,6 @@ export function PlastPaymentsPage() {
               value={customerId}
               onChange={setCustomerId}
               placeholder="Filter by Customer"
-            />
-
-            <CustomSelect
-              options={PAYMENT_MODES}
-              value={paymentMode}
-              onChange={setPaymentMode}
-              placeholder="Filter by Mode"
             />
 
             <div className="flex items-center gap-2">
@@ -485,9 +418,8 @@ export function PlastPaymentsPage() {
           </div>
         </div>
 
-        {/* TAB 1: Collections Log */}
-        {activeTab === "COLLECTIONS" && (
-          <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
+        {/* Collections Log */}
+        <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
             {loading ? (
               <div className="p-6">
                 <SkeletonLoader count={5} />
@@ -507,7 +439,6 @@ export function PlastPaymentsPage() {
                       <th className="py-3 px-4">Receipt / Ref #</th>
                       <th className="py-3 px-4">Customer</th>
                       <th className="py-3 px-4">Linked To</th>
-                      <th className="py-3 px-4">Payment Mode</th>
                       <th className="py-3 px-4 text-right">Amount Received</th>
                       <th className="py-3 px-4">Recorded By</th>
                       <th className="py-3 px-4 text-right">Actions</th>
@@ -541,16 +472,6 @@ export function PlastPaymentsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-gray-100 text-[#14213D]">
-                            {p.payment_mode || "CASH"}
-                          </span>
-                          {p.notes && (
-                            <div className="text-[10px] text-[#8C97AB] truncate max-w-[150px]" title={p.notes}>
-                              {p.notes}
-                            </div>
-                          )}
-                        </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 text-sm">
                           {formatCurrency(p.amount)}
                         </td>
@@ -575,115 +496,7 @@ export function PlastPaymentsPage() {
                 </table>
               </div>
             )}
-          </div>
-        )}
-
-        {/* TAB 2: Customer Balances */}
-        {activeTab === "BALANCES" && (
-          <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
-            {loading ? (
-              <div className="p-6">
-                <SkeletonLoader count={5} />
-              </div>
-            ) : customers.length === 0 ? (
-              <EmptyState
-                icon={Building2}
-                title="No customer accounts"
-                description="Add customers to manage their running balance."
-              />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
-                    <tr>
-                      <th className="py-3 px-4">Customer Name</th>
-                      <th className="py-3 px-4 text-right">Opening Pending</th>
-                      <th className="py-3 px-4 text-right">Total Invoiced</th>
-                      <th className="py-3 px-4 text-right">Total Paid</th>
-                      <th className="py-3 px-4 text-right">Net Pending</th>
-                      <th className="py-3 px-4 text-center">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#EDEAE1]">
-                    {customers.map((c) => {
-                      const bal = Number(c.current_balance || 0);
-                      return (
-                        <tr key={c.id} className="hover:bg-[#FAFAF8] transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="font-bold text-[#14213D]">{c.name}</div>
-                            {c.phone && <div className="text-[10px] text-[#8C97AB] font-mono">{c.phone}</div>}
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                            {formatCurrency(c.opening_balance)}
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono font-medium text-[#14213D]">
-                            {formatCurrency(c.total_billed)}
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono font-medium text-emerald-700">
-                            {formatCurrency(c.total_paid)}
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold">
-                            <span className={bal > 0 ? "text-rose-700" : bal < 0 ? "text-blue-700" : "text-emerald-700"}>
-                              {formatCurrency(bal)}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {bal > 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                <AlertCircle size={10} />
-                                Pending
-                              </span>
-                            ) : bal < 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                Advance
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 size={10} />
-                                Settled
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                variant="secondary"
-                                size="xs"
-                                icon={CreditCard}
-                                className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
-                                onClick={() => openRecordModal(c)}
-                              >
-                                + Pay
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="xs"
-                                icon={FileText}
-                                onClick={() => openLedgerModal(c)}
-                              >
-                                Statement
-                              </Button>
-                              <Button
-                                variant="whatsapp"
-                                size="xs"
-                                icon={Share2}
-                                onClick={() => shareStatementOnWhatsApp(c)}
-                                title="Share on WhatsApp"
-                              >
-                                WA
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </main>
 
       {/* Record Customer Payment Modal */}
@@ -741,43 +554,6 @@ export function PlastPaymentsPage() {
                 className="w-full px-2 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Payment Mode
-              </label>
-              <CustomSelect
-                options={MODAL_PAYMENT_MODES}
-                value={recordForm.payment_mode}
-                onChange={(val) => setRecordForm({ ...recordForm, payment_mode: val })}
-                placeholder="Select mode"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Reference / Transaction # (Optional)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. UPI Ref, Cheque #, GPay txn ID"
-              value={recordForm.reference_number}
-              onChange={(e) => setRecordForm({ ...recordForm, reference_number: e.target.value })}
-              className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Notes
-            </label>
-            <input
-              type="text"
-              placeholder="Optional notes or remarks"
-              value={recordForm.notes}
-              onChange={(e) => setRecordForm({ ...recordForm, notes: e.target.value })}
-              className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-            />
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">

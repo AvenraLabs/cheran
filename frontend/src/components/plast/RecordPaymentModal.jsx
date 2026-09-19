@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { DollarSign, CheckCircle, CreditCard } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import Modal from "../common/Modal.jsx";
 import Button from "../common/Button.jsx";
-import CustomSelect from "../common/CustomSelect.jsx";
 import { plastApi } from "../../api/plastApi.js";
 import { toast } from "sonner";
 
 export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess }) {
   const [amount, setAmount] = useState("");
-  const [paymentMode, setPaymentMode] = useState("CASH");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
-  const [referenceNumber, setReferenceNumber] = useState("");
-  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   const balance = Math.max(0, Number(sale?.balance_amount || 0));
@@ -19,10 +15,7 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
   useEffect(() => {
     if (isOpen && sale) {
       setAmount(balance > 0 ? String(balance) : "");
-      setPaymentMode("CASH");
       setPaymentDate(new Date().toISOString().split("T")[0]);
-      setReferenceNumber("");
-      setNotes("");
     }
   }, [isOpen, sale, balance]);
 
@@ -56,9 +49,6 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
       const res = await plastApi.recordPayment(sale.id, {
         amount: numAmount,
         payment_date: paymentDate,
-        payment_mode: paymentMode,
-        reference_number: referenceNumber.trim() || undefined,
-        notes: notes.trim() || undefined,
       });
 
       toast.success(
@@ -84,7 +74,7 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
       isOpen={isOpen}
       onClose={onClose}
       title={`Record Payment - ${sale.sale_number}`}
-      size="md"
+      size="sm"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {/* Invoice Summary Banner */}
@@ -132,7 +122,7 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
         {/* Payment Amount Input */}
         <div>
           <div className="flex justify-between items-center mb-1">
-            <label className="font-bold text-[#14213D]">Payment Amount Received (₹) *</label>
+            <label className="font-bold text-[#14213D]">Amount Received (₹) *</label>
             <div className="flex gap-1">
               <button
                 type="button"
@@ -162,7 +152,7 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
               min="0.01"
               max={balance}
               required
-              placeholder="0.00"
+              placeholder="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="w-full pl-7 pr-3 py-2 bg-white border border-[#E4E1D8] rounded-[6px] text-sm font-mono font-bold text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
@@ -177,65 +167,21 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
                 newBalance === 0 ? "text-emerald-700" : "text-rose-700"
               }`}
             >
-              {newBalance === 0 ? "₹0.00 (Fully Cleared)" : formatCurrency(newBalance)}
+              {newBalance === 0 ? "₹0 (Fully Cleared)" : formatCurrency(newBalance)}
             </span>
           </div>
         </div>
 
-        {/* Payment Mode & Date */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <CustomSelect
-              label="Payment Mode *"
-              size="sm"
-              value={paymentMode}
-              onChange={(val) => setPaymentMode(val)}
-              options={[
-                { value: "CASH", label: "Cash" },
-                { value: "UPI", label: "UPI / GPay / PhonePe" },
-                { value: "BANK_TRANSFER", label: "Bank Transfer / NEFT" },
-                { value: "CHEQUE", label: "Cheque" },
-              ]}
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold text-[#14213D] mb-1">Payment Date *</label>
-            <input
-              type="date"
-              required
-              value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-            />
-          </div>
-        </div>
-
-        {/* Reference & Notes */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block font-semibold text-[#14213D] mb-1">
-              Reference / Txn ID / Cheque #
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. UPI ref or Cheque number"
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold text-[#14213D] mb-1">Notes / Remark</label>
-            <input
-              type="text"
-              placeholder="e.g. Received from customer"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-            />
-          </div>
+        {/* Payment Date */}
+        <div>
+          <label className="block font-semibold text-[#14213D] mb-1">Payment Date *</label>
+          <input
+            type="date"
+            required
+            value={paymentDate}
+            onChange={(e) => setPaymentDate(e.target.value)}
+            className="w-full px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+          />
         </div>
 
         {/* Modal Actions */}

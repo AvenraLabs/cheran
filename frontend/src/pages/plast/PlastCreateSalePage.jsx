@@ -42,7 +42,6 @@ export function PlastCreateSalePage() {
   const [customerAddress, setCustomerAddress] = useState("");
 
   const [gstRate, setGstRate] = useState(0);
-  const [paymentMode, setPaymentMode] = useState("CASH");
   const [paidAmountInput, setPaidAmountInput] = useState("");
 
   // Common Bill Discount State
@@ -502,7 +501,6 @@ export function PlastCreateSalePage() {
         customer_address: customerAddress.trim() || undefined,
         sale_date: saleDate,
         gst_rate: gstRate,
-        payment_mode: paymentMode,
         payment_status: calculatedPaymentStatus,
         paid_amount: effectivePaidAmount,
         discount_type: discountType,
@@ -802,24 +800,8 @@ export function PlastCreateSalePage() {
                 </div>
               </div>
 
-              {/* Payment Mode & Amount Received */}
+              {/* Amount Received */}
               <div className="space-y-3">
-                <div>
-                  <CustomSelect
-                    label="Payment Mode"
-                    size="sm"
-                    value={paymentMode}
-                    onChange={(val) => setPaymentMode(val)}
-                    options={[
-                      { value: "CASH", label: "Cash" },
-                      { value: "UPI", label: "UPI / GPay / PhonePe" },
-                      { value: "BANK_TRANSFER", label: "Bank Transfer / NEFT" },
-                      { value: "CHEQUE", label: "Cheque" },
-                    ]}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-[#14213D]">
                       Amount Received (₹)
@@ -883,7 +865,6 @@ export function PlastCreateSalePage() {
                       {isUnpaid && `Pending: ${formatCurrency(grandTotal)} (Unpaid)`}
                     </span>
                   </div>
-                </div>
               </div>
 
               {/* Financial Breakdown */}

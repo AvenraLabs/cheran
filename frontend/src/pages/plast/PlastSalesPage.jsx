@@ -8,12 +8,8 @@ import {
   Eye,
   Printer,
   DollarSign,
-  TrendingUp,
-  Receipt,
   FileText,
-  CreditCard,
   CheckCircle2,
-  AlertCircle,
   Clock,
   User,
   Share2,
@@ -25,7 +21,6 @@ import Button from "../../components/common/Button.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
-import RecordPaymentModal from "../../components/plast/RecordPaymentModal.jsx";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext.jsx";
 import jsPDF from "jspdf";
@@ -46,14 +41,11 @@ export function PlastSalesPage() {
   // Filters
   const [search, setSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("");
-  const [paymentMode, setPaymentMode] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
   // Modal states
   const [selectedSale, setSelectedSale] = useState(null);
-  const [paymentModalSale, setPaymentModalSale] = useState(null);
 
   const fetchSales = async (isManual = false) => {
     if (!canViewLogs) {
@@ -66,8 +58,6 @@ export function PlastSalesPage() {
     try {
       const data = await plastApi.getSales({
         customer_id: customerId || undefined,
-        payment_status: paymentStatus || undefined,
-        payment_mode: paymentMode || undefined,
         from_date: fromDate || undefined,
         to_date: toDate || undefined,
         search: search || undefined,
@@ -104,7 +94,7 @@ export function PlastSalesPage() {
       fetchSales();
     }, 200);
     return () => clearTimeout(timer);
-  }, [search, customerId, paymentStatus, paymentMode, fromDate, toDate]);
+  }, [search, customerId, fromDate, toDate]);
 
   // Format currency with NO decimals (.00 removed)
   const formatCurrency = (val) => {
@@ -561,7 +551,7 @@ export function PlastSalesPage() {
             </div>
 
             {/* Filter Bar */}
-            <div className="bg-white p-3 sm:p-4 rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] grid grid-cols-1 sm:grid-cols-6 gap-3 items-center text-xs">
+            <div className="bg-white p-3 sm:p-4 rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] grid grid-cols-1 sm:grid-cols-4 gap-3 items-center text-xs">
               <div className="relative sm:col-span-2">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8C97AB]" />
                 <input
@@ -585,37 +575,6 @@ export function PlastSalesPage() {
                       value: c.id,
                       label: `${c.name} ${c.phone ? `(${c.phone})` : ""}`,
                     })),
-                  ]}
-                />
-              </div>
-
-              <div>
-                <CustomSelect
-                  size="sm"
-                  value={paymentStatus}
-                  onChange={(val) => setPaymentStatus(val)}
-                  placeholder="All Payment Status"
-                  options={[
-                    { value: "", label: "All Statuses" },
-                    { value: "PAID", label: "Paid in Full" },
-                    { value: "PARTIAL", label: "Partially Paid" },
-                    { value: "UNPAID", label: "Unpaid / Due" },
-                  ]}
-                />
-              </div>
-
-              <div>
-                <CustomSelect
-                  size="sm"
-                  value={paymentMode}
-                  onChange={(val) => setPaymentMode(val)}
-                  placeholder="All Payment Modes"
-                  options={[
-                    { value: "", label: "All Modes" },
-                    { value: "CASH", label: "Cash" },
-                    { value: "UPI", label: "UPI / GPay" },
-                    { value: "BANK_TRANSFER", label: "Bank Transfer" },
-                    { value: "CHEQUE", label: "Cheque" },
                   ]}
                 />
               </div>
@@ -661,8 +620,6 @@ export function PlastSalesPage() {
                         <th className="py-3 px-3 text-right">Total Bill</th>
                         <th className="py-3 px-3 text-right text-emerald-800">Amount Paid</th>
                         <th className="py-3 px-3 text-right text-rose-800">Balance Due</th>
-                        <th className="py-3 px-3 text-center">Mode</th>
-                        <th className="py-3 px-3 text-center">Status</th>
                         <th className="py-3 px-3 text-center">Entered By</th>
                         <th className="py-3 px-4 text-center">Actions</th>
                       </tr>
@@ -696,12 +653,6 @@ export function PlastSalesPage() {
                                 {formatCurrency(balance)}
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-center font-medium text-[11px] text-[#52607D]">
-                              <span className="px-2 py-0.5 bg-slate-100 rounded text-[#14213D] border border-slate-200">
-                                {sale.payment_mode || "CASH"}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-center">{getStatusBadge(sale)}</td>
                             <td className="py-3 px-3 text-center">
                               <span
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-emerald-50 text-[#2F6F5E] border border-emerald-200"
@@ -730,17 +681,6 @@ export function PlastSalesPage() {
                                 >
                                   Bill
                                 </Button>
-                                {balance > 0 && (
-                                  <Button
-                                    variant="secondary"
-                                    size="xs"
-                                    icon={CreditCard}
-                                    className="text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
-                                    onClick={() => setPaymentModalSale(sale)}
-                                  >
-                                    + Pay
-                                  </Button>
-                                )}
                               </div>
                             </td>
                           </tr>
@@ -927,21 +867,6 @@ export function PlastSalesPage() {
               >
                 Share on WhatsApp
               </Button>
-              {Number(selectedSale.balance_amount) > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={CreditCard}
-                  className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
-                  onClick={() => {
-                    const toPay = selectedSale;
-                    setSelectedSale(null);
-                    setPaymentModalSale(toPay);
-                  }}
-                >
-                  Record Payment
-                </Button>
-              )}
               <Button
                 variant="secondary"
                 size="sm"
@@ -959,15 +884,6 @@ export function PlastSalesPage() {
         )}
       </Modal>
 
-      {/* Record Payment Modal */}
-      <RecordPaymentModal
-        isOpen={Boolean(paymentModalSale)}
-        onClose={() => setPaymentModalSale(null)}
-        sale={paymentModalSale}
-        onSuccess={() => {
-          fetchSales();
-        }}
-      />
     </div>
   );
 }
