@@ -634,6 +634,17 @@ PlastSalePayment.belongsTo(User, {
   as: "creator",
 });
 
+// Plast Customer <-> Payments (Direct Customer Payments)
+PlastCustomer.hasMany(PlastSalePayment, {
+  foreignKey: "customer_id",
+  as: "payments",
+  onDelete: "SET NULL",
+});
+PlastSalePayment.belongsTo(PlastCustomer, {
+  foreignKey: "customer_id",
+  as: "customer",
+});
+
 export {
   Dealer,
   GovernmentStatus,

@@ -234,17 +234,314 @@ export const getCustomers = async (search = "") => {
       { phone: { [Op.iLike]: `%${search}%` } },
     ];
   }
-  return await PlastCustomer.findAll({ where, order: [["name", "ASC"]] });
+  const customers = await PlastCustomer.findAll({ where, order: [["name", "ASC"]] });
+
+  // Aggregate sales by customer
+  const salesAgg = await PlastSale.findAll({
+    attributes: [
+      "customer_id",
+      [db.fn("COALESCE", db.fn("SUM", db.col("grand_total")), 0), "total_billed"],
+      [db.fn("COUNT", db.col("id")), "invoice_count"],
+    ],
+    where: { customer_id: { [Op.ne]: null } },
+    group: ["customer_id"],
+    raw: true,
+  });
+
+  // Aggregate payments by customer
+  const paymentsAgg = await PlastSalePayment.findAll({
+    attributes: [
+      "customer_id",
+      [db.fn("COALESCE", db.fn("SUM", db.col("amount")), 0), "total_paid"],
+      [db.fn("COUNT", db.col("id")), "payment_count"],
+    ],
+    where: { customer_id: { [Op.ne]: null } },
+    group: ["customer_id"],
+    raw: true,
+  });
+
+  const salesMap = new Map();
+  for (const s of salesAgg) {
+    salesMap.set(s.customer_id, {
+      total_billed: Number(s.total_billed) || 0,
+      invoice_count: Number(s.invoice_count) || 0,
+    });
+  }
+
+  const paymentsMap = new Map();
+  for (const p of paymentsAgg) {
+    paymentsMap.set(p.customer_id, {
+      total_paid: Number(p.total_paid) || 0,
+      payment_count: Number(p.payment_count) || 0,
+    });
+  }
+
+  return customers.map((c) => {
+    const custJson = c.toJSON();
+    const opening = Number(custJson.opening_balance || 0);
+    const saleInfo = salesMap.get(c.id) || { total_billed: 0, invoice_count: 0 };
+    const payInfo = paymentsMap.get(c.id) || { total_paid: 0, payment_count: 0 };
+
+    const totalBilled = Number(saleInfo.total_billed.toFixed(2));
+    const totalPaid = Number(payInfo.total_paid.toFixed(2));
+    const currentBalance = Number((opening + totalBilled - totalPaid).toFixed(2));
+
+    return {
+      ...custJson,
+      opening_balance: opening,
+      total_billed: totalBilled,
+      total_paid: totalPaid,
+      current_balance: currentBalance,
+      invoice_count: saleInfo.invoice_count,
+      payment_count: payInfo.payment_count,
+    };
+  });
 };
 
 export const createCustomer = async (data) => {
-  return await PlastCustomer.create(data);
+  return await PlastCustomer.create({
+    name: data.name?.trim(),
+    phone: data.phone?.trim() || null,
+    address: data.address?.trim() || null,
+    gst_number: data.gst_number?.trim() || null,
+    opening_balance: Number(data.opening_balance || 0),
+    opening_balance_date: data.opening_balance_date || new Date().toISOString().split("T")[0],
+    is_active: data.is_active !== undefined ? data.is_active : true,
+  });
 };
 
 export const updateCustomer = async (id, data) => {
   const customer = await PlastCustomer.findByPk(id);
   if (!customer) throw new AppError("Customer not found", 404);
-  return await customer.update(data);
+  const updateData = { ...data };
+  if (updateData.opening_balance !== undefined) {
+    updateData.opening_balance = Number(updateData.opening_balance || 0);
+  }
+  return await customer.update(updateData);
+};
+
+export const getCustomerLedger = async (customerId) => {
+  const customer = await PlastCustomer.findByPk(customerId);
+  if (!customer) throw new AppError("Customer not found", 404);
+
+  const openingBalance = Number(customer.opening_balance || 0);
+  const openingDate = customer.opening_balance_date || customer.created_at || new Date().toISOString().split("T")[0];
+
+  // Fetch all sales invoices for this customer
+  const sales = await PlastSale.findAll({
+    where: { customer_id: customerId },
+    include: [
+      {
+        model: PlastSaleItem,
+        as: "items",
+        attributes: ["id", "item_name", "quantity", "unit_price", "line_total"],
+      },
+    ],
+    order: [["sale_date", "ASC"], ["created_at", "ASC"]],
+  });
+
+  // Fetch all payments for this customer (direct customer payments or sale bill payments)
+  const payments = await PlastSalePayment.findAll({
+    where: { customer_id: customerId },
+    include: [
+      {
+        model: PlastSale,
+        as: "sale",
+        attributes: ["id", "sale_number"],
+      },
+    ],
+    order: [["payment_date", "ASC"], ["created_at", "ASC"]],
+  });
+
+  // Combine sales and payments into a single chronological stream
+  const rawEntries = [];
+
+  for (const s of sales) {
+    rawEntries.push({
+      date: s.sale_date,
+      timestamp: new Date(s.sale_date + "T00:00:00").getTime(),
+      created_at: s.created_at,
+      type: "INVOICE",
+      ref_id: s.id,
+      ref_number: s.sale_number,
+      description: `Sales Bill #${s.sale_number} (${s.items?.length || 0} item${s.items?.length === 1 ? "" : "s"})`,
+      debit: Number(Number(s.grand_total).toFixed(2)),
+      credit: 0,
+      metadata: {
+        sale_number: s.sale_number,
+        items_count: s.items?.length || 0,
+        subtotal: s.subtotal,
+        discount: s.total_discount,
+      },
+    });
+  }
+
+  for (const p of payments) {
+    const saleNum = p.sale?.sale_number;
+    const desc = saleNum
+      ? `Payment received for Bill #${saleNum} (${p.payment_mode || "CASH"})`
+      : `Payment received (${p.payment_mode || "CASH"})`;
+
+    rawEntries.push({
+      date: p.payment_date,
+      timestamp: new Date(p.payment_date + "T00:00:00").getTime(),
+      created_at: p.created_at,
+      type: "PAYMENT",
+      ref_id: p.id,
+      ref_number: p.reference_number || `PAY-${p.id.slice(0, 8).toUpperCase()}`,
+      description: p.notes ? `${desc} - ${p.notes}` : desc,
+      debit: 0,
+      credit: Number(Number(p.amount).toFixed(2)),
+      metadata: {
+        payment_mode: p.payment_mode,
+        reference_number: p.reference_number,
+        sale_id: p.sale_id,
+        sale_number: saleNum || null,
+        notes: p.notes,
+        created_by_name: p.created_by_name,
+      },
+    });
+  }
+
+  // Sort chronological
+  rawEntries.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
+  // Calculate running balance starting with opening balance
+  let runningBalance = openingBalance;
+  let totalBilled = 0;
+  let totalPaid = 0;
+
+  const ledgerEntries = [
+    {
+      date: openingDate,
+      type: "OPENING",
+      ref_id: null,
+      ref_number: "OPENING",
+      description: "Opening Pending Balance",
+      debit: openingBalance >= 0 ? openingBalance : 0,
+      credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+      running_balance: Number(openingBalance.toFixed(2)),
+      metadata: null,
+    },
+  ];
+
+  for (const entry of rawEntries) {
+    if (entry.type === "INVOICE") {
+      runningBalance += entry.debit;
+      totalBilled += entry.debit;
+    } else if (entry.type === "PAYMENT") {
+      runningBalance -= entry.credit;
+      totalPaid += entry.credit;
+    }
+
+    ledgerEntries.push({
+      ...entry,
+      running_balance: Number(runningBalance.toFixed(2)),
+    });
+  }
+
+  return {
+    customer: {
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+      address: customer.address,
+      gst_number: customer.gst_number,
+      opening_balance: openingBalance,
+      opening_balance_date: openingDate,
+    },
+    summary: {
+      opening_balance: openingBalance,
+      total_billed: Number(totalBilled.toFixed(2)),
+      total_paid: Number(totalPaid.toFixed(2)),
+      current_balance: Number(runningBalance.toFixed(2)),
+      total_invoices: sales.length,
+      total_payments: payments.length,
+    },
+    entries: ledgerEntries,
+  };
+};
+
+export const recordCustomerPayment = async (customerId, data, user = {}) => {
+  const customer = await PlastCustomer.findByPk(customerId);
+  if (!customer) throw new AppError("Customer not found", 404);
+
+  const amount = Number(data.amount);
+  if (!amount || isNaN(amount) || amount <= 0) {
+    throw new AppError("Payment amount must be greater than 0", 400);
+  }
+
+  return await db.transaction(async (t) => {
+    const payment = await PlastSalePayment.create(
+      {
+        customer_id: customer.id,
+        sale_id: data.sale_id || null,
+        amount: Number(amount.toFixed(2)),
+        payment_date: data.payment_date || new Date().toISOString().split("T")[0],
+        payment_mode: data.payment_mode || "CASH",
+        reference_number: data.reference_number ? data.reference_number.trim() : null,
+        notes: data.notes ? data.notes.trim() : null,
+        created_by: user.id || null,
+        created_by_name: user.username || user.name || "admin",
+      },
+      { transaction: t }
+    );
+
+    if (data.sale_id) {
+      const sale = await PlastSale.findByPk(data.sale_id, { transaction: t });
+      if (sale) {
+        const newPaid = Number((Number(sale.paid_amount || 0) + amount).toFixed(2));
+        const newBal = Math.max(0, Number((Number(sale.grand_total) - newPaid).toFixed(2)));
+        await sale.update(
+          {
+            paid_amount: newPaid,
+            balance_amount: newBal,
+            payment_status: newBal <= 0.01 ? "PAID" : "PARTIAL",
+          },
+          { transaction: t }
+        );
+      }
+    }
+
+    return payment;
+  });
+};
+
+export const getPayments = async (filters = {}) => {
+  const where = {};
+  if (filters.from_date && filters.to_date) {
+    where.payment_date = { [Op.between]: [filters.from_date, filters.to_date] };
+  } else if (filters.from_date) {
+    where.payment_date = { [Op.gte]: filters.from_date };
+  } else if (filters.to_date) {
+    where.payment_date = { [Op.lte]: filters.to_date };
+  }
+  if (filters.customer_id) {
+    where.customer_id = filters.customer_id;
+  }
+  if (filters.payment_mode) {
+    where.payment_mode = filters.payment_mode;
+  }
+  if (filters.search) {
+    where[Op.or] = [
+      { reference_number: { [Op.iLike]: `%${filters.search}%` } },
+      { notes: { [Op.iLike]: `%${filters.search}%` } },
+    ];
+  }
+
+  const payments = await PlastSalePayment.findAll({
+    where,
+    include: [
+      { model: PlastCustomer, as: "customer", attributes: ["id", "name", "phone"] },
+      { model: PlastSale, as: "sale", attributes: ["id", "sale_number", "grand_total"] },
+    ],
+    order: [["payment_date", "DESC"], ["created_at", "DESC"]],
+  });
+
+  return payments;
 };
 
 // =========================================================================
@@ -691,6 +988,7 @@ export const createSale = async (data) => {
   }
 
   return await db.transaction(async (t) => {
+    let resolvedCustomerId = customer_id || null;
     let resolvedCustomerName = customer_name;
     let resolvedCustomerPhone = customer_phone;
 
@@ -699,6 +997,7 @@ export const createSale = async (data) => {
       if (cust) {
         resolvedCustomerName = cust.name;
         resolvedCustomerPhone = cust.phone;
+        resolvedCustomerId = cust.id;
       }
     } else if (customer_name) {
       // Auto-save new customer if phone provided
@@ -707,10 +1006,13 @@ export const createSale = async (data) => {
         transaction: t,
       });
       if (!existingCust) {
-        await PlastCustomer.create(
+        const newCust = await PlastCustomer.create(
           { name: customer_name, phone: customer_phone || null },
           { transaction: t }
         );
+        resolvedCustomerId = newCust.id;
+      } else {
+        resolvedCustomerId = existingCust.id;
       }
     }
 
@@ -796,7 +1098,7 @@ export const createSale = async (data) => {
       {
         sale_number: saleNumber,
         sale_date: sale_date || new Date().toISOString().split("T")[0],
-        customer_id: customer_id || null,
+        customer_id: resolvedCustomerId,
         customer_name: resolvedCustomerName || "Cash Customer",
         customer_phone: resolvedCustomerPhone || null,
         subtotal,
@@ -823,6 +1125,7 @@ export const createSale = async (data) => {
       await PlastSalePayment.create(
         {
           sale_id: sale.id,
+          customer_id: resolvedCustomerId,
           amount: initialPaid,
           payment_date: sale_date || new Date().toISOString().split("T")[0],
           payment_mode: payment_mode || "CASH",
@@ -886,6 +1189,7 @@ export const recordSalePayment = async (saleId, data) => {
     const payment = await PlastSalePayment.create(
       {
         sale_id: saleId,
+        customer_id: sale.customer_id || null,
         amount: actualAmount,
         payment_date: payment_date || new Date().toISOString().split("T")[0],
         payment_mode: payment_mode || sale.payment_mode || "CASH",
@@ -970,11 +1274,45 @@ export const getPaymentsSummary = async (filters = {}) => {
     }
   }
 
+  // Get total collections from PlastSalePayment
+  const paymentWhere = {};
+  if (filters.from_date && filters.to_date) {
+    paymentWhere.payment_date = { [Op.between]: [filters.from_date, filters.to_date] };
+  } else if (filters.from_date) {
+    paymentWhere.payment_date = { [Op.gte]: filters.from_date };
+  } else if (filters.to_date) {
+    paymentWhere.payment_date = { [Op.lte]: filters.to_date };
+  }
+  if (filters.customer_id) {
+    paymentWhere.customer_id = filters.customer_id;
+  }
+  if (filters.payment_mode) {
+    paymentWhere.payment_mode = filters.payment_mode;
+  }
+
+  const payments = await PlastSalePayment.findAll({ where: paymentWhere });
+  const totalCollected = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  // Overall active customers opening balance
+  const custWhere = { is_active: true };
+  if (filters.customer_id) {
+    custWhere.id = filters.customer_id;
+  }
+  const customers = await PlastCustomer.findAll({ where: custWhere, attributes: ["opening_balance"] });
+  const totalOpeningBalance = customers.reduce((sum, c) => sum + Number(c.opening_balance || 0), 0);
+
+  // Total outstanding across ledger: opening balance + total billed - total collected
+  const totalLedgerOutstanding = totalOpeningBalance + totalBilled - totalCollected;
+
   return {
     total_billed: Number(totalBilled.toFixed(2)),
     total_paid: Number(totalPaid.toFixed(2)),
     total_balance: Number(totalBalance.toFixed(2)),
+    total_collected: Number(totalCollected.toFixed(2)),
+    total_opening_balance: Number(totalOpeningBalance.toFixed(2)),
+    total_ledger_outstanding: Number(totalLedgerOutstanding.toFixed(2)),
     total_invoices: sales.length,
+    total_payment_receipts: payments.length,
     paid_count: paidCount,
     partial_count: partialCount,
     unpaid_count: unpaidCount,

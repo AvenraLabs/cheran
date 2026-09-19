@@ -11,7 +11,11 @@ const PlastSalePayment = db.define(
     },
     sale_id: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
+    },
+    customer_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
     },
     amount: {
       type: DataTypes.DECIMAL(14, 2),

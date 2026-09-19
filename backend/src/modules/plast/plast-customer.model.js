@@ -21,6 +21,16 @@ const PlastCustomer = db.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    opening_balance: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: false,
+      defaultValue: 0.0,
+    },
+    opening_balance_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+      defaultValue: DataTypes.NOW,
+    },
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

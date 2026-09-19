@@ -10,11 +10,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  History,
-  ArrowRight,
-  Eye,
-  Check,
+  Plus,
+  Share2,
+  Calendar,
   Building2,
+  Download,
 } from "lucide-react";
 import { plastApi } from "../../api/plastApi.js";
 import Navbar from "../../components/layout/Navbar.jsx";
@@ -23,12 +23,30 @@ import Button from "../../components/common/Button.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
-import RecordPaymentModal from "../../components/plast/RecordPaymentModal.jsx";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+const PAYMENT_MODES = [
+  { value: "", label: "All Payment Modes" },
+  { value: "CASH", label: "Cash" },
+  { value: "UPI", label: "UPI / GPay / PhonePe" },
+  { value: "BANK_TRANSFER", label: "Bank Transfer (NEFT/RTGS)" },
+  { value: "CHEQUE", label: "Cheque" },
+];
+
+const MODAL_PAYMENT_MODES = [
+  { value: "CASH", label: "Cash" },
+  { value: "UPI", label: "UPI / GPay / PhonePe" },
+  { value: "BANK_TRANSFER", label: "Bank Transfer (NEFT/RTGS/IMPS)" },
+  { value: "CHEQUE", label: "Cheque" },
+];
 
 export function PlastPaymentsPage() {
-  const [sales, setSales] = useState([]);
+  const [activeTab, setActiveTab] = useState("COLLECTIONS"); // "COLLECTIONS" or "BALANCES"
+  const [payments, setPayments] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -38,52 +56,68 @@ export function PlastPaymentsPage() {
   const [paymentMode, setPaymentMode] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [activeTab, setActiveTab] = useState("ALL"); // "ALL", "UNPAID", "PARTIAL", "PAID"
 
-  // Modals
-  const [activePaymentSale, setActivePaymentSale] = useState(null);
-  const [historySale, setHistorySale] = useState(null);
-  const [inlineSubmittingId, setInlineSubmittingId] = useState(null);
-  const [inlineAmounts, setInlineAmounts] = useState({});
+  // Record Payment Modal
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [recordForm, setRecordForm] = useState({
+    customer_id: "",
+    amount: "",
+    payment_date: new Date().toISOString().split("T")[0],
+    payment_mode: "CASH",
+    reference_number: "",
+    notes: "",
+  });
+  const [recording, setRecording] = useState(false);
 
-  const fetchSales = async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    else setLoading(true);
+  // Statement / Ledger Modal
+  const [ledgerCustomer, setLedgerCustomer] = useState(null);
+  const [ledgerData, setLedgerData] = useState(null);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [exportingLedgerPdf, setExportingLedgerPdf] = useState(false);
+
+  const fetchSummary = async () => {
     try {
-      const data = await plastApi.getSales({
+      const data = await plastApi.getPaymentsSummary({
         customer_id: customerId || undefined,
         payment_mode: paymentMode || undefined,
         from_date: fromDate || undefined,
         to_date: toDate || undefined,
-        search: search || undefined,
       });
-
-      const list = Array.isArray(data) ? data : data?.data || [];
-      setSales(list);
+      setSummary(data);
     } catch (err) {
-      toast.error("Failed to load customer sales and payments");
+      console.error(err);
+    }
+  };
+
+  const fetchPayments = async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const [paymentsRes, customersRes] = await Promise.all([
+        plastApi.getPayments({
+          customer_id: customerId || undefined,
+          payment_mode: paymentMode || undefined,
+          from_date: fromDate || undefined,
+          to_date: toDate || undefined,
+          search: search || undefined,
+        }),
+        plastApi.getCustomers(),
+        fetchSummary(),
+      ]);
+
+      setPayments(Array.isArray(paymentsRes) ? paymentsRes : paymentsRes?.data || []);
+      setCustomers(Array.isArray(customersRes) ? customersRes : customersRes?.data || []);
+    } catch (err) {
+      toast.error("Failed to load payment records");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const fetchCustomers = async () => {
-    try {
-      const data = await plastApi.getCustomers();
-      setCustomers(Array.isArray(data) ? data : data?.data || []);
-    } catch (err) {
-      setCustomers([]);
-    }
-  };
-
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
-
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchSales();
+      fetchPayments();
     }, 200);
     return () => clearTimeout(timer);
   }, [search, customerId, paymentMode, fromDate, toDate]);
@@ -92,111 +126,259 @@ export function PlastPaymentsPage() {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      maximumFractionDigits: 2,
-    }).format(val || 0);
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(Math.round(Number(val) || 0));
   };
 
-  const safeSales = Array.isArray(sales) ? sales : [];
+  const openRecordModal = (prefillCustomer = null) => {
+    setRecordForm({
+      customer_id: prefillCustomer?.id || "",
+      amount: prefillCustomer?.current_balance > 0 ? String(Math.round(prefillCustomer.current_balance)) : "",
+      payment_date: new Date().toISOString().split("T")[0],
+      payment_mode: "CASH",
+      reference_number: "",
+      notes: "",
+    });
+    setIsRecordModalOpen(true);
+  };
 
-  const unpaidCount = safeSales.filter((s) => Number(s.paid_amount || 0) === 0).length;
-  const partialCount = safeSales.filter(
-    (s) => Number(s.paid_amount || 0) > 0 && Number(s.balance_amount || 0) > 0.01
-  ).length;
-  const paidCount = safeSales.filter((s) => Number(s.balance_amount || 0) <= 0.01).length;
-  const pendingCount = unpaidCount + partialCount;
-
-  // Filter client-side by activeTab
-  const displayedSales = safeSales.filter((s) => {
-    if (activeTab === "UNPAID") return Number(s.paid_amount || 0) === 0;
-    if (activeTab === "PARTIAL") {
-      return Number(s.paid_amount || 0) > 0 && Number(s.balance_amount || 0) > 0.01;
-    }
-    if (activeTab === "PAID") return Number(s.balance_amount || 0) <= 0.01;
-    return true; // "ALL"
-  });
-
-  const totalBilled = safeSales.reduce((acc, s) => acc + Number(s.grand_total || 0), 0);
-  const totalPaid = safeSales.reduce((acc, s) => acc + Number(s.paid_amount || 0), 0);
-  const totalBalance = safeSales.reduce((acc, s) => acc + Number(s.balance_amount || 0), 0);
-
-  const handleInlinePaymentSubmit = async (sale) => {
-    const rawVal = inlineAmounts[sale.id];
-    const amountToPay = parseFloat(rawVal);
-    const balance = Number(sale.balance_amount || 0);
-
-    if (!amountToPay || amountToPay <= 0) {
-      toast.error("Please enter a valid amount");
-      return;
-    }
-    if (amountToPay > balance + 0.05) {
-      toast.error(`Amount cannot exceed remaining balance of ${formatCurrency(balance)}`);
+  const handleRecordSubmit = async (e) => {
+    e.preventDefault();
+    if (!recordForm.customer_id) {
+      toast.error("Please select a customer");
       return;
     }
 
-    setInlineSubmittingId(sale.id);
+    const amt = parseFloat(recordForm.amount);
+    if (!amt || amt <= 0) {
+      toast.error("Please enter a valid amount greater than 0");
+      return;
+    }
+
+    setRecording(true);
     try {
-      await plastApi.recordPayment(sale.id, {
-        amount: amountToPay,
-        payment_date: new Date().toISOString().split("T")[0],
-        payment_mode: sale.payment_mode || "CASH",
-        notes: "Quick payment entered via Payments table",
+      await plastApi.recordCustomerPayment(recordForm.customer_id, {
+        amount: amt,
+        payment_date: recordForm.payment_date,
+        payment_mode: recordForm.payment_mode,
+        reference_number: recordForm.reference_number || undefined,
+        notes: recordForm.notes || undefined,
       });
 
-      toast.success(
-        `Payment of ${formatCurrency(amountToPay)} added to invoice ${sale.sale_number}!`
-      );
-      setInlineAmounts((prev) => ({ ...prev, [sale.id]: "" }));
-      fetchSales();
+      toast.success(`Payment of ${formatCurrency(amt)} recorded successfully!`);
+      setIsRecordModalOpen(false);
+      fetchPayments();
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || "Failed to record payment");
     } finally {
-      setInlineSubmittingId(null);
+      setRecording(false);
     }
   };
 
-  const getStatusBadge = (sale) => {
-    const balance = Number(sale.balance_amount || 0);
-    const paid = Number(sale.paid_amount || 0);
-
-    if (balance <= 0.01) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[4px] text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <CheckCircle2 size={12} />
-          Paid in Full
-        </span>
-      );
+  // Open Statement / Ledger Modal
+  const openLedgerModal = async (cust) => {
+    setLedgerCustomer(cust);
+    setLoadingLedger(true);
+    try {
+      const data = await plastApi.getCustomerLedger(cust.id);
+      setLedgerData(data);
+    } catch (err) {
+      toast.error("Failed to load customer statement");
+      setLedgerCustomer(null);
+    } finally {
+      setLoadingLedger(false);
     }
-    if (paid > 0) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[4px] text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-          <Clock size={12} />
-          Partially Paid
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[4px] text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-        <AlertCircle size={12} />
-        Unpaid / Due
-      </span>
-    );
   };
+
+  const handleExportStatementPdf = (ledger) => {
+    if (!ledger) return;
+    setExportingLedgerPdf(true);
+    try {
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(47, 111, 94);
+      doc.rect(0, 0, pageWidth, 28, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(255, 255, 255);
+      doc.text("CHERAN PLAST", 14, 12);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(220, 235, 230);
+      doc.text("PVC & Polymer Pipes Manufacturing Division", 14, 18);
+      doc.text("Customer Account Ledger / Statement of Account", 14, 23);
+
+      const todayStr = new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`Date: ${todayStr}`, pageWidth - 14, 12, { align: "right" });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 33, 61);
+      doc.text(`Customer: ${ledger.customer.name}`, 14, 36);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(82, 96, 125);
+      if (ledger.customer.phone) doc.text(`Phone: ${ledger.customer.phone}`, 14, 41);
+      if (ledger.customer.address) doc.text(`Address: ${ledger.customer.address}`, 14, 46);
+
+      const summaryBoxX = pageWidth - 90;
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(summaryBoxX - 4, 31, 80, 26, 2, 2, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(82, 96, 125);
+      doc.text("Opening Balance:", summaryBoxX, 36);
+      doc.text("Total Billed:", summaryBoxX, 41);
+      doc.text("Total Paid:", summaryBoxX, 46);
+      doc.text("Net Outstanding:", summaryBoxX, 52);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(20, 33, 61);
+      doc.text(`Rs. ${Math.round(ledger.summary.opening_balance).toLocaleString("en-IN")}`, pageWidth - 16, 36, { align: "right" });
+      doc.text(`Rs. ${Math.round(ledger.summary.total_billed).toLocaleString("en-IN")}`, pageWidth - 16, 41, { align: "right" });
+      doc.setTextColor(22, 101, 52);
+      doc.text(`Rs. ${Math.round(ledger.summary.total_paid).toLocaleString("en-IN")}`, pageWidth - 16, 46, { align: "right" });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      if (ledger.summary.current_balance > 0) doc.setTextColor(190, 24, 93);
+      else doc.setTextColor(22, 101, 52);
+      doc.text(`Rs. ${Math.round(ledger.summary.current_balance).toLocaleString("en-IN")}`, pageWidth - 16, 52, { align: "right" });
+
+      const tableRows = (ledger.entries || []).map((entry) => [
+        entry.date || "",
+        entry.type || "",
+        entry.description || "",
+        entry.debit > 0 ? `Rs. ${Math.round(entry.debit).toLocaleString("en-IN")}` : "—",
+        entry.credit > 0 ? `Rs. ${Math.round(entry.credit).toLocaleString("en-IN")}` : "—",
+        `Rs. ${Math.round(entry.running_balance).toLocaleString("en-IN")}`,
+      ]);
+
+      autoTable(doc, {
+        startY: 61,
+        head: [["Date", "Type", "Particulars / Description", "Debit (+)", "Credit (-)", "Balance"]],
+        body: tableRows,
+        theme: "striped",
+        headStyles: {
+          fillColor: [47, 111, 94],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 8.5,
+          cellPadding: 2.5,
+        },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 22 },
+          2: { cellWidth: "auto" },
+          3: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 28, halign: "right", fontStyle: "bold" },
+        },
+        styles: { fontSize: 8, cellPadding: 2.2, textColor: [20, 33, 61] },
+        alternateRowStyles: { fillColor: [250, 250, 248] },
+      });
+
+      const safeName = (ledger.customer.name || "Customer").replace(/[/\\?%*:|"<> ]/g, "_");
+      doc.save(`Cheran_Plast_Statement_${safeName}.pdf`);
+      toast.success("Statement PDF downloaded successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to export statement PDF");
+    } finally {
+      setExportingLedgerPdf(false);
+    }
+  };
+
+  const shareStatementOnWhatsApp = (customer) => {
+    if (!customer) return;
+    const phone = customer.phone || "";
+    const cleanPhone = phone.replace(/\D/g, "").replace(/^0+/, "");
+    const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+    const opening = Math.round(Number(customer.opening_balance) || 0);
+    const billed = Math.round(Number(customer.total_billed) || 0);
+    const paid = Math.round(Number(customer.total_paid) || 0);
+    const pending = Math.round(Number(customer.current_balance) || 0);
+
+    const msg = `📋 *CHERAN PLAST - STATEMENT OF ACCOUNT*\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `*Customer:* ${customer.name}\n` +
+      `*Statement Date:* ${new Date().toISOString().split("T")[0]}\n\n` +
+      `*Opening Pending Balance:* ₹${opening.toLocaleString("en-IN")}\n` +
+      `*Total Invoices Billed:* ₹${billed.toLocaleString("en-IN")}\n` +
+      `*Total Payments Received:* ₹${paid.toLocaleString("en-IN")}\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `*CURRENT PENDING AMOUNT:* ₹${pending.toLocaleString("en-IN")}\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `Kindly arrange payment for the pending balance. If already paid, please ignore.\n\n` +
+      `Thank you for your business! 🙏\nCheran Plast`;
+
+    const url = targetPhone
+      ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+    window.open(url, "_blank");
+  };
+
+  const customerSelectOptions = [
+    { value: "", label: "Select a customer..." },
+    ...customers.map((c) => ({
+      value: c.id,
+      label: `${c.name} ${c.current_balance > 0 ? `(₹${Math.round(c.current_balance).toLocaleString("en-IN")} pending)` : ""}`.trim(),
+    })),
+  ];
+
+  const filterCustomerOptions = [
+    { value: "", label: "All Customers" },
+    ...customers.map((c) => ({
+      value: c.id,
+      label: c.name,
+    })),
+  ];
+
+  const totalCollectedMetric = summary?.total_collected ?? customers.reduce((s, c) => s + Number(c.total_paid || 0), 0);
+  const totalOutstandingMetric = summary?.total_ledger_outstanding ?? customers.reduce((s, c) => s + Number(c.current_balance || 0), 0);
+  const totalOpeningMetric = summary?.total_opening_balance ?? customers.reduce((s, c) => s + Number(c.opening_balance || 0), 0);
+  const totalBilledMetric = summary?.total_billed ?? customers.reduce((s, c) => s + Number(c.total_billed || 0), 0);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
-        title="Payments & Collections"
-        subtitle="Track sales invoices, amount collected, pending balances, and record payments"
+        title="Collections & Receipts"
+        subtitle="Manage customer payments, opening balances, account statements & running ledger"
         actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={RefreshCw}
-            loading={refreshing}
-            onClick={() => fetchSales(true)}
-          >
-            Refresh
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RefreshCw}
+              loading={refreshing}
+              onClick={() => fetchPayments(true)}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Plus}
+              onClick={() => openRecordModal()}
+            >
+              + Record Payment
+            </Button>
+          </>
         }
       />
 
@@ -204,419 +386,556 @@ export function PlastPaymentsPage() {
         {/* KPI Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
+            title="Total Collections"
+            value={formatCurrency(totalCollectedMetric)}
+            subtitle="Total customer receipts recorded"
+            icon={TrendingUp}
+          />
+          <MetricCard
+            title="Net Customer Outstanding"
+            value={formatCurrency(totalOutstandingMetric)}
+            subtitle="Balance pending to collect"
+            icon={Receipt}
+          />
+          <MetricCard
             title="Total Billed"
-            value={formatCurrency(totalBilled)}
-            subtitle="Gross invoice value"
+            value={formatCurrency(totalBilledMetric)}
+            subtitle="Gross invoice volume"
             icon={DollarSign}
           />
           <MetricCard
-            title="Total Collected"
-            value={formatCurrency(totalPaid)}
-            subtitle="Amount paid across invoices"
-            icon={CheckCircle2}
-          />
-          <MetricCard
-            title="Balance Pending"
-            value={formatCurrency(totalBalance)}
-            subtitle={`${pendingCount} invoices awaiting payment`}
+            title="Opening Balances"
+            value={formatCurrency(totalOpeningMetric)}
+            subtitle="Pre-app pending amounts"
             icon={Clock}
           />
-          <MetricCard
-            title="Pending Invoices"
-            value={`${pendingCount} Bills`}
-            subtitle="With outstanding balance"
-            icon={CreditCard}
-          />
         </div>
 
-        {/* Quick Filter Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-[#EDEAE1]">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2 border-b border-[#EDEAE1] pb-1">
           <button
             type="button"
-            onClick={() => setActiveTab("ALL")}
-            className={`px-3 py-1.5 rounded-[6px] text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === "ALL"
-                ? "bg-[#2F6F5E] text-white shadow-sm"
-                : "text-[#52607D] hover:bg-slate-100"
+            onClick={() => setActiveTab("COLLECTIONS")}
+            className={`px-4 py-2 text-xs font-bold rounded-t-[8px] transition-colors cursor-pointer ${
+              activeTab === "COLLECTIONS"
+                ? "bg-white text-[#2F6F5E] border border-[#E4E1D8] border-b-white -mb-[2px] shadow-xs"
+                : "text-[#52607D] hover:text-[#14213D]"
             }`}
           >
-            <FileText size={14} />
-            All Sales Bills ({safeSales.length})
+            Collections & Receipts Log ({payments.length})
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("UNPAID")}
-            className={`px-3 py-1.5 rounded-[6px] text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === "UNPAID"
-                ? "bg-rose-700 text-white shadow-sm"
-                : "text-[#52607D] hover:bg-slate-100"
+            onClick={() => setActiveTab("BALANCES")}
+            className={`px-4 py-2 text-xs font-bold rounded-t-[8px] transition-colors cursor-pointer ${
+              activeTab === "BALANCES"
+                ? "bg-white text-[#2F6F5E] border border-[#E4E1D8] border-b-white -mb-[2px] shadow-xs"
+                : "text-[#52607D] hover:text-[#14213D]"
             }`}
           >
-            <AlertCircle size={14} />
-            Unpaid ({unpaidCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("PARTIAL")}
-            className={`px-3 py-1.5 rounded-[6px] text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === "PARTIAL"
-                ? "bg-amber-600 text-white shadow-sm"
-                : "text-[#52607D] hover:bg-slate-100"
-            }`}
-          >
-            <Clock size={14} />
-            Partially Paid ({partialCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("PAID")}
-            className={`px-3 py-1.5 rounded-[6px] text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === "PAID"
-                ? "bg-emerald-700 text-white shadow-sm"
-                : "text-[#52607D] hover:bg-slate-100"
-            }`}
-          >
-            <CheckCircle2 size={14} />
-            Fully Paid ({paidCount})
+            Customer Balances ({customers.length})
           </button>
         </div>
 
-        {/* Filter Bar */}
-        <div className="bg-white p-3 sm:p-4 rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] grid grid-cols-1 sm:grid-cols-6 gap-3 items-center text-xs">
-          <div className="relative sm:col-span-2">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8C97AB]" />
-            <input
-              type="text"
-              placeholder="Search invoice number, customer name, phone..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
-            />
-          </div>
-
-          <div>
-            <CustomSelect
-              size="sm"
-              value={customerId}
-              onChange={(val) => setCustomerId(val)}
-              placeholder="All Customers"
-              options={[
-                { value: "", label: "All Customers" },
-                ...(Array.isArray(customers) ? customers : []).map((c) => ({
-                  value: c.id,
-                  label: `${c.name} ${c.phone ? `(${c.phone})` : ""}`,
-                })),
-              ]}
-            />
-          </div>
-
-          <div>
-            <CustomSelect
-              size="sm"
-              value={paymentMode}
-              onChange={(val) => setPaymentMode(val)}
-              placeholder="All Payment Modes"
-              options={[
-                { value: "", label: "All Payment Modes" },
-                { value: "CASH", label: "Cash" },
-                { value: "UPI", label: "UPI / GPay" },
-                { value: "BANK_TRANSFER", label: "Bank Transfer" },
-                { value: "CHEQUE", label: "Cheque" },
-              ]}
-            />
-          </div>
-
-          <div className="flex gap-2 sm:col-span-2">
-            <input
-              type="date"
-              title="From Date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="w-1/2 px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-            />
-            <input
-              type="date"
-              title="To Date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="w-1/2 px-2.5 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-            />
-          </div>
-        </div>
-
-        {/* Payments Table */}
-        <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
-          {loading ? (
-            <div className="p-6">
-              <SkeletonLoader count={5} />
+        {/* Filters */}
+        <div className="bg-white p-3 sm:p-4 rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C97AB]" />
+              <input
+                type="text"
+                placeholder="Search reference # or notes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] placeholder-[#8C97AB] focus:outline-none focus:border-[#2F6F5E]"
+              />
             </div>
-          ) : displayedSales.length === 0 ? (
-            <EmptyState
-              icon={CreditCard}
-              title="No bills found for selected filter"
-              description="Switch filters or change the search query to see other sales records."
+
+            <CustomSelect
+              options={filterCustomerOptions}
+              value={customerId}
+              onChange={setCustomerId}
+              placeholder="Filter by Customer"
             />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
-                  <tr>
-                    <th className="py-3 px-4">Invoice No</th>
-                    <th className="py-3 px-3">Date</th>
-                    <th className="py-3 px-4">Customer</th>
-                    <th className="py-3 px-3 text-right">Grand Total</th>
-                    <th className="py-3 px-3 text-right text-emerald-800">Amount Paid</th>
-                    <th className="py-3 px-3 text-right text-rose-800">Pending Balance</th>
-                    <th className="py-3 px-3 text-center">Status</th>
-                    <th className="py-3 px-4 text-center">Quick Payment Entry</th>
-                    <th className="py-3 px-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EDEAE1]">
-                  {displayedSales.map((sale) => {
-                    const balance = Number(sale.balance_amount || 0);
-                    const paid = Number(sale.paid_amount || 0);
-                    const grand = Number(sale.grand_total || 0);
-                    const percentPaid = grand > 0 ? Math.min(100, Math.round((paid / grand) * 100)) : 100;
-                    const isSubmitting = inlineSubmittingId === sale.id;
 
-                    return (
-                      <tr key={sale.id} className="hover:bg-[#FAFAF8] transition-colors">
+            <CustomSelect
+              options={PAYMENT_MODES}
+              value={paymentMode}
+              onChange={setPaymentMode}
+              placeholder="Filter by Mode"
+            />
+
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                title="From Date"
+              />
+              <span className="text-[#8C97AB] text-xs">to</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                title="To Date"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* TAB 1: Collections Log */}
+        {activeTab === "COLLECTIONS" && (
+          <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
+            {loading ? (
+              <div className="p-6">
+                <SkeletonLoader count={5} />
+              </div>
+            ) : payments.length === 0 ? (
+              <EmptyState
+                icon={CreditCard}
+                title="No collection records found"
+                description="Use '+ Record Payment' above to record collections from customers."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
+                    <tr>
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Receipt / Ref #</th>
+                      <th className="py-3 px-4">Customer</th>
+                      <th className="py-3 px-4">Linked To</th>
+                      <th className="py-3 px-4">Payment Mode</th>
+                      <th className="py-3 px-4 text-right">Amount Received</th>
+                      <th className="py-3 px-4">Recorded By</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EDEAE1]">
+                    {payments.map((p) => (
+                      <tr key={p.id} className="hover:bg-[#FAFAF8] transition-colors">
+                        <td className="py-3 px-4 font-mono text-[#52607D] whitespace-nowrap">
+                          {p.payment_date}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-[#14213D]">
+                          {p.reference_number || `REC-${p.id.slice(0, 8).toUpperCase()}`}
+                        </td>
                         <td className="py-3 px-4">
-                          <div className="font-mono font-bold text-[#2F6F5E]">{sale.sale_number}</div>
-                          <div className="text-[10px] text-[#8C97AB] font-mono">
-                            Mode: {sale.payment_mode || "CASH"}
+                          <div className="font-bold text-[#14213D]">
+                            {p.customer?.name || "Customer"}
                           </div>
-                        </td>
-
-                        <td className="py-3 px-3 text-[#52607D] whitespace-nowrap">
-                          {sale.sale_date}
-                        </td>
-
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-[#14213D]">{sale.customer_name}</div>
-                          {sale.customer_phone && (
-                            <div className="text-[10px] text-[#52607D] font-mono">
-                              {sale.customer_phone}
-                            </div>
+                          {p.customer?.phone && (
+                            <div className="text-[10px] text-[#8C97AB]">{p.customer.phone}</div>
                           )}
                         </td>
-
-                        <td className="py-3 px-3 text-right font-mono font-bold text-[#14213D]">
-                          {formatCurrency(grand)}
-                        </td>
-
-                        <td className="py-3 px-3 text-right font-mono">
-                          <div className="font-bold text-emerald-700">{formatCurrency(paid)}</div>
-                          <div className="text-[10px] text-[#8C97AB]">{percentPaid}% collected</div>
-                        </td>
-
-                        <td className="py-3 px-3 text-right font-mono">
-                          <div
-                            className={`font-black text-sm ${
-                              balance > 0.01 ? "text-rose-700" : "text-emerald-700 font-bold"
-                            }`}
-                          >
-                            {formatCurrency(balance)}
-                          </div>
-                          {balance > 0.01 && (
-                            <div className="text-[10px] text-rose-600 font-medium">To be collected</div>
-                          )}
-                        </td>
-
-                        <td className="py-3 px-3 text-center">{getStatusBadge(sale)}</td>
-
-                        {/* Quick Payment Entry Column */}
                         <td className="py-3 px-4">
-                          {balance > 0.01 ? (
-                            <div className="flex items-center gap-1.5 justify-center">
-                              <div className="relative w-28">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-[#8C97AB] font-bold">
-                                  ₹
-                                </span>
-                                <input
-                                  type="number"
-                                  step="any"
-                                  min="1"
-                                  max={balance}
-                                  placeholder={String(Math.round(balance))}
-                                  value={inlineAmounts[sale.id] ?? ""}
-                                  onChange={(e) =>
-                                    setInlineAmounts((prev) => ({
-                                      ...prev,
-                                      [sale.id]: e.target.value,
-                                    }))
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleInlinePaymentSubmit(sale);
-                                  }}
-                                  className="w-full pl-5 pr-1.5 py-1 text-xs font-mono font-bold bg-white border border-[#E4E1D8] rounded-[5px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-                                />
-                              </div>
-
-                              <button
-                                type="button"
-                                title="Add payment to this bill"
-                                disabled={isSubmitting || !inlineAmounts[sale.id]}
-                                onClick={() => handleInlinePaymentSubmit(sale)}
-                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-[5px] font-bold text-xs flex items-center gap-0.5 transition-colors shadow-sm"
-                              >
-                                {isSubmitting ? (
-                                  <RefreshCw size={12} className="animate-spin" />
-                                ) : (
-                                  <Check size={13} />
-                                )}
-                                Add
-                              </button>
-                            </div>
+                          {p.sale?.sale_number ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                              Bill #{p.sale.sale_number}
+                            </span>
                           ) : (
-                            <div className="text-center text-[11px] font-semibold text-emerald-700 flex items-center justify-center gap-1">
-                              <CheckCircle2 size={13} />
-                              Zero Balance
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Account Balance
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-gray-100 text-[#14213D]">
+                            {p.payment_mode || "CASH"}
+                          </span>
+                          {p.notes && (
+                            <div className="text-[10px] text-[#8C97AB] truncate max-w-[150px]" title={p.notes}>
+                              {p.notes}
                             </div>
                           )}
                         </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 text-sm">
+                          {formatCurrency(p.amount)}
+                        </td>
+                        <td className="py-3 px-4 text-[#8C97AB] font-mono text-[11px]">
+                          @{p.created_by_name || "admin"}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {p.customer && (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              icon={FileText}
+                              onClick={() => openLedgerModal(p.customer)}
+                            >
+                              Statement
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
-                        {/* Actions */}
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {balance > 0.01 && (
+        {/* TAB 2: Customer Balances */}
+        {activeTab === "BALANCES" && (
+          <div className="bg-white rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
+            {loading ? (
+              <div className="p-6">
+                <SkeletonLoader count={5} />
+              </div>
+            ) : customers.length === 0 ? (
+              <EmptyState
+                icon={Building2}
+                title="No customer accounts"
+                description="Add customers to manage their running balance."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
+                    <tr>
+                      <th className="py-3 px-4">Customer Name</th>
+                      <th className="py-3 px-4 text-right">Opening Pending</th>
+                      <th className="py-3 px-4 text-right">Total Invoiced</th>
+                      <th className="py-3 px-4 text-right">Total Paid</th>
+                      <th className="py-3 px-4 text-right">Net Pending</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EDEAE1]">
+                    {customers.map((c) => {
+                      const bal = Number(c.current_balance || 0);
+                      return (
+                        <tr key={c.id} className="hover:bg-[#FAFAF8] transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-[#14213D]">{c.name}</div>
+                            {c.phone && <div className="text-[10px] text-[#8C97AB] font-mono">{c.phone}</div>}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-[#52607D]">
+                            {formatCurrency(c.opening_balance)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-medium text-[#14213D]">
+                            {formatCurrency(c.total_billed)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-medium text-emerald-700">
+                            {formatCurrency(c.total_paid)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold">
+                            <span className={bal > 0 ? "text-rose-700" : bal < 0 ? "text-blue-700" : "text-emerald-700"}>
+                              {formatCurrency(bal)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {bal > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <AlertCircle size={10} />
+                                Pending
+                              </span>
+                            ) : bal < 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                Advance
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 size={10} />
+                                Settled
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
                               <Button
                                 variant="secondary"
                                 size="xs"
                                 icon={CreditCard}
                                 className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
-                                onClick={() => setActivePaymentSale(sale)}
+                                onClick={() => openRecordModal(c)}
                               >
-                                Record
+                                + Pay
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              icon={History}
-                              title="View Payment Ledger"
-                              onClick={() => setHistorySale(sale)}
-                            >
-                              Ledger
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                icon={FileText}
+                                onClick={() => openLedgerModal(c)}
+                              >
+                                Statement
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                icon={Share2}
+                                className="text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => shareStatementOnWhatsApp(c)}
+                              >
+                                WA
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Record Customer Payment Modal */}
+      <Modal
+        isOpen={isRecordModalOpen}
+        onClose={() => setIsRecordModalOpen(false)}
+        title="Record Customer Payment"
+        size="sm"
+      >
+        <form onSubmit={handleRecordSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Select Customer *
+            </label>
+            <CustomSelect
+              options={customerSelectOptions}
+              value={recordForm.customer_id}
+              onChange={(val) => {
+                const sel = customers.find((c) => c.id === val);
+                setRecordForm({
+                  ...recordForm,
+                  customer_id: val,
+                  amount: sel && sel.current_balance > 0 ? String(Math.round(sel.current_balance)) : recordForm.amount,
+                });
+              }}
+              placeholder="Select customer"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Payment Amount (₹) *
+            </label>
+            <input
+              type="number"
+              step="any"
+              min="0.01"
+              required
+              placeholder="Enter amount paid"
+              value={recordForm.amount}
+              onChange={(e) => setRecordForm({ ...recordForm, amount: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-sm bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono font-bold focus:outline-none focus:border-[#2F6F5E]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                Payment Date
+              </label>
+              <input
+                type="date"
+                value={recordForm.payment_date}
+                onChange={(e) => setRecordForm({ ...recordForm, payment_date: e.target.value })}
+                className="w-full px-2 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                Payment Mode
+              </label>
+              <CustomSelect
+                options={MODAL_PAYMENT_MODES}
+                value={recordForm.payment_mode}
+                onChange={(val) => setRecordForm({ ...recordForm, payment_mode: val })}
+                placeholder="Select mode"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Reference / Transaction # (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. UPI Ref, Cheque #, GPay txn ID"
+              value={recordForm.reference_number}
+              onChange={(e) => setRecordForm({ ...recordForm, reference_number: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#14213D] mb-1">
+              Notes
+            </label>
+            <input
+              type="text"
+              placeholder="Optional notes or remarks"
+              value={recordForm.notes}
+              onChange={(e) => setRecordForm({ ...recordForm, notes: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setIsRecordModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm" loading={recording}>
+              Record Payment
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Customer Statement / Account Ledger Modal */}
+      <Modal
+        isOpen={Boolean(ledgerCustomer)}
+        onClose={() => {
+          setLedgerCustomer(null);
+          setLedgerData(null);
+        }}
+        title={`Statement of Account: ${ledgerCustomer?.name || ""}`}
+        size="lg"
+      >
+        {loadingLedger ? (
+          <div className="p-6">
+            <SkeletonLoader count={4} />
+          </div>
+        ) : ledgerData ? (
+          <div className="space-y-4">
+            {/* Account Summary Banner */}
+            <div className="bg-[#F8FAFC] p-3 rounded-[8px] border border-[#E4E1D8] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Opening Pending</span>
+                <span className="font-mono font-bold text-[#14213D]">
+                  {formatCurrency(ledgerData.summary.opening_balance)}
+                </span>
+              </div>
+              <div>
+                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Total Invoiced</span>
+                <span className="font-mono font-bold text-[#14213D]">
+                  {formatCurrency(ledgerData.summary.total_billed)}
+                </span>
+                <span className="text-[10px] text-[#8C97AB] ml-1">({ledgerData.summary.total_invoices} bills)</span>
+              </div>
+              <div>
+                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Total Paid</span>
+                <span className="font-mono font-bold text-emerald-700">
+                  {formatCurrency(ledgerData.summary.total_paid)}
+                </span>
+                <span className="text-[10px] text-[#8C97AB] ml-1">({ledgerData.summary.total_payments} receipts)</span>
+              </div>
+              <div>
+                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Current Outstanding</span>
+                <span
+                  className={`font-mono font-bold text-sm ${
+                    ledgerData.summary.current_balance > 0
+                      ? "text-rose-700"
+                      : "text-emerald-700"
+                  }`}
+                >
+                  {formatCurrency(ledgerData.summary.current_balance)}
+                </span>
+              </div>
+            </div>
+
+            {/* Ledger Transactions Table */}
+            <div className="max-h-[380px] overflow-y-auto border border-[#E4E1D8] rounded-[8px]">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold sticky top-0">
+                  <tr>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">Description</th>
+                    <th className="py-2.5 px-3 text-right">Debit (+)</th>
+                    <th className="py-2.5 px-3 text-right">Credit (-)</th>
+                    <th className="py-2.5 px-3 text-right">Running Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EDEAE1]">
+                  {ledgerData.entries.map((row, idx) => (
+                    <tr
+                      key={idx}
+                      className={
+                        row.type === "OPENING"
+                          ? "bg-amber-50/50 font-medium"
+                          : "hover:bg-[#FAFAF8] transition-colors"
+                      }
+                    >
+                      <td className="py-2 px-3 font-mono text-[#52607D]">{row.date}</td>
+                      <td className="py-2 px-3">
+                        <span
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            row.type === "INVOICE"
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
+                              : row.type === "PAYMENT"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-amber-50 text-amber-800 border border-amber-200"
+                          }`}
+                        >
+                          {row.type}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-[#14213D]">
+                        {row.description}
+                        {row.metadata?.reference_number && (
+                          <span className="text-[10px] font-mono text-[#8C97AB] ml-1">
+                            (Ref: {row.metadata.reference_number})
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-medium text-[#14213D]">
+                        {row.debit > 0 ? formatCurrency(row.debit) : "—"}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">
+                        {row.credit > 0 ? formatCurrency(row.credit) : "—"}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D]">
+                        {formatCurrency(row.running_balance)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-      </main>
 
-      {/* Record Payment Full Modal */}
-      <RecordPaymentModal
-        isOpen={Boolean(activePaymentSale)}
-        onClose={() => setActivePaymentSale(null)}
-        sale={activePaymentSale}
-        onSuccess={() => {
-          fetchSales();
-        }}
-      />
-
-      {/* Payment Ledger / History Modal */}
-      <Modal
-        isOpen={Boolean(historySale)}
-        onClose={() => setHistorySale(null)}
-        title={`Payment History - ${historySale?.sale_number || ""}`}
-        size="md"
-      >
-        {historySale && (
-          <div className="space-y-4 text-xs">
-            <div className="bg-[#F8FAFC] p-3 rounded border border-[#EDEAE1] flex justify-between items-center">
-              <div>
-                <div className="text-[10px] font-bold text-[#52607D] uppercase">Customer</div>
-                <div className="text-sm font-bold text-[#14213D]">{historySale.customer_name}</div>
-                <div className="font-mono text-[11px] text-[#52607D]">
-                  Billed: {formatCurrency(historySale.grand_total)}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] font-bold text-[#52607D] uppercase">Remaining Due</div>
-                <div className="text-base font-mono font-black text-rose-700">
-                  {formatCurrency(historySale.balance_amount)}
-                </div>
-                <div className="text-[11px] font-bold text-emerald-700">
-                  Paid: {formatCurrency(historySale.paid_amount)}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="font-bold text-[#14213D]">Transactions Received</div>
-              {historySale.payments && historySale.payments.length > 0 ? (
-                <div className="border border-[#EDEAE1] rounded-[8px] overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[#F8FAFC] text-[#52607D] font-semibold border-b border-[#EDEAE1]">
-                      <tr>
-                        <th className="p-2.5">Date</th>
-                        <th className="p-2.5">Mode</th>
-                        <th className="p-2.5">Reference / Notes</th>
-                        <th className="p-2.5 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#EDEAE1]">
-                      {historySale.payments.map((p, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="p-2.5 font-mono text-[#52607D]">{p.payment_date}</td>
-                          <td className="p-2.5 font-medium">
-                            <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[10px] font-bold">
-                              {p.payment_mode}
-                            </span>
-                          </td>
-                          <td className="p-2.5 text-[#52607D]">
-                            <div>{p.reference_number || "—"}</div>
-                            {p.notes && <div className="text-[10px] text-[#8C97AB]">{p.notes}</div>}
-                          </td>
-                          <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
-                            {formatCurrency(p.amount)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-6 text-slate-400 italic">
-                  No payment transactions recorded yet.
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center pt-2 border-t border-[#EDEAE1]">
-              {Number(historySale.balance_amount) > 0.01 ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={CreditCard}
-                  onClick={() => {
-                    const toPay = historySale;
-                    setHistorySale(null);
-                    setActivePaymentSale(toPay);
-                  }}
-                >
-                  Record Payment Now
-                </Button>
-              ) : (
-                <div className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                  <CheckCircle2 size={14} />
-                  Fully Cleared
-                </div>
-              )}
-              <Button variant="secondary" size="sm" onClick={() => setHistorySale(null)}>
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Share2}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
+                onClick={() => shareStatementOnWhatsApp(ledgerCustomer)}
+              >
+                Share WhatsApp
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Download}
+                loading={exportingLedgerPdf}
+                onClick={() => handleExportStatementPdf(ledgerData)}
+              >
+                Download Statement PDF
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setLedgerCustomer(null);
+                  setLedgerData(null);
+                }}
+              >
                 Close
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
       </Modal>
     </div>
   );

@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Clock,
   User,
+  Share2,
 } from "lucide-react";
 import { plastApi } from "../../api/plastApi.js";
 import Navbar from "../../components/layout/Navbar.jsx";
@@ -237,11 +238,9 @@ export function PlastSalesPage() {
 
       // Summary Breakdown Block (Right side)
       const subVal = Math.round(Number(sale.subtotal) || 0);
-      const discVal = Math.round(Number(sale.discount_amount) || 0);
-      let discPct = 0;
-      if (sale.discount_type === "PERCENTAGE" && Number(sale.discount_value) > 0) {
-        discPct = Math.round(Number(sale.discount_value));
-      } else if (subVal > 0 && discVal > 0) {
+      const discVal = Math.round(Number(sale.total_discount ?? sale.discount_amount) || 0);
+      let discPct = Number(sale.discount_value) || 0;
+      if (!discPct && subVal > 0 && discVal > 0) {
         discPct = Math.round((discVal / subVal) * 100);
       }
       const totalAfterDiscVal = Math.max(0, subVal - discVal);
@@ -350,6 +349,64 @@ export function PlastSalesPage() {
     } finally {
       setExportingPdf(false);
     }
+  };
+
+  const shareOnWhatsApp = (sale) => {
+    if (!sale) return;
+    const phone = sale.customer_phone || "";
+    const cleanPhone = phone.replace(/\D/g, "").replace(/^0+/, "");
+    const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+    const subVal = Math.round(Number(sale.subtotal) || 0);
+    const discVal = Math.round(Number(sale.total_discount ?? sale.discount_amount) || 0);
+    let discPct = Number(sale.discount_value) || 0;
+    if (!discPct && subVal > 0 && discVal > 0) {
+      discPct = Math.round((discVal / subVal) * 100);
+    }
+    const totalAfterDisc = Math.max(0, subVal - discVal);
+    const gstVal = Math.round(Number(sale.gst_amount) || 0);
+    const grandVal = Math.round(Number(sale.grand_total) || (totalAfterDisc + gstVal));
+    const paidVal = Math.round(Number(sale.paid_amount) || 0);
+    const balVal = Math.round(Number(sale.balance_amount) || Math.max(0, grandVal - paidVal));
+
+    const itemsList = sale.items && sale.items.length > 0
+      ? sale.items.map(it => `• ${it.item_name} × ${it.quantity} = ₹${Math.round(Number(it.line_total || it.total_amount || 0)).toLocaleString("en-IN")}`).join("\n")
+      : "";
+
+    let msg = `🧾 *CHERAN PLAST - INVOICE*\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `*Invoice No:* #${sale.sale_number}\n` +
+      `*Date:* ${sale.sale_date}\n` +
+      `*Customer:* ${sale.customer_name || "Valued Customer"}\n\n`;
+
+    if (itemsList) {
+      msg += `*Items:*\n${itemsList}\n\n`;
+    }
+
+    msg += `━━━━━━━━━━━━━━━━━━\n` +
+      `*Subtotal:* ₹${subVal.toLocaleString("en-IN")}\n`;
+
+    if (discVal > 0) {
+      msg += `*Discount (${discPct}%):* -₹${discVal.toLocaleString("en-IN")}\n`;
+    }
+
+    msg += `*Total:* ₹${totalAfterDisc.toLocaleString("en-IN")}\n`;
+
+    if (gstVal > 0) {
+      msg += `*GST (${sale.gst_rate}%):* +₹${gstVal.toLocaleString("en-IN")}\n`;
+      msg += `*Grand Total:* ₹${grandVal.toLocaleString("en-IN")}\n`;
+    }
+
+    msg += `*Paid Amount:* ₹${paidVal.toLocaleString("en-IN")}\n` +
+      `*Balance Due:* ₹${balVal.toLocaleString("en-IN")}\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `Thank you for your business! 🙏\nCheran Plast`;
+
+    const url = targetPhone
+      ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+    window.open(url, "_blank");
   };
 
   const getStatusBadge = (sale) => {
@@ -624,6 +681,16 @@ export function PlastSalesPage() {
                                 <Button
                                   variant="ghost"
                                   size="xs"
+                                  icon={Share2}
+                                  className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                                  title="Share Invoice on WhatsApp"
+                                  onClick={() => shareOnWhatsApp(sale)}
+                                >
+                                  WA
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
                                   icon={Eye}
                                   onClick={() => setSelectedSale(sale)}
                                 >
@@ -762,11 +829,9 @@ export function PlastSalesPage() {
 
                 {(() => {
                   const subVal = Math.round(Number(selectedSale.subtotal) || 0);
-                  const discVal = Math.round(Number(selectedSale.discount_amount) || 0);
-                  let discPct = 0;
-                  if (selectedSale.discount_type === "PERCENTAGE" && Number(selectedSale.discount_value) > 0) {
-                    discPct = Math.round(Number(selectedSale.discount_value));
-                  } else if (subVal > 0 && discVal > 0) {
+                  const discVal = Math.round(Number(selectedSale.total_discount ?? selectedSale.discount_amount) || 0);
+                  let discPct = Number(selectedSale.discount_value) || 0;
+                  if (!discPct && subVal > 0 && discVal > 0) {
                     discPct = Math.round((discVal / subVal) * 100);
                   }
                   const totalAfterDiscVal = Math.max(0, subVal - discVal);
@@ -818,6 +883,16 @@ export function PlastSalesPage() {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" size="sm" onClick={() => setSelectedSale(null)}>
                 Close
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={Share2}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
+                onClick={() => shareOnWhatsApp(selectedSale)}
+              >
+                Share on WhatsApp
               </Button>
               {Number(selectedSale.balance_amount) > 0 && (
                 <Button

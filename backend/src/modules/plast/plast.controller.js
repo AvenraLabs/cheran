@@ -141,6 +141,24 @@ export const updateCustomer = async (req, res, next) => {
   }
 };
 
+export const getCustomerLedger = async (req, res, next) => {
+  try {
+    const data = await plastService.getCustomerLedger(req.params.id);
+    res.status(200).json({ status: "success", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const recordCustomerPayment = async (req, res, next) => {
+  try {
+    const data = await plastService.recordCustomerPayment(req.params.id, req.body, req.user);
+    res.status(201).json({ status: "success", message: "Payment recorded to customer account", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ==========================================
 // Stock On-Hand
 // ==========================================
@@ -269,6 +287,15 @@ export const getPaymentsSummary = async (req, res, next) => {
   try {
     const data = await plastService.getPaymentsSummary(req.query);
     res.status(200).json({ status: "success", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getPayments = async (req, res, next) => {
+  try {
+    const data = await plastService.getPayments(req.query);
+    res.status(200).json({ status: "success", count: data.length, data });
   } catch (err) {
     next(err);
   }

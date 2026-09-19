@@ -38,6 +38,8 @@ export const plastApi = {
   getCustomers: (search = "") => api.get("/plast/customers", { params: { search } }).then(unwrapList),
   createCustomer: (data) => api.post("/plast/customers", data).then(unwrapData),
   updateCustomer: (id, data) => api.put(`/plast/customers/${id}`, data).then(unwrapData),
+  getCustomerLedger: (id) => api.get(`/plast/customers/${id}/ledger`).then(unwrapData),
+  recordCustomerPayment: (customerId, data) => api.post(`/plast/customers/${customerId}/payments`, data).then(unwrapData),
 
   // Stock On-Hand
   getStockOnHand: (params) => api.get("/plast/inventory/stock", { params }).then(unwrapList),
@@ -57,6 +59,7 @@ export const plastApi = {
   createSale: (data) => api.post("/plast/sales", data).then(unwrapData),
 
   // Payments
+  getPayments: (params) => api.get("/plast/payments", { params }).then(unwrapList),
   recordPayment: (saleId, data) => api.post(`/plast/sales/${saleId}/payments`, data).then(unwrapData),
   getSalePayments: (saleId) => api.get(`/plast/sales/${saleId}/payments`).then(unwrapList),
   getPaymentsSummary: (params) => api.get("/plast/payments/summary", { params }).then(unwrapData),
