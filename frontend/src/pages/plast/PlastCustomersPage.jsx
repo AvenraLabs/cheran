@@ -821,7 +821,6 @@ export function PlastCustomersPage() {
                   <tr>
                     <th className="py-2.5 px-3">Date</th>
                     <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3">Description</th>
                     <th className="py-2.5 px-3 text-right">Debit (+)</th>
                     <th className="py-2.5 px-3 text-right">Credit (-)</th>
                     <th className="py-2.5 px-3 text-right">Running Balance</th>
@@ -850,14 +849,6 @@ export function PlastCustomersPage() {
                         >
                           {row.type}
                         </span>
-                      </td>
-                      <td className="py-2 px-3 text-[#14213D]">
-                        {row.description}
-                        {row.metadata?.reference_number && (
-                          <span className="text-[10px] font-mono text-[#8C97AB] ml-1">
-                            (Ref: {row.metadata.reference_number})
-                          </span>
-                        )}
                       </td>
                       <td className="py-2 px-3 text-right font-mono font-medium text-[#14213D]">
                         {row.debit > 0 ? formatCurrency(row.debit) : "—"}
