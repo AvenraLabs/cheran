@@ -85,3 +85,51 @@ input[type="number"] {
 ::-webkit-scrollbar-thumb:hover {
   background: #52607D;
 }
+
+/* Print styles for Plast Sales & Invoices */
+@media print {
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #14213D !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide everything on page by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Only show printable bill */
+  #printable-bill,
+  #printable-bill * {
+    visibility: visible;
+  }
+
+  #printable-bill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Hide buttons and navigation */
+  button,
+  .no-print,
+  header,
+  nav,
+  aside {
+    display: none !important;
+  }
+}

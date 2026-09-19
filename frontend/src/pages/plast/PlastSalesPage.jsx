@@ -27,6 +27,8 @@ import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoad
 import RecordPaymentModal from "../../components/plast/RecordPaymentModal.jsx";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext.jsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export function PlastSalesPage() {
   const { user } = useAuth();
@@ -37,6 +39,7 @@ export function PlastSalesPage() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const navigate = useNavigate();
 
   // Filters
@@ -102,12 +105,14 @@ export function PlastSalesPage() {
     return () => clearTimeout(timer);
   }, [search, customerId, paymentStatus, paymentMode, fromDate, toDate]);
 
+  // Format currency with NO decimals (.00 removed)
   const formatCurrency = (val) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      maximumFractionDigits: 2,
-    }).format(val || 0);
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(Math.round(Number(val) || 0));
   };
 
   const safeSales = Array.isArray(sales) ? sales : [];
@@ -117,6 +122,234 @@ export function PlastSalesPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleExportPDF = (sale) => {
+    if (!sale) return;
+    try {
+      setExportingPdf(true);
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Header Branding
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(47, 111, 94); // #2F6F5E
+      doc.text("CHERAN PLAST", 14, 18);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(82, 96, 125);
+      doc.text("PVC & Polymer Manufacturing Division", 14, 23);
+
+      // Invoice info top-right
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 33, 61);
+      doc.text(`INVOICE: ${sale.sale_number || ""}`, pageWidth - 14, 16, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(82, 96, 125);
+      doc.text(`Date: ${sale.sale_date || ""}`, pageWidth - 14, 21, { align: "right" });
+      const enteredBy = sale.creator?.username || sale.created_by_name || "admin";
+      doc.text(`Entered By: @${enteredBy}`, pageWidth - 14, 26, { align: "right" });
+
+      // Divider line
+      doc.setDrawColor(228, 225, 216);
+      doc.setLineWidth(0.5);
+      doc.line(14, 30, pageWidth - 14, 30);
+
+      // Customer / Billed To box
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 34, pageWidth - 28, 20, 2, 2, "F");
+      doc.setDrawColor(237, 234, 225);
+      doc.roundedRect(14, 34, pageWidth - 28, 20, 2, 2, "D");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(82, 96, 125);
+      doc.text("BILLED TO", 18, 39);
+      doc.text("PAYMENT STATUS", pageWidth - 18, 39, { align: "right" });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(20, 33, 61);
+      doc.text(sale.customer_name || "Cash Customer", 18, 45);
+
+      const bal = Math.round(Number(sale.balance_amount) || 0);
+      const isPaid = bal <= 0;
+      doc.setTextColor(isPaid ? 16 : 180, isPaid ? 130 : 60, isPaid ? 80 : 50);
+      doc.text(isPaid ? "PAID" : `BALANCE: Rs. ${bal.toLocaleString("en-IN")}`, pageWidth - 18, 45, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(82, 96, 125);
+      if (sale.customer_phone) {
+        doc.text(`Phone: ${sale.customer_phone}`, 18, 50);
+      }
+
+      // Line Items Table
+      const tableRows = (sale.items || []).map((it, idx) => {
+        const unitLabel = typeof it.unit === "object" ? (it.unit?.symbol || it.unit?.name || "") : (it.unit || "");
+        const qtyStr = `${Math.round(Number(it.quantity) || 0)} ${unitLabel}`.trim();
+        const priceNum = Math.round(Number(it.unit_price) || 0);
+        const lineTotalNum = Math.round(Number(it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0))));
+        return [
+          idx + 1,
+          it.item_name || "",
+          qtyStr,
+          `Rs. ${priceNum.toLocaleString("en-IN")}`,
+          `Rs. ${lineTotalNum.toLocaleString("en-IN")}`,
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 58,
+        head: [["#", "Item Description", "Qty", "Unit Price", "Total"]],
+        body: tableRows,
+        theme: "striped",
+        headStyles: {
+          fillColor: [47, 111, 94],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 9,
+          cellPadding: 3,
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: "auto" },
+          2: { cellWidth: 25, halign: "center" },
+          3: { cellWidth: 32, halign: "right" },
+          4: { cellWidth: 35, halign: "right", fontStyle: "bold" },
+        },
+        styles: {
+          fontSize: 8.5,
+          cellPadding: 2.8,
+          textColor: [20, 33, 61],
+        },
+        alternateRowStyles: {
+          fillColor: [250, 250, 248],
+        },
+      });
+
+      const finalY = doc.lastAutoTable.finalY + 6;
+
+      // Summary Breakdown Block (Right side)
+      const subVal = Math.round(Number(sale.subtotal) || 0);
+      const discVal = Math.round(Number(sale.discount_amount) || 0);
+      let discPct = 0;
+      if (sale.discount_type === "PERCENTAGE" && Number(sale.discount_value) > 0) {
+        discPct = Math.round(Number(sale.discount_value));
+      } else if (subVal > 0 && discVal > 0) {
+        discPct = Math.round((discVal / subVal) * 100);
+      }
+      const totalAfterDiscVal = Math.max(0, subVal - discVal);
+      const gstVal = Math.round(Number(sale.gst_amount) || 0);
+      const grandVal = Math.round(Number(sale.grand_total) || (totalAfterDiscVal + gstVal));
+      const paidVal = Math.round(Number(sale.paid_amount) || 0);
+      const balVal = Math.round(Number(sale.balance_amount) || Math.max(0, grandVal - paidVal));
+
+      const summaryLines = [
+        { label: "Subtotal:", value: `Rs. ${subVal.toLocaleString("en-IN")}` },
+      ];
+      if (discVal > 0) {
+        summaryLines.push({
+          label: `Discount (${discPct}%):`,
+          value: `-Rs. ${discVal.toLocaleString("en-IN")}`,
+          isDiscount: true,
+        });
+      }
+      summaryLines.push({
+        label: discVal > 0 ? "Total after Discount:" : "Total:",
+        value: `Rs. ${totalAfterDiscVal.toLocaleString("en-IN")}`,
+        isTotal: true,
+      });
+      if (gstVal > 0) {
+        summaryLines.push({
+          label: `GST (${sale.gst_rate}%):`,
+          value: `+Rs. ${gstVal.toLocaleString("en-IN")}`,
+        });
+        summaryLines.push({
+          label: "Grand Total:",
+          value: `Rs. ${grandVal.toLocaleString("en-IN")}`,
+          isGrand: true,
+        });
+      }
+      summaryLines.push({
+        label: "Amount Paid:",
+        value: `Rs. ${paidVal.toLocaleString("en-IN")}`,
+        isPaid: true,
+      });
+      summaryLines.push({
+        label: "Balance Due:",
+        value: `Rs. ${balVal.toLocaleString("en-IN")}`,
+        isBal: true,
+      });
+
+      // Draw payment ledger on left (if exists)
+      if (sale.payments && sale.payments.length > 0) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(20, 33, 61);
+        doc.text("PAYMENT LEDGER", 14, finalY);
+
+        const paymentRows = sale.payments.map((p) => [
+          p.payment_date || "",
+          p.payment_mode || "CASH",
+          `Rs. ${Math.round(Number(p.amount) || 0).toLocaleString("en-IN")}`,
+        ]);
+
+        autoTable(doc, {
+          startY: finalY + 2,
+          margin: { left: 14 },
+          tableWidth: 80,
+          head: [["Date", "Mode", "Amount"]],
+          body: paymentRows,
+          theme: "plain",
+          headStyles: {
+            fontSize: 7.5,
+            fillColor: [240, 243, 246],
+            textColor: [82, 96, 125],
+            fontStyle: "bold",
+            cellPadding: 1.5,
+          },
+          styles: { fontSize: 7.5, cellPadding: 1.5, textColor: [20, 33, 61] },
+        });
+      }
+
+      // Render summary on right side
+      const summaryBoxX = pageWidth - 90;
+      let sY = finalY;
+      summaryLines.forEach((line) => {
+        doc.setFont("helvetica", line.isTotal || line.isGrand ? "bold" : "normal");
+        doc.setFontSize(line.isTotal || line.isGrand ? 9.5 : 8.5);
+        if (line.isDiscount) doc.setTextColor(180, 83, 9);
+        else if (line.isPaid) doc.setTextColor(22, 101, 52);
+        else if (line.isBal && balVal > 0) doc.setTextColor(190, 24, 93);
+        else if (line.isTotal || line.isGrand) doc.setTextColor(47, 111, 94);
+        else doc.setTextColor(82, 96, 125);
+
+        doc.text(line.label, summaryBoxX, sY);
+        doc.text(line.value, pageWidth - 14, sY, { align: "right" });
+        sY += 5.5;
+      });
+
+      // Bottom footer note
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(140, 151, 171);
+      doc.text("Thank you for your business! · Cheran Plast", pageWidth / 2, 285, { align: "center" });
+
+      const safeNumber = (sale.sale_number || "Bill").replace(/[/\\?%*:|"<> ]/g, "_");
+      doc.save(`Cheran_Plast_Invoice_${safeNumber}.pdf`);
+      toast.success("PDF invoice downloaded successfully");
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to export PDF invoice");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const getStatusBadge = (sale) => {
@@ -527,43 +760,58 @@ export function PlastSalesPage() {
                   )}
                 </div>
 
-                <div className="w-64 space-y-1">
-                  <div className="flex justify-between text-[#52607D]">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(selectedSale.subtotal)}</span>
-                  </div>
-                  {Number(selectedSale.discount_amount) > 0 && (
-                    <div className="flex justify-between text-amber-800 font-medium">
-                      <span>
-                        Bill Discount
-                        {selectedSale.discount_type === "PERCENTAGE" && Number(selectedSale.discount_value) > 0
-                          ? ` (${selectedSale.discount_value}%)`
-                          : ""}:
-                      </span>
-                      <span>- {formatCurrency(selectedSale.discount_amount)}</span>
+                {(() => {
+                  const subVal = Math.round(Number(selectedSale.subtotal) || 0);
+                  const discVal = Math.round(Number(selectedSale.discount_amount) || 0);
+                  let discPct = 0;
+                  if (selectedSale.discount_type === "PERCENTAGE" && Number(selectedSale.discount_value) > 0) {
+                    discPct = Math.round(Number(selectedSale.discount_value));
+                  } else if (subVal > 0 && discVal > 0) {
+                    discPct = Math.round((discVal / subVal) * 100);
+                  }
+                  const totalAfterDiscVal = Math.max(0, subVal - discVal);
+                  const gstVal = Math.round(Number(selectedSale.gst_amount) || 0);
+                  const grandVal = Math.round(Number(selectedSale.grand_total) || (totalAfterDiscVal + gstVal));
+
+                  return (
+                    <div className="w-64 space-y-1">
+                      <div className="flex justify-between text-[#52607D]">
+                        <span>Subtotal:</span>
+                        <span>{formatCurrency(subVal)}</span>
+                      </div>
+                      {discVal > 0 && (
+                        <div className="flex justify-between text-amber-800 font-medium">
+                          <span>Discount ({discPct}%):</span>
+                          <span>-{formatCurrency(discVal)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-[#14213D] font-bold border-t border-[#EDEAE1] pt-1">
+                        <span>{discVal > 0 ? "Total after Discount:" : "Total:"}</span>
+                        <span className="font-mono">{formatCurrency(totalAfterDiscVal)}</span>
+                      </div>
+                      {gstVal > 0 && (
+                        <>
+                          <div className="flex justify-between text-[#52607D]">
+                            <span>GST ({selectedSale.gst_rate}%):</span>
+                            <span>+{formatCurrency(gstVal)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-sm text-[#14213D] border-t border-[#EDEAE1] pt-1.5">
+                            <span>Grand Total:</span>
+                            <span className="text-[#2F6F5E]">{formatCurrency(grandVal)}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
+                        <span>Amount Paid:</span>
+                        <span className="font-mono font-bold">{formatCurrency(selectedSale.paid_amount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-semibold text-rose-700 border-t border-dashed border-[#EDEAE1] pt-1">
+                        <span>Balance Due:</span>
+                        <span className="font-mono font-bold">{formatCurrency(selectedSale.balance_amount)}</span>
+                      </div>
                     </div>
-                  )}
-                  <div className="flex justify-between text-[#52607D]">
-                    <span>Taxable Amount:</span>
-                    <span>{formatCurrency(selectedSale.taxable_amount)}</span>
-                  </div>
-                  <div className="flex justify-between text-[#52607D]">
-                    <span>GST ({selectedSale.gst_rate}%):</span>
-                    <span>{formatCurrency(selectedSale.gst_amount)}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-sm text-[#14213D] border-t border-[#EDEAE1] pt-1.5">
-                    <span>Grand Total:</span>
-                    <span className="text-[#2F6F5E]">{formatCurrency(selectedSale.grand_total)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
-                    <span>Amount Paid:</span>
-                    <span className="font-mono font-bold">{formatCurrency(selectedSale.paid_amount)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-semibold text-rose-700 border-t border-dashed border-[#EDEAE1] pt-1">
-                    <span>Balance Due:</span>
-                    <span className="font-mono font-bold">{formatCurrency(selectedSale.balance_amount)}</span>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -586,6 +834,15 @@ export function PlastSalesPage() {
                   Record Payment
                 </Button>
               )}
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={FileText}
+                loading={exportingPdf}
+                onClick={() => handleExportPDF(selectedSale)}
+              >
+                Download PDF
+              </Button>
               <Button variant="primary" size="sm" icon={Printer} onClick={handlePrint}>
                 Print Receipt
               </Button>

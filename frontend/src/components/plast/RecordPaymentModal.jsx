@@ -33,8 +33,9 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      maximumFractionDigits: 2,
-    }).format(val || 0);
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(Math.round(Number(val) || 0));
   };
 
   const handleSubmit = async (e) => {

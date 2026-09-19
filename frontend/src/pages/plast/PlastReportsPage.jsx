@@ -104,8 +104,9 @@ export function PlastReportsPage() {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      maximumFractionDigits: 2,
-    }).format(val || 0);
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(Math.round(Number(val) || 0));
   };
 
   const exportToCSV = () => {
@@ -311,9 +312,9 @@ export function PlastReportsPage() {
               icon={DollarSign}
             />
             <MetricCard
-              title="Taxable Turnover"
+              title="Total Net Turnover"
               value={formatCurrency(summary.total_taxable_sales || 0)}
-              subtitle="Net taxable amount"
+              subtitle="Turnover after discount"
               icon={TrendingUp}
             />
             <MetricCard
@@ -418,7 +419,7 @@ export function PlastReportsPage() {
                         <th className="py-3 px-4">Customer</th>
                         <th className="py-3 px-3 text-right">Subtotal</th>
                         <th className="py-3 px-3 text-right">Discount</th>
-                        <th className="py-3 px-3 text-right">Taxable</th>
+                        <th className="py-3 px-3 text-right">Total</th>
                         <th className="py-3 px-3 text-right">GST</th>
                         <th className="py-3 px-4 text-right">Grand Total</th>
                       </tr>

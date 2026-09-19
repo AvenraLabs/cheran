@@ -5,6 +5,7 @@ import {
   Plus,
   Trash2,
   Printer,
+  FileText,
   ArrowLeft,
   UserCheck,
   CheckCircle,
@@ -15,6 +16,8 @@ import Button from "../../components/common/Button.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const GST_OPTIONS = [
   { rate: 0, label: "0% (Nil / Exempt)" },
@@ -28,6 +31,7 @@ export function PlastCreateSalePage() {
   const [itemsList, setItemsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Form
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split("T")[0]);
@@ -165,12 +169,211 @@ export function PlastCreateSalePage() {
   const isUnpaid = effectivePaidAmount === 0;
   const calculatedPaymentStatus = isFullyPaid ? "PAID" : isPartial ? "PARTIAL" : "UNPAID";
 
+  // Format currency with NO decimals (.00 removed)
   const formatCurrency = (val) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-      maximumFractionDigits: 2,
-    }).format(val || 0);
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format(Math.round(Number(val) || 0));
+  };
+
+  const handleExportPDF = (sale) => {
+    if (!sale) return;
+    try {
+      setExportingPdf(true);
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Header Branding
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(47, 111, 94); // #2F6F5E
+      doc.text("CHERAN PLAST", 14, 18);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(82, 96, 125);
+      doc.text("PVC & Polymer Manufacturing Division", 14, 23);
+
+      // Invoice info top-right
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 33, 61);
+      doc.text(`INVOICE: ${sale.sale_number || ""}`, pageWidth - 14, 16, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(82, 96, 125);
+      doc.text(`Date: ${sale.sale_date || ""}`, pageWidth - 14, 21, { align: "right" });
+      const enteredBy = sale.creator?.username || sale.created_by_name || "admin";
+      doc.text(`Entered By: @${enteredBy}`, pageWidth - 14, 26, { align: "right" });
+
+      // Divider line
+      doc.setDrawColor(228, 225, 216);
+      doc.setLineWidth(0.5);
+      doc.line(14, 30, pageWidth - 14, 30);
+
+      // Customer / Billed To box
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 34, pageWidth - 28, 20, 2, 2, "F");
+      doc.setDrawColor(237, 234, 225);
+      doc.roundedRect(14, 34, pageWidth - 28, 20, 2, 2, "D");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(82, 96, 125);
+      doc.text("BILLED TO", 18, 39);
+      doc.text("PAYMENT STATUS", pageWidth - 18, 39, { align: "right" });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(20, 33, 61);
+      doc.text(sale.customer_name || "Cash Customer", 18, 45);
+
+      const bal = Math.round(Number(sale.balance_amount) || 0);
+      const isPaid = bal <= 0;
+      doc.setTextColor(isPaid ? 16 : 180, isPaid ? 130 : 60, isPaid ? 80 : 50);
+      doc.text(isPaid ? "PAID" : `BALANCE: Rs. ${bal.toLocaleString("en-IN")}`, pageWidth - 18, 45, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(82, 96, 125);
+      if (sale.customer_phone) {
+        doc.text(`Phone: ${sale.customer_phone}`, 18, 50);
+      }
+
+      // Line Items Table
+      const tableRows = (sale.items || []).map((it, idx) => {
+        const unitLabel = typeof it.unit === "object" ? (it.unit?.symbol || it.unit?.name || "") : (it.unit || "");
+        const qtyStr = `${Math.round(Number(it.quantity) || 0)} ${unitLabel}`.trim();
+        const priceNum = Math.round(Number(it.unit_price) || 0);
+        const lineTotalNum = Math.round(Number(it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0))));
+        return [
+          idx + 1,
+          it.item_name || "",
+          qtyStr,
+          `Rs. ${priceNum.toLocaleString("en-IN")}`,
+          `Rs. ${lineTotalNum.toLocaleString("en-IN")}`,
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 58,
+        head: [["#", "Item Description", "Qty", "Unit Price", "Total"]],
+        body: tableRows,
+        theme: "striped",
+        headStyles: {
+          fillColor: [47, 111, 94],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 9,
+          cellPadding: 3,
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: "auto" },
+          2: { cellWidth: 25, halign: "center" },
+          3: { cellWidth: 32, halign: "right" },
+          4: { cellWidth: 35, halign: "right", fontStyle: "bold" },
+        },
+        styles: {
+          fontSize: 8.5,
+          cellPadding: 2.8,
+          textColor: [20, 33, 61],
+        },
+        alternateRowStyles: {
+          fillColor: [250, 250, 248],
+        },
+      });
+
+      const finalY = doc.lastAutoTable.finalY + 6;
+
+      // Summary Breakdown Block (Right side)
+      const subVal = Math.round(Number(sale.subtotal) || 0);
+      const discVal = Math.round(Number(sale.discount_amount) || 0);
+      let discPct = 0;
+      if (sale.discount_type === "PERCENTAGE" && Number(sale.discount_value) > 0) {
+        discPct = Math.round(Number(sale.discount_value));
+      } else if (subVal > 0 && discVal > 0) {
+        discPct = Math.round((discVal / subVal) * 100);
+      }
+      const totalAfterDiscVal = Math.max(0, subVal - discVal);
+      const gstVal = Math.round(Number(sale.gst_amount) || 0);
+      const grandVal = Math.round(Number(sale.grand_total) || (totalAfterDiscVal + gstVal));
+      const paidVal = Math.round(Number(sale.paid_amount) || 0);
+      const balVal = Math.round(Number(sale.balance_amount) || Math.max(0, grandVal - paidVal));
+
+      const summaryLines = [
+        { label: "Subtotal:", value: `Rs. ${subVal.toLocaleString("en-IN")}` },
+      ];
+      if (discVal > 0) {
+        summaryLines.push({
+          label: `Discount (${discPct}%):`,
+          value: `-Rs. ${discVal.toLocaleString("en-IN")}`,
+          isDiscount: true,
+        });
+      }
+      summaryLines.push({
+        label: discVal > 0 ? "Total after Discount:" : "Total:",
+        value: `Rs. ${totalAfterDiscVal.toLocaleString("en-IN")}`,
+        isTotal: true,
+      });
+      if (gstVal > 0) {
+        summaryLines.push({
+          label: `GST (${sale.gst_rate}%):`,
+          value: `+Rs. ${gstVal.toLocaleString("en-IN")}`,
+        });
+        summaryLines.push({
+          label: "Grand Total:",
+          value: `Rs. ${grandVal.toLocaleString("en-IN")}`,
+          isGrand: true,
+        });
+      }
+      summaryLines.push({
+        label: "Amount Paid:",
+        value: `Rs. ${paidVal.toLocaleString("en-IN")}`,
+        isPaid: true,
+      });
+      summaryLines.push({
+        label: "Balance Due:",
+        value: `Rs. ${balVal.toLocaleString("en-IN")}`,
+        isBal: true,
+      });
+
+      // Render summary on right side
+      const summaryBoxX = pageWidth - 90;
+      let sY = finalY;
+      summaryLines.forEach((line) => {
+        doc.setFont("helvetica", line.isTotal || line.isGrand ? "bold" : "normal");
+        doc.setFontSize(line.isTotal || line.isGrand ? 9.5 : 8.5);
+        if (line.isDiscount) doc.setTextColor(180, 83, 9);
+        else if (line.isPaid) doc.setTextColor(22, 101, 52);
+        else if (line.isBal && balVal > 0) doc.setTextColor(190, 24, 93);
+        else if (line.isTotal || line.isGrand) doc.setTextColor(47, 111, 94);
+        else doc.setTextColor(82, 96, 125);
+
+        doc.text(line.label, summaryBoxX, sY);
+        doc.text(line.value, pageWidth - 14, sY, { align: "right" });
+        sY += 5.5;
+      });
+
+      // Bottom footer note
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(140, 151, 171);
+      doc.text("Thank you for your business! · Cheran Plast", pageWidth / 2, 285, { align: "center" });
+
+      const safeNumber = (sale.sale_number || "Bill").replace(/[/\\?%*:|"<> ]/g, "_");
+      doc.save(`Cheran_Plast_Invoice_${safeNumber}.pdf`);
+      toast.success("PDF invoice downloaded successfully");
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to export PDF invoice");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -578,28 +781,32 @@ export function PlastCreateSalePage() {
                 {billDiscountAmt > 0 && (
                   <div className="flex justify-between text-amber-800 font-medium">
                     <span>
-                      Bill Discount {discountType === "PERCENTAGE" ? `(${rawDiscVal}%)` : ""}:
+                      Discount ({discountType === "PERCENTAGE" && rawDiscVal > 0 ? Math.round(rawDiscVal) : (subtotal > 0 ? Math.round((billDiscountAmt / subtotal) * 100) : 0)}%):
                     </span>
                     <span className="font-mono">-{formatCurrency(billDiscountAmt)}</span>
                   </div>
                 )}
 
-                <div className="flex justify-between text-[#52607D] border-t border-[#EDEAE1] pt-1.5">
-                  <span>Taxable Value:</span>
-                  <span className="font-mono font-semibold text-[#14213D]">{formatCurrency(taxableAmount)}</span>
+                <div className="flex justify-between text-[#14213D] font-bold border-t border-[#EDEAE1] pt-1.5">
+                  <span>{billDiscountAmt > 0 ? "Total after Discount:" : "Total:"}</span>
+                  <span className="font-mono">{formatCurrency(taxableAmount)}</span>
                 </div>
 
-                <div className="flex justify-between text-[#52607D]">
-                  <span>GST Amount ({gstRate}%):</span>
-                  <span className="font-mono">+{formatCurrency(gstAmount)}</span>
-                </div>
+                {gstRate > 0 && (
+                  <>
+                    <div className="flex justify-between text-[#52607D]">
+                      <span>GST Amount ({gstRate}%):</span>
+                      <span className="font-mono">+{formatCurrency(gstAmount)}</span>
+                    </div>
 
-                <div className="flex justify-between text-sm font-bold text-[#14213D] border-t border-[#EDEAE1] pt-2">
-                  <span>Grand Total:</span>
-                  <span className="text-[#2F6F5E] font-mono text-base font-black">
-                    {formatCurrency(grandTotal)}
-                  </span>
-                </div>
+                    <div className="flex justify-between text-sm font-bold text-[#14213D] border-t border-[#EDEAE1] pt-2">
+                      <span>Grand Total:</span>
+                      <span className="text-[#2F6F5E] font-mono text-base font-black">
+                        {formatCurrency(grandTotal)}
+                      </span>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex justify-between items-center text-xs font-semibold text-emerald-800 pt-1">
                   <span>Amount Paid:</span>
@@ -619,7 +826,7 @@ export function PlastCreateSalePage() {
                         : "bg-emerald-100 text-emerald-800"
                     }`}
                   >
-                    {balanceAmount > 0 ? formatCurrency(balanceAmount) : "Fully Paid"}
+                    {balanceAmount > 0 ? formatCurrency(balanceAmount) : "Paid"}
                   </span>
                 </div>
               </div>
@@ -652,63 +859,148 @@ export function PlastCreateSalePage() {
         </form>
       </main>
 
-      {/* Success Modal */}
+      {/* Success Bill Modal */}
       <Modal
         isOpen={Boolean(createdSale)}
         onClose={() => {
           setCreatedSale(null);
           navigate("/plast/sales");
         }}
-        title="Invoice Created Successfully"
-        size="md"
+        title={`Invoice Created: ${createdSale?.sale_number || ""}`}
+        size="lg"
       >
         {createdSale && (
-          <div className="text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-              <CheckCircle size={28} />
-            </div>
-
-            <div>
-              <div className="text-xs text-[#52607D]">Invoice Number</div>
-              <div className="text-base font-mono font-bold text-[#2F6F5E]">{createdSale.sale_number}</div>
-              <div className="text-sm font-bold text-[#14213D] mt-1">{createdSale.customer_name}</div>
-              <div className="text-xl font-mono font-black text-[#14213D] mt-2">
-                {formatCurrency(createdSale.grand_total)}
-              </div>
-            </div>
-
-            <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#EDEAE1] text-xs text-left space-y-1.5">
-              <div className="flex justify-between text-[#52607D]">
-                <span>Subtotal:</span>
-                <span className="font-mono">{formatCurrency(createdSale.subtotal)}</span>
-              </div>
-              {Number(createdSale.discount_amount) > 0 && (
-                <div className="flex justify-between text-amber-800 font-medium">
-                  <span>Discount Applied:</span>
-                  <span className="font-mono">-{formatCurrency(createdSale.discount_amount)}</span>
+          <div className="space-y-4">
+            <div id="printable-bill" className="p-4 bg-white rounded border border-[#E4E1D8] space-y-4 text-xs">
+              <div className="flex justify-between items-start border-b border-[#EDEAE1] pb-3">
+                <div>
+                  <h2 className="text-base font-bold text-[#2F6F5E]">CHERAN PLAST</h2>
+                  <p className="text-[10px] text-[#52607D]">PVC & Polymer Manufacturing Division</p>
                 </div>
-              )}
-              <div className="flex justify-between text-[#52607D]">
-                <span>Taxable Amount:</span>
-                <span className="font-mono">{formatCurrency(createdSale.taxable_amount)}</span>
-              </div>
-              <div className="flex justify-between text-[#52607D]">
-                <span>GST ({createdSale.gst_rate}%):</span>
-                <span className="font-mono">+{formatCurrency(createdSale.gst_amount)}</span>
-              </div>
-              <div className="flex justify-between text-emerald-700 font-semibold border-t border-[#EDEAE1] pt-1">
-                <span>Amount Paid:</span>
-                <span className="font-mono">{formatCurrency(createdSale.paid_amount)}</span>
-              </div>
-              {Number(createdSale.balance_amount) > 0 && (
-                <div className="flex justify-between text-rose-700 font-semibold">
-                  <span>Balance Due:</span>
-                  <span className="font-mono">{formatCurrency(createdSale.balance_amount)}</span>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-[#14213D]">{createdSale.sale_number}</div>
+                  <div className="text-[#52607D]">Date: {createdSale.sale_date}</div>
+                  <div className="text-[10px] text-[#52607D] mt-0.5">
+                    Entered By: <strong className="font-mono text-[#2F6F5E]">@{createdSale.creator?.username || createdSale.created_by_name || "admin"}</strong>
+                  </div>
                 </div>
+              </div>
+
+              <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#EDEAE1] flex justify-between items-start">
+                <div>
+                  <div className="text-[10px] font-bold text-[#52607D] uppercase">Billed To</div>
+                  <div className="text-sm font-bold text-[#14213D] mt-0.5">{createdSale.customer_name}</div>
+                  {createdSale.customer_phone && (
+                    <div className="text-xs text-[#52607D] font-mono">Phone: {createdSale.customer_phone}</div>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] font-bold text-[#52607D] uppercase">Payment Status</div>
+                  <div className="mt-1 font-bold text-xs">
+                    {Number(createdSale.balance_amount || 0) <= 0.01 ? (
+                      <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">Paid</span>
+                    ) : (
+                      <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                        Pending: {formatCurrency(createdSale.balance_amount)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Items in Invoice */}
+              {createdSale.items && createdSale.items.length > 0 && (
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D]">
+                    <tr>
+                      <th className="py-2 px-2">Item Name</th>
+                      <th className="py-2 px-2 text-center">Qty</th>
+                      <th className="py-2 px-2 text-right">Unit Price</th>
+                      <th className="py-2 px-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EDEAE1]">
+                    {createdSale.items.map((it, idx) => {
+                      const unitLabel = typeof it.unit === "object"
+                        ? (it.unit?.symbol || it.unit?.name || "")
+                        : (it.unit || "");
+                      const lineTotal = it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0));
+
+                      return (
+                        <tr key={idx}>
+                          <td className="py-2 px-2 font-medium">{it.item_name}</td>
+                          <td className="py-2 px-2 text-center font-mono">
+                            {it.quantity} {unitLabel}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono">{formatCurrency(it.unit_price)}</td>
+                          <td className="py-2 px-2 text-right font-mono font-bold text-[#14213D]">
+                            {formatCurrency(lineTotal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )}
+
+              {/* Summary Breakdown */}
+              <div className="flex justify-end pt-2 border-t border-[#EDEAE1]">
+                {(() => {
+                  const subVal = Math.round(Number(createdSale.subtotal) || 0);
+                  const discVal = Math.round(Number(createdSale.discount_amount) || 0);
+                  let discPct = 0;
+                  if (createdSale.discount_type === "PERCENTAGE" && Number(createdSale.discount_value) > 0) {
+                    discPct = Math.round(Number(createdSale.discount_value));
+                  } else if (subVal > 0 && discVal > 0) {
+                    discPct = Math.round((discVal / subVal) * 100);
+                  }
+                  const totalAfterDiscVal = Math.max(0, subVal - discVal);
+                  const gstVal = Math.round(Number(createdSale.gst_amount) || 0);
+                  const grandVal = Math.round(Number(createdSale.grand_total) || (totalAfterDiscVal + gstVal));
+
+                  return (
+                    <div className="w-64 space-y-1 text-xs">
+                      <div className="flex justify-between text-[#52607D]">
+                        <span>Subtotal:</span>
+                        <span>{formatCurrency(subVal)}</span>
+                      </div>
+                      {discVal > 0 && (
+                        <div className="flex justify-between text-amber-800 font-medium">
+                          <span>Discount ({discPct}%):</span>
+                          <span>-{formatCurrency(discVal)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-[#14213D] font-bold border-t border-[#EDEAE1] pt-1">
+                        <span>{discVal > 0 ? "Total after Discount:" : "Total:"}</span>
+                        <span className="font-mono">{formatCurrency(totalAfterDiscVal)}</span>
+                      </div>
+                      {gstVal > 0 && (
+                        <>
+                          <div className="flex justify-between text-[#52607D]">
+                            <span>GST ({createdSale.gst_rate}%):</span>
+                            <span>+{formatCurrency(gstVal)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-sm text-[#14213D] border-t border-[#EDEAE1] pt-1.5">
+                            <span>Grand Total:</span>
+                            <span className="text-[#2F6F5E]">{formatCurrency(grandVal)}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
+                        <span>Amount Paid:</span>
+                        <span className="font-mono font-bold">{formatCurrency(createdSale.paid_amount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-semibold text-rose-700 border-t border-dashed border-[#EDEAE1] pt-1">
+                        <span>Balance Due:</span>
+                        <span className="font-mono font-bold">{formatCurrency(createdSale.balance_amount)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
 
-            <div className="flex justify-center gap-2 pt-2 border-t border-[#EDEAE1]">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -720,12 +1012,21 @@ export function PlastCreateSalePage() {
                 Go to Sales Invoices
               </Button>
               <Button
+                variant="secondary"
+                size="sm"
+                icon={FileText}
+                loading={exportingPdf}
+                onClick={() => handleExportPDF(createdSale)}
+              >
+                Download PDF
+              </Button>
+              <Button
                 variant="primary"
                 size="sm"
                 icon={Printer}
                 onClick={() => window.print()}
               >
-                Print Slip
+                Print Receipt
               </Button>
             </div>
           </div>
