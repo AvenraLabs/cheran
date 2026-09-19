@@ -16,11 +16,16 @@ export async function previewProceedingExcel(req, res, next) {
       req.body.include_fittings !== undefined
         ? req.body.include_fittings
         : req.query.include_fittings;
+    const fundPercentageParam =
+      req.body.fund_percentage_value !== undefined
+        ? req.body.fund_percentage_value
+        : req.query.fund_percentage_value;
 
     const preview = await proceedingService.previewProceedingExcel(
       req.file.buffer,
       originalFilename,
-      includeFittingsParam !== undefined ? includeFittingsParam === "true" || includeFittingsParam === true : null
+      includeFittingsParam !== undefined ? includeFittingsParam === "true" || includeFittingsParam === true : null,
+      fundPercentageParam || null
     );
 
     res.json({

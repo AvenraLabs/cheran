@@ -497,7 +497,7 @@ export function CommissionProceedingsPage() {
 };
 
   // Handle File Select & Preview
-  const handleFileChange = async (file, overrideFittings = null) => {
+  const handleFileChange = async (file, overrideFittings = null, overrideFundPct = null) => {
     if (!file) return;
     setSelectedFile(file);
     setPreviewError("");
@@ -509,6 +509,9 @@ export function CommissionProceedingsPage() {
     data.append("file", file);
     if (overrideFittings !== null) {
       data.append("include_fittings", overrideFittings);
+    }
+    if (overrideFundPct !== null) {
+      data.append("fund_percentage_value", overrideFundPct);
     }
 
     try {
@@ -523,8 +526,8 @@ export function CommissionProceedingsPage() {
       setPreviewData(prev);
       setFormData((f) => ({
         ...f,
-        proceeding_no: prev.proceeding_no || `PROC-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
-        fund_percentage_value: prev.detected_fund_percentage || 55.0,
+        proceeding_no: prev.proceeding_no || f.proceeding_no || `PROC-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
+        fund_percentage_value: overrideFundPct !== null ? overrideFundPct : (prev.detected_fund_percentage || 55.0),
         include_fittings: prev.include_fittings,
       }));
     } catch (err) {
@@ -546,7 +549,8 @@ export function CommissionProceedingsPage() {
     const updatedRows = previewData.rows.map((r) => {
       const gstPct = parseFloat(r.gst_percentage ?? 12.0);
       const fitPct = parseFloat(r.fittings_percentage ?? 5.0);
-      const taxableEligible = r.subsidy_eligible_amount > 0 ? r.subsidy_eligible_amount / (1 + gstPct / 100) : 0;
+      const calculationGrossBase = (parseFloat(r.subsidy_eligible_amount || 0)) + (parseFloat(r.farmer_contribution || 0));
+      const taxableEligible = calculationGrossBase > 0 ? calculationGrossBase / (1 + gstPct / 100) : 0;
       const totalMatCost = taxableEligible > 0 ? Math.floor(taxableEligible / (1 + fitPct / 100)) : 0;
       const totalFit5pct = Math.floor(taxableEligible - totalMatCost);
 
@@ -951,6 +955,8 @@ export function CommissionProceedingsPage() {
                           ? "bg-indigo-700 text-white"
                           : previewData.detected_fund_percentage === 45
                           ? "bg-blue-700 text-white"
+                          : previewData.detected_fund_percentage === 60
+                          ? "bg-purple-700 text-white"
                           : "bg-[#2F6F5E] text-white"
                       }`}
                     >
@@ -978,45 +984,45 @@ export function CommissionProceedingsPage() {
 
                 {/* KPI Summary Strip */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
-                    <span className="text-[10px] text-[#52607D] uppercase font-semibold block">
-                      Total Subsidy Eligible (100%)
+                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#52607D]">
+                      Total Subsidy Base
                     </span>
                     <div className="text-xl font-bold font-mono text-[#14213D] mt-1">
-                      {formatRupees(previewData.summary.total_subsidy_eligible)}
+                      {formatRupees(previewData.summary.total_subsidy_amount)}
                     </div>
                     <div className="text-[11px] text-[#52607D] mt-0.5">
-                      Govt proceeding gross subsidy
+                      {previewData.summary.matched_count} linked projects
                     </div>
                   </div>
 
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
-                    <span className="text-[10px] text-[#52607D] uppercase font-semibold block">
-                      Total Material Cost
+                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#52607D]">
+                      Net Material Base
                     </span>
                     <div className="text-xl font-bold font-mono text-[#14213D] mt-1">
-                      {formatRupees(previewData.summary.total_material_cost)}
+                      {formatRupees(previewData.summary.total_net_material_base)}
                     </div>
                     <div className="text-[11px] text-[#52607D] mt-0.5">
-                      After GST & 5% fittings deduction
+                      Excl. GST & {formData.include_fittings ? "5% Fittings" : "Fittings"}
                     </div>
                   </div>
 
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
-                    <span className="text-[10px] text-[#2F6F5E] uppercase font-bold block">
-                      Now to be Released ({previewData.detected_fund_percentage}%)
+                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#52607D]">
+                      Dealer Commission
                     </span>
                     <div className="text-xl font-bold font-mono text-[#2F6F5E] mt-1">
-                      {formatRupees(previewData.summary.total_now_released)}
+                      {formatRupees(previewData.summary.total_dealer_commission)}
                     </div>
                     <div className="text-[11px] text-[#52607D] mt-0.5">
-                      Total tranche release value
+                      Avg Rate: {previewData.summary.total_net_material_base > 0 ? ((previewData.summary.total_dealer_commission / previewData.summary.total_net_material_base) * 100).toFixed(1) : 0}%
                     </div>
                   </div>
 
-                  <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
-                    <span className="text-[10px] text-emerald-700 uppercase font-bold block">
-                      Net Dealer Payout
+                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                      Total Net Payout
                     </span>
                     <div className="text-xl font-bold font-mono text-emerald-800 mt-1">
                       {formatRupees(previewData.summary.total_net_payout)}
@@ -1033,7 +1039,7 @@ export function CommissionProceedingsPage() {
                   </div>
                 </div>
 
-                {/* Batch Information Form Card with Fittings Checkbox */}
+                {/* Batch Information Form Card with Fittings Checkbox & Fund Release % */}
                 <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-5 shadow-[0_1px_2px_rgba(20,33,61,0.04)] space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EDEAE1] pb-3">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#14213D] flex items-center gap-2">
@@ -1041,21 +1047,44 @@ export function CommissionProceedingsPage() {
                       Proceeding Batch Information & Settings
                     </h3>
 
-                    {/* Fittings Checkbox Control */}
-                    <label className="flex items-center gap-2 cursor-pointer bg-[#FAFAF8] px-3 py-1.5 rounded-[8px] border border-[#E4E1D8] hover:border-[#2F6F5E] transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={formData.include_fittings}
-                        onChange={(e) => handleToggleFittings(e.target.checked)}
-                        className="w-4 h-4 text-[#2F6F5E] rounded focus:ring-[#2F6F5E]"
-                      />
-                      <div className="text-xs">
-                        <span className="font-bold text-[#14213D]">Include 5% Fittings Cost</span>
-                        <span className="text-[10px] text-[#52607D] ml-1.5 font-mono">
-                          {formData.include_fittings ? "(5% on Total Subsidy Amount)" : "(No Fittings)"}
-                        </span>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Fund Release % Selector */}
+                      <div className="flex items-center gap-2 bg-[#FAFAF8] px-3 py-1.5 rounded-[8px] border border-[#E4E1D8]">
+                        <span className="text-xs font-bold text-[#14213D]">Fund Release %:</span>
+                        <select
+                          value={formData.fund_percentage_value}
+                          onChange={(e) => {
+                            const newPct = parseFloat(e.target.value);
+                            setFormData((f) => ({ ...f, fund_percentage_value: newPct }));
+                            if (selectedFile) {
+                              handleFileChange(selectedFile, formData.include_fittings, newPct);
+                            }
+                          }}
+                          className="text-xs font-bold text-[#2F6F5E] bg-transparent border-none focus:outline-none cursor-pointer"
+                        >
+                          <option value="55">55% (1st Fund Release)</option>
+                          <option value="45">45% (2nd / Balance Release)</option>
+                          <option value="40">40% (2nd / Balance Release)</option>
+                          <option value="60">60% (1st Fund Release)</option>
+                        </select>
                       </div>
-                    </label>
+
+                      {/* Fittings Checkbox Control */}
+                      <label className="flex items-center gap-2 cursor-pointer bg-[#FAFAF8] px-3 py-1.5 rounded-[8px] border border-[#E4E1D8] hover:border-[#2F6F5E] transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={formData.include_fittings}
+                          onChange={(e) => handleToggleFittings(e.target.checked)}
+                          className="w-4 h-4 text-[#2F6F5E] rounded focus:ring-[#2F6F5E]"
+                        />
+                        <div className="text-xs">
+                          <span className="font-bold text-[#14213D]">Include 5% Fittings Cost</span>
+                          <span className="text-[10px] text-[#52607D] ml-1.5 font-mono">
+                            {formData.include_fittings ? "(5% on Total Subsidy Amount)" : "(No Fittings)"}
+                          </span>
+                        </div>
+                      </label>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1527,6 +1556,7 @@ export function CommissionProceedingsPage() {
                           { value: "40", label: "40% Release" },
                           { value: "45", label: "45% Release" },
                           { value: "55", label: "55% Release" },
+                          { value: "60", label: "60% Release" },
                         ]}
                         value={selectedFundPct}
                         onChange={(val) => setSelectedFundPct(val)}
@@ -1843,6 +1873,7 @@ export function CommissionProceedingsPage() {
                           { value: "55", label: "55% Release" },
                           { value: "45", label: "45% Release" },
                           { value: "40", label: "40% Release" },
+                          { value: "60", label: "60% Release" },
                         ]}
                         value={selectedFundPct}
                         onChange={(val) => setSelectedFundPct(val)}

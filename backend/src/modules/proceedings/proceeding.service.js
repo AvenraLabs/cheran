@@ -31,10 +31,12 @@ const FIRST_FUND_STATUSES = [
 export async function previewProceedingExcel(
   fileBuffer,
   originalFilename = "proceeding.xls",
-  includeFittingsOverride = null
+  includeFittingsOverride = null,
+  fundPercentageOverride = null
 ) {
-  const parsed = parseProceedingExcel(fileBuffer, originalFilename);
+  const parsed = parseProceedingExcel(fileBuffer, originalFilename, fundPercentageOverride);
   const { detected_fund_percentage, rows, file_name, proceeding_no: extractedProcNo } = parsed;
+  const effectiveFundPct = fundPercentageOverride ? parseFloat(fundPercentageOverride) : detected_fund_percentage;
 
   const appIds = rows.map((r) => r.application_id.trim().toUpperCase());
   const uniqueAppIds = [...new Set(appIds)];
@@ -69,6 +71,34 @@ export async function previewProceedingExcel(
     }
   }
 
+  // Pre-load farmer contribution & financial baseline from ANY previous proceeding batch projects for these application IDs
+  const prevBatchProjects = await ProceedingBatchProject.findAll({
+    where: {
+      application_id: { [Op.in]: uniqueAppIds },
+    },
+    attributes: [
+      "application_id",
+      "farmer_contribution",
+      "subsidy_amount",
+      "state_restricted_amount",
+      "total_material_cost",
+    ],
+    order: [["created_at", "DESC"]],
+  });
+
+  const prevBatchMap = new Map();
+  for (const bp of prevBatchProjects) {
+    const key = bp.application_id.trim().toUpperCase();
+    if (!prevBatchMap.has(key)) {
+      prevBatchMap.set(key, bp);
+    } else {
+      const existing = prevBatchMap.get(key);
+      if (parseFloat(bp.farmer_contribution || 0) > parseFloat(existing.farmer_contribution || 0)) {
+        prevBatchMap.set(key, bp);
+      }
+    }
+  }
+
   // Pre-load status history for matched projects to evaluate Milestone 1 & 2 SLA delay
   const histories =
     matchedProjectIds.length > 0
@@ -87,7 +117,7 @@ export async function previewProceedingExcel(
   }
 
   // Auto-detect whether fittings should be included (55% or 60% first fund = true, 40% or 45% second fund = false)
-  const isFirstFund = detected_fund_percentage >= 50.0;
+  const isFirstFund = effectiveFundPct >= 50.0;
   const includeFittings =
     includeFittingsOverride !== null && includeFittingsOverride !== undefined
       ? includeFittingsOverride === true || includeFittingsOverride === "true"
@@ -108,6 +138,7 @@ export async function previewProceedingExcel(
   for (const row of rows) {
     const key = row.application_id.trim().toUpperCase();
     const proj = projectMap.get(key);
+    const prevBatchItem = prevBatchMap.get(key);
 
     const isMatched = Boolean(proj);
     if (!isMatched) {
@@ -122,22 +153,35 @@ export async function previewProceedingExcel(
     const invoiceDate = proj?.invoice_date || row.invoice_date || null;
     const rawInvoiceAmount = Math.floor(parseFloat(row.invoice_amount || proj?.invoice_amount || 0));
 
-    // Farmer contribution (from Excel or DB)
-    const rawFarmerContribution = Math.floor(parseFloat(row.farmer_contribution || proj?.farmer_contribution || 0));
+    // Farmer contribution: Resolve across (1) Excel row, (2) DB GovernmentProject, (3) Any previous proceeding batch
+    const rawFarmerContribution = Math.floor(
+      parseFloat(
+        (parseFloat(row.farmer_contribution) > 0 ? row.farmer_contribution : null) ||
+        (parseFloat(proj?.farmer_contribution) > 0 ? proj.farmer_contribution : null) ||
+        (parseFloat(prevBatchItem?.farmer_contribution) > 0 ? prevBatchItem.farmer_contribution : null) ||
+        0
+      )
+    );
 
-    // Rule: Add farmer contribution to invoice amount across ALL fund releases (not just 55% / 1st fund)
+    // Rule: Add farmer contribution to invoice amount across ALL fund releases (40%, 45%, 55%, 60%)
     const effectiveInvoiceAmount = rawFarmerContribution > 0
       ? rawInvoiceAmount + rawFarmerContribution
       : rawInvoiceAmount;
 
-    // Subsidy Eligible Amount (from Excel or DB)
+    // Subsidy Eligible Amount (from Excel, DB Project, or previous batch)
     const rawSubsidyEligible = Math.floor(
-      row.subsidy_eligible_amount > 0
-        ? row.subsidy_eligible_amount
-        : parseFloat(proj?.state_restricted_amount || proj?.quotation_subsidy_amount || rawInvoiceAmount || 0)
+      parseFloat(
+        (parseFloat(row.subsidy_eligible_amount) > 0 ? row.subsidy_eligible_amount : null) ||
+        (parseFloat(proj?.state_restricted_amount) > 0 ? proj.state_restricted_amount : null) ||
+        (parseFloat(prevBatchItem?.subsidy_amount) > 0 ? prevBatchItem.subsidy_amount : null) ||
+        (parseFloat(prevBatchItem?.state_restricted_amount) > 0 ? prevBatchItem.state_restricted_amount : null) ||
+        (parseFloat(proj?.quotation_subsidy_amount) > 0 ? proj.quotation_subsidy_amount : null) ||
+        rawInvoiceAmount ||
+        0
+      )
     );
 
-    // Rule: When calculating material cost, gross base always includes farmer contribution across all fund releases
+    // Rule: When calculating material cost, gross base ALWAYS includes farmer contribution across all fund releases (40, 45, 55, 60)
     const calculationGrossBase = rawFarmerContribution > 0
       ? rawSubsidyEligible + rawFarmerContribution
       : rawSubsidyEligible;
@@ -165,7 +209,7 @@ export async function previewProceedingExcel(
 
     // 2. Released Tranche Calculations (Main Base for Dealer Commission)
     // Net Material Base for this milestone tranche = (Total Material Cost * Fund Release %) / 100
-    const fundPct = detected_fund_percentage || 55.0;
+    const fundPct = effectiveFundPct || 55.0;
     const releasedNetMaterial = Math.floor((totalMaterialCost * fundPct) / 100.0);
     const calculatedGst = Math.floor(calculationGrossBase - taxableEligible);
 
@@ -230,15 +274,17 @@ export async function previewProceedingExcel(
         if (ffDate && jvDate) {
           delayDays = Math.max(0, calculateDaysBetween(ffDate, jvDate));
           if (delayDays > 45) {
-            penaltyPoints = Math.floor(delayDays / 45); // 1% per 45-day block
+            penaltyPoints = Math.floor(delayDays / 45);
           }
         }
       }
     }
 
-    const commissionAmount = Math.floor(releasedNetMaterial * (dealerBaseRate / 100));
-    const penaltyAmount = Math.floor(releasedNetMaterial * (penaltyPoints / 100));
-    const netDealerPayout = Math.max(0, commissionAmount + fittingsAmount - penaltyAmount);
+    // Commission and penalty calculations from Net Material Base (all integer rounded)
+    const commissionAmount = Math.floor((releasedNetMaterial * dealerBaseRate) / 100);
+    const penaltyAmount = Math.floor((releasedNetMaterial * penaltyPoints) / 100);
+    const netDealerCommission = Math.max(0, commissionAmount - penaltyAmount);
+    const netDealerPayout = Math.max(0, netDealerCommission + fittingsAmount);
 
     totalSubsidyEligible += rawSubsidyEligible;
     totalFarmerContributionSum += rawFarmerContribution;
@@ -294,7 +340,7 @@ export async function previewProceedingExcel(
 
   return {
     file_name,
-    detected_fund_percentage,
+    detected_fund_percentage: effectiveFundPct,
     include_fittings: includeFittings,
     proceeding_no: extractedProcNo,
     total_rows_count: rows.length,
@@ -330,7 +376,12 @@ export async function importProceedingBatch({
   payment_received_ref = null,
   notes = null,
 }) {
-  const preview = await previewProceedingExcel(file_buffer, original_filename, include_fittings);
+  const preview = await previewProceedingExcel(
+    file_buffer,
+    original_filename,
+    include_fittings,
+    fund_percentage_value
+  );
 
   const finalProcNo =
     (proceeding_no && proceeding_no.trim()) ||
@@ -385,7 +436,23 @@ export async function importProceedingBatch({
       { transaction: t }
     );
 
-    // 2. Create ProceedingBatchProjects
+    // 2. Synchronize farmer_contribution back to GovernmentProject if missing
+    for (const r of rowsToSave) {
+      if (r.farmer_contribution > 0 && r.application_id) {
+        await GovernmentProject.update(
+          { farmer_contribution: r.farmer_contribution },
+          {
+            where: {
+              application_id: r.application_id,
+              [Op.or]: [{ farmer_contribution: 0 }, { farmer_contribution: null }],
+            },
+            transaction: t,
+          }
+        ).catch(() => {});
+      }
+    }
+
+    // 3. Create ProceedingBatchProjects
     const batchProjectsPayload = rowsToSave.map((r, idx) => ({
       proceeding_batch_id: batch.id,
       row_index: r.row_index !== undefined && r.row_index !== null ? r.row_index : (idx + 1),
@@ -688,8 +755,17 @@ export async function recalculateProceedingBatch(id) {
   if (!batch) throw new AppError("Proceeding batch not found", 404);
 
   const matchedProjectIds = batch.projects.map((p) => p.project_id).filter(Boolean);
+  const matchedAppIds = batch.projects.map((p) => p.application_id.trim().toUpperCase());
+
   const matchedProjects = await GovernmentProject.findAll({
-    where: { id: { [Op.in]: matchedProjectIds } },
+    where: {
+      [Op.or]: [
+        { id: { [Op.in]: matchedProjectIds } },
+        db.where(db.fn("UPPER", db.col("GovernmentProject.application_id")), {
+          [Op.in]: matchedAppIds,
+        }),
+      ],
+    },
     include: [
       {
         model: Dealer,
@@ -706,12 +782,46 @@ export async function recalculateProceedingBatch(id) {
     ],
   });
 
-  const projectMap = new Map(matchedProjects.map((p) => [p.id, p]));
+  const projectMap = new Map();
+  for (const p of matchedProjects) {
+    if (p.id) projectMap.set(p.id, p);
+    if (p.application_id) projectMap.set(p.application_id.trim().toUpperCase(), p);
+  }
 
+  // Pre-load farmer contribution & baseline subsidy from ANY other proceeding batch projects for these application IDs
+  const otherBatchProjects = await ProceedingBatchProject.findAll({
+    where: {
+      application_id: { [Op.in]: matchedAppIds },
+      farmer_contribution: { [Op.gt]: 0 },
+    },
+    attributes: [
+      "application_id",
+      "farmer_contribution",
+      "subsidy_amount",
+      "state_restricted_amount",
+      "total_material_cost",
+    ],
+    order: [["created_at", "DESC"]],
+  });
+
+  const otherBatchMap = new Map();
+  for (const ob of otherBatchProjects) {
+    const k = ob.application_id.trim().toUpperCase();
+    if (!otherBatchMap.has(k)) {
+      otherBatchMap.set(k, ob);
+    } else {
+      const existing = otherBatchMap.get(k);
+      if (parseFloat(ob.farmer_contribution || 0) > parseFloat(existing.farmer_contribution || 0)) {
+        otherBatchMap.set(k, ob);
+      }
+    }
+  }
+
+  const allProjectIds = matchedProjects.map((p) => p.id);
   const histories =
-    matchedProjectIds.length > 0
+    allProjectIds.length > 0
       ? await GovernmentProjectStatusHistory.findAll({
-          where: { project_id: { [Op.in]: matchedProjectIds } },
+          where: { project_id: { [Op.in]: allProjectIds } },
           order: [["status_date", "ASC"]],
         })
       : [];
@@ -731,7 +841,9 @@ export async function recalculateProceedingBatch(id) {
 
   await db.transaction(async (t) => {
     for (const item of batch.projects) {
-      const proj = item.project_id ? projectMap.get(item.project_id) : null;
+      const key = item.application_id.trim().toUpperCase();
+      const proj = (item.project_id ? projectMap.get(item.project_id) : null) || projectMap.get(key) || null;
+      const otherBatch = otherBatchMap.get(key);
       const dealer = proj?.dealer || null;
       const invoiceDate = proj?.invoice_date || item.invoice_date || null;
 
@@ -749,8 +861,15 @@ export async function recalculateProceedingBatch(id) {
       const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);
       const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
 
-      // Farmer contribution from item or linked DB project
-      const rawFarmerContribution = Math.floor(parseFloat(item.farmer_contribution || proj?.farmer_contribution || 0));
+      // Farmer contribution: resolve across (1) current item, (2) linked GovernmentProject, (3) other batches
+      const rawFarmerContribution = Math.floor(
+        parseFloat(
+          (parseFloat(item.farmer_contribution) > 0 ? item.farmer_contribution : null) ||
+          (parseFloat(proj?.farmer_contribution) > 0 ? proj.farmer_contribution : null) ||
+          (parseFloat(otherBatch?.farmer_contribution) > 0 ? otherBatch.farmer_contribution : null) ||
+          0
+        )
+      );
 
       const rawInvoiceAmount = Math.floor(parseFloat(proj?.invoice_amount || item.invoice_amount || 0));
       const effectiveInvoiceAmount = rawFarmerContribution > 0
@@ -758,19 +877,27 @@ export async function recalculateProceedingBatch(id) {
         : rawInvoiceAmount;
 
       const rawSubsidyEligible = Math.floor(
-        parseFloat(item.subsidy_amount || item.state_restricted_amount || proj?.state_restricted_amount || 0)
+        parseFloat(
+          (parseFloat(item.subsidy_amount) > 0 ? item.subsidy_amount : null) ||
+          (parseFloat(item.state_restricted_amount) > 0 ? item.state_restricted_amount : null) ||
+          (parseFloat(proj?.state_restricted_amount) > 0 ? proj.state_restricted_amount : null) ||
+          (parseFloat(otherBatch?.subsidy_amount) > 0 ? otherBatch.subsidy_amount : null) ||
+          (parseFloat(otherBatch?.state_restricted_amount) > 0 ? otherBatch.state_restricted_amount : null) ||
+          (parseFloat(proj?.quotation_subsidy_amount) > 0 ? proj.quotation_subsidy_amount : null) ||
+          rawInvoiceAmount ||
+          0
+        )
       );
 
-      // Gross calculation base always includes farmer contribution across all fund releases
+      // Gross calculation base ALWAYS includes farmer contribution across all fund releases (40%, 45%, 55%, 60%)
       const calculationGrossBase = rawFarmerContribution > 0
         ? rawSubsidyEligible + rawFarmerContribution
         : rawSubsidyEligible;
 
       const nowToBeReleased = Math.floor(parseFloat(item.now_to_be_released_amount || item.fund_share_amount || 0));
-
       const fundPct = batch.fund_percentage_value || 55.0;
 
-      // 1. Total Project Material Cost
+      // 1. Total Project Material Cost (Calculated from Gross Calculation Base)
       // Sequentially back out GST percentage (/ 1 + GST%), then back out 5% fittings (/ 1 + Fittings%)
       const taxableEligible = calculationGrossBase > 0 ? calculationGrossBase / (1 + gstPct / 100) : 0;
       const totalMaterialCost = taxableEligible > 0 ? Math.floor(taxableEligible / (1 + fittingsPct / 100)) : 0;
@@ -833,11 +960,12 @@ export async function recalculateProceedingBatch(id) {
         }
       }
 
-      const commissionAmt = Math.floor(releasedNetMaterial * (dealerBaseRate / 100));
-      const penaltyAmt = Math.floor(releasedNetMaterial * (penaltyPoints / 100));
+      const commissionAmt = Math.floor((releasedNetMaterial * dealerBaseRate) / 100);
+      const penaltyAmt = Math.floor((releasedNetMaterial * penaltyPoints) / 100);
 
       item.invoice_amount = effectiveInvoiceAmount;
       item.farmer_contribution = rawFarmerContribution;
+      item.subsidy_amount = rawSubsidyEligible;
       item.total_material_cost = totalMaterialCost;
       item.gst_percentage = gstPct;
       item.fittings_percentage = fittingsPct;
@@ -852,6 +980,22 @@ export async function recalculateProceedingBatch(id) {
       item.penalty_percentage = penaltyPoints;
       item.penalty_amount = penaltyAmt;
       item.adjusted_penalty_amount = penaltyAmt;
+
+      // Link project_id if it was unlinked
+      if (!item.project_id && proj?.id) {
+        item.project_id = proj.id;
+      }
+      if (!item.dealer_id && dealer?.id) {
+        item.dealer_id = dealer.id;
+      }
+
+      // Sync farmer_contribution to government_projects if missing
+      if (rawFarmerContribution > 0 && proj && (!proj.farmer_contribution || parseFloat(proj.farmer_contribution) === 0)) {
+        await GovernmentProject.update(
+          { farmer_contribution: rawFarmerContribution },
+          { where: { id: proj.id }, transaction: t }
+        ).catch(() => {});
+      }
 
       await item.save({ transaction: t });
 
@@ -873,6 +1017,20 @@ export async function recalculateProceedingBatch(id) {
  * Recalculate financial amounts for ALL saved proceeding batches
  */
 export async function recalculateAllProceedingBatches() {
+  // Pre-sync: backfill farmer_contribution on government_projects from any proceeding_batch_projects where farmer_contribution > 0
+  await db.query(`
+    UPDATE government_projects gp
+    SET farmer_contribution = bp.max_fc
+    FROM (
+      SELECT application_id, MAX(farmer_contribution) as max_fc
+      FROM proceeding_batch_projects
+      WHERE farmer_contribution > 0
+      GROUP BY application_id
+    ) bp
+    WHERE UPPER(gp.application_id) = UPPER(bp.application_id)
+      AND (gp.farmer_contribution IS NULL OR gp.farmer_contribution = 0);
+  `).catch((err) => console.warn("Pre-sync farmer_contribution warning:", err.message));
+
   const batches = await ProceedingBatch.findAll({
     attributes: ["id", "proceeding_no", "proceeding_date"],
     order: [["proceeding_date", "ASC"], ["created_at", "ASC"]],

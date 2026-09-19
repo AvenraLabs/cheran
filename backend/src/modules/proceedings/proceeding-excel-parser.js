@@ -6,7 +6,7 @@ import AppError from "../../shared/appError.js";
  * Parses government proceeding Excel files (.xls, .xlsx)
  * Supports 40%, 45%, and 55% proceeding structures.
  */
-export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls") {
+export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls", overrideFundPercentage = null) {
   if (!buffer || buffer.length === 0) {
     throw new AppError("Uploaded Excel file is empty", 400);
   }
@@ -32,51 +32,103 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
 
   const headers = Object.keys(rawRows[0] || {});
 
+  // Helper to normalize header string for fuzzy matching
+  const cleanHeader = (str) =>
+    (str || "")
+      .toLowerCase()
+      .replace(/[_\-\.]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
   // 1. Detect Fund Percentage and the "Now to be Released" column
-  let detectedPercentage = 55.0; // default fallback
+  let detectedPercentage = overrideFundPercentage ? parseFloat(overrideFundPercentage) : 55.0;
   let releasedCol = null;
 
-  for (const h of headers) {
-    const norm = h.toLowerCase().trim();
-    if (
-      norm.includes("balance 40%") ||
-      norm.includes("40% subsidy amount now to be released") ||
-      (norm.includes("40%") && norm.includes("released"))
-    ) {
-      detectedPercentage = 40.0;
-      releasedCol = h;
-      break;
-    } else if (
-      norm.includes("55% subsidy amount now to be released") ||
-      norm.includes("55% subsidy amount") ||
-      (norm.includes("55%") && norm.includes("released"))
-    ) {
-      detectedPercentage = 55.0;
-      releasedCol = h;
-      break;
-    } else if (
-      norm.includes("balance fund subsidy amount") ||
-      (norm.includes("45%") && norm.includes("released")) ||
-      norm.includes("balance 45%")
-    ) {
-      detectedPercentage = 45.0;
-      releasedCol = h;
-      break;
+  if (!overrideFundPercentage) {
+    // Scan headers to detect tranche % (checking 60%, 40%, 45%, 55%)
+    for (const h of headers) {
+      const norm = cleanHeader(h);
+      if (
+        norm.includes("60%") ||
+        norm.includes("60 %") ||
+        norm.includes("60 percent") ||
+        (norm.includes("60") && norm.includes("released")) ||
+        (norm.includes("60") && norm.includes("subsidy")) ||
+        norm.includes("sparsh 60")
+      ) {
+        detectedPercentage = 60.0;
+        releasedCol = h;
+        break;
+      } else if (
+        norm.includes("40%") ||
+        norm.includes("40 %") ||
+        norm.includes("40 percent") ||
+        norm.includes("balance 40") ||
+        (norm.includes("40") && norm.includes("released")) ||
+        (norm.includes("40") && norm.includes("subsidy")) ||
+        norm.includes("sparsh 40")
+      ) {
+        detectedPercentage = 40.0;
+        releasedCol = h;
+        break;
+      } else if (
+        norm.includes("45%") ||
+        norm.includes("45 %") ||
+        norm.includes("45 percent") ||
+        norm.includes("balance 45") ||
+        (norm.includes("45") && norm.includes("released")) ||
+        (norm.includes("45") && norm.includes("subsidy")) ||
+        norm.includes("balance fund subsidy") ||
+        norm.includes("balance fund")
+      ) {
+        detectedPercentage = 45.0;
+        releasedCol = h;
+        break;
+      } else if (
+        norm.includes("55%") ||
+        norm.includes("55 %") ||
+        norm.includes("55 percent") ||
+        norm.includes("first fund 55") ||
+        (norm.includes("55") && norm.includes("released")) ||
+        (norm.includes("55") && norm.includes("subsidy"))
+      ) {
+        detectedPercentage = 55.0;
+        releasedCol = h;
+        break;
+      }
+    }
+
+    // Secondary fallback from filename if headers lacked clear % indicators
+    if (!releasedCol || detectedPercentage === 55.0) {
+      const fname = originalFilename.toLowerCase();
+      if (fname.includes("60%") || fname.includes("60pct") || fname.includes("60_") || fname.includes("60-") || fname.includes("60.")) {
+        detectedPercentage = 60.0;
+      } else if (fname.includes("40%") || fname.includes("40pct") || fname.includes("40_") || fname.includes("40-") || fname.includes("40.")) {
+        detectedPercentage = 40.0;
+      } else if (fname.includes("45%") || fname.includes("45pct") || fname.includes("45_") || fname.includes("45-") || fname.includes("45.")) {
+        detectedPercentage = 45.0;
+      } else if (fname.includes("55%") || fname.includes("55pct") || fname.includes("55_") || fname.includes("55-") || fname.includes("55.")) {
+        detectedPercentage = 55.0;
+      }
     }
   }
 
   // Secondary fallback for released column if not matched above
   if (!releasedCol) {
     for (const h of headers) {
-      const norm = h.toLowerCase().trim();
+      const norm = cleanHeader(h);
       if (
         norm.includes("now to be released") ||
-        norm.includes("balance fund subsidy") ||
         norm.includes("amount now to be released") ||
-        norm.includes("released in rs")
+        norm.includes("balance fund subsidy") ||
+        norm.includes("released in rs") ||
+        norm.includes("subsidy released") ||
+        norm.includes("now released") ||
+        norm.includes("amount released")
       ) {
         releasedCol = h;
-        if (norm.includes("40")) detectedPercentage = 40.0;
+        if (norm.includes("60")) detectedPercentage = 60.0;
+        else if (norm.includes("40")) detectedPercentage = 40.0;
         else if (norm.includes("45")) detectedPercentage = 45.0;
         else if (norm.includes("55")) detectedPercentage = 55.0;
         break;
@@ -84,16 +136,16 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
     }
   }
 
-  // 2. Identify remaining column mappings dynamically
+  // 2. Identify remaining column mappings dynamically with robust normalization
   const findCol = (patterns) => {
     for (const h of headers) {
-      const norm = h.toLowerCase().trim();
-      if (patterns.some((p) => norm.includes(p))) return h;
+      const norm = cleanHeader(h);
+      if (patterns.some((p) => norm.includes(cleanHeader(p)))) return h;
     }
     return null;
   };
 
-  const appIdCol = findCol(["application id", "app id", "appl id"]);
+  const appIdCol = findCol(["application id", "app id", "appl id", "application number", "application no"]);
   if (!appIdCol) {
     throw new AppError(
       "Missing mandatory column: 'Application ID' not found in uploaded Excel file headers.",
@@ -101,43 +153,69 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
     );
   }
 
-  const farmerNameCol = findCol(["name of the farmer", "farmer name", "beneficiary name", "farmer"]);
-  const districtCol = findCol(["district"]);
-  const blockCol = findCol(["block", "taluk"]);
-  const villageCol = findCol(["village"]);
-  const invoiceDateCol = findCol(["invoice date"]);
-  const invoiceNoCol = findCol(["invoice no", "invoice number"]);
+  const farmerNameCol = findCol(["name of the farmer", "farmer name", "beneficiary name", "farmer", "beneficiary"]);
+  const districtCol = findCol(["district", "district name"]);
+  const blockCol = findCol(["block", "taluk", "block name"]);
+  const villageCol = findCol(["village", "revenue village", "village name"]);
+  const invoiceDateCol = findCol(["invoice date", "inv date", "date of invoice"]);
+  const invoiceNoCol = findCol(["invoice no", "invoice number", "inv no", "bill no"]);
   const subsidyEligibleCol = findCol([
     "subsidy eligible amount (in rs)",
+    "subsidy eligible amount in rs",
     "subsidy eligible amount",
+    "subsidy eligible",
     "state restricted amount (in rs)",
+    "state restricted amount in rs",
     "state restricted amount",
+    "state restricted",
+    "quotation subsidy amount",
+    "quotation subsidy",
+    "total subsidy amount",
     "invoice amount (in rs)",
+    "invoice amount in rs",
     "invoice amount",
   ]);
-  const invoiceAmtCol = findCol(["invoice amount (in rs)", "invoice amount"]);
+  const invoiceAmtCol = findCol([
+    "invoice amount (in rs)",
+    "invoice amount in rs",
+    "invoice amount",
+    "total invoice amount",
+    "inv amount",
+    "invoice value",
+  ]);
   const gstAmtCol = findCol([
     "gst amount",
     "adll state share gst amount",
     "addl state share gst amount",
     "gst amount in rs",
+    "gst amount rs",
   ]);
-  const goiShareCol = findCol(["goi share amount", "goi share"]);
-  const stateShareCol = findCol(["state share amount", "state share"]);
+  const goiShareCol = findCol(["goi share amount", "goi share", "central share amount", "central share"]);
+  const stateShareCol = findCol(["state share amount", "state share", "tn share amount"]);
   const addlStateShareCol = findCol(["addl state share amount", "addl state share", "additional state share"]);
   const proceedingNoCol = findCol(["proceeding no.", "proceeding no", "proceeding number", "proceedings no"]);
-  const utrNoCol = findCol(["utr no", "utr number", "treasury utr no"]);
+  const utrNoCol = findCol(["utr no", "utr number", "treasury utr no", "first fund utr no"]);
   const utrDateCol = findCol(["utr date", "first fund utr date", "treasury utr date"]);
   const farmerContribCol = findCol([
     "farmer contribution (in rs)",
+    "farmer contribution in rs",
+    "farmer contribution rs 25",
     "farmer contribution rs",
+    "farmer contribution 25",
     "farmer contribution",
     "farmer share amount",
+    "farmer share in rs",
+    "farmer share rs",
     "farmer share",
     "beneficiary contribution",
+    "beneficiary share",
     "fc amount (in rs)",
+    "fc amount in rs",
+    "fc amount rs",
     "fc amount",
     "fc amt",
+    "fc rs",
+    "fc",
   ]);
 
   let firstProceedingNo = null;
