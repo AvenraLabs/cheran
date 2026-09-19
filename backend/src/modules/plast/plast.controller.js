@@ -209,6 +209,10 @@ export const createProductionEntry = async (req, res, next) => {
 // ==========================================
 export const getSales = async (req, res, next) => {
   try {
+    const role = (req.user?.role || "USER").toUpperCase();
+    if (role === "PLAST_USER" || role === "PLAST") {
+      return res.status(200).json({ status: "success", count: 0, data: [] });
+    }
     const data = await plastService.getSales(req.query);
     res.status(200).json({ status: "success", count: data.length, data });
   } catch (err) {
@@ -227,7 +231,11 @@ export const getSaleById = async (req, res, next) => {
 
 export const createSale = async (req, res, next) => {
   try {
-    const data = await plastService.createSale(req.body);
+    const data = await plastService.createSale({
+      ...req.body,
+      created_by: req.user?.id || null,
+      created_by_name: req.user?.username || req.user?.name || "admin",
+    });
     res.status(201).json({ status: "success", message: "Sale invoice created and stock updated.", data });
   } catch (err) {
     next(err);
@@ -239,6 +247,8 @@ export const recordSalePayment = async (req, res, next) => {
     const data = await plastService.recordSalePayment(req.params.id, {
       ...req.body,
       user_id: req.user?.id,
+      created_by: req.user?.id || null,
+      created_by_name: req.user?.username || req.user?.name || "admin",
     });
     res.status(200).json({ status: "success", message: "Payment recorded successfully", data });
   } catch (err) {

@@ -10,6 +10,7 @@ import ProjectsPage from "./pages/ProjectsPage.jsx";
 import ProjectDetailPage from "./pages/ProjectDetailPage.jsx";
 import PendingReportsPage from "./pages/PendingReportsPage.jsx";
 import ImportsPage from "./pages/ImportsPage.jsx";
+import ImportBatchDetailPage from "./pages/ImportBatchDetailPage.jsx";
 import InvoiceBulkUploadPage from "./pages/InvoiceBulkUploadPage.jsx";
 import LoadOrderUploadPage from "./pages/LoadOrderUploadPage.jsx";
 import DirectSalesPage from "./pages/DirectSalesPage.jsx";
@@ -238,6 +239,7 @@ export function App() {
               </UserOrAdminRoute>
             }
           />
+          <Route path="imports/:id" element={<ImportBatchDetailPage />} />
           <Route
             path="commissions"
             element={
@@ -427,14 +429,7 @@ export function App() {
         <Route path="/plast" element={<PlastProtectedLayout />}>
           <Route index element={<PlastIndexRoute />} />
           <Route path="items" element={<PlastItemsPage />} />
-          <Route
-            path="units"
-            element={
-              <PlastAdminRoute>
-                <PlastUnitsPage />
-              </PlastAdminRoute>
-            }
-          />
+          <Route path="units" element={<PlastUnitsPage />} />
           <Route
             path="stock"
             element={

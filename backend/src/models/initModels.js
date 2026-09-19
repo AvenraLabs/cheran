@@ -65,6 +65,7 @@ import {
 import PlastSale from "../modules/plast/plast-sale.model.js";
 import PlastSaleItem from "../modules/plast/plast-sale-item.model.js";
 import PlastSalePayment from "../modules/plast/plast-sale-payment.model.js";
+import User from "../modules/auth/user.model.js";
 
 // ==========================================
 // 1. Government Module Associations
@@ -611,6 +612,26 @@ PlastSale.hasMany(PlastSalePayment, {
 PlastSalePayment.belongsTo(PlastSale, {
   foreignKey: "sale_id",
   as: "sale",
+});
+
+// User <-> PlastSale (Created By / Entered By)
+User.hasMany(PlastSale, {
+  foreignKey: "created_by",
+  as: "plast_sales",
+});
+PlastSale.belongsTo(User, {
+  foreignKey: "created_by",
+  as: "creator",
+});
+
+// User <-> PlastSalePayment (Created By)
+User.hasMany(PlastSalePayment, {
+  foreignKey: "created_by",
+  as: "plast_sale_payments",
+});
+PlastSalePayment.belongsTo(User, {
+  foreignKey: "created_by",
+  as: "creator",
 });
 
 export {

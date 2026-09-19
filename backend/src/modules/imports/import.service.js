@@ -51,7 +51,7 @@ export async function getImportById(id) {
   };
 }
 
-export async function getImportRows(importId, { page = 1, limit = 50, action, resolution_status } = {}) {
+export async function getImportRows(importId, { page = 1, limit = 50, action, resolution_status, all, search } = {}) {
   const importRecord = await GovernmentImport.findByPk(importId);
   if (!importRecord) {
     throw new AppError(`Import with ID ${importId} not found`, 404);
@@ -60,6 +60,42 @@ export async function getImportRows(importId, { page = 1, limit = 50, action, re
   const where = { import_id: importId };
   if (action && action !== "ALL") where.action = action;
   if (resolution_status) where.resolution_status = resolution_status;
+
+  if (search && search.trim()) {
+    const s = `%${search.trim()}%`;
+    where[Op.or] = [
+      { application_id: { [Op.iLike]: s } },
+      { dealer_name: { [Op.iLike]: s } },
+      db.where(db.cast(db.col("GovernmentImportRow.raw_data->>'farmer_name'"), "text"), { [Op.iLike]: s }),
+      db.where(db.cast(db.col("GovernmentImportRow.raw_data->>'village'"), "text"), { [Op.iLike]: s }),
+      db.where(db.cast(db.col("GovernmentImportRow.raw_data->>'district'"), "text"), { [Op.iLike]: s }),
+    ];
+  }
+
+  if (all === "true" || all === true) {
+    const rows = await GovernmentImportRow.findAll({
+      where,
+      include: [
+        {
+          model: Dealer,
+          as: "matched_dealer",
+          attributes: ["id", "name", "normalized_name"],
+        },
+      ],
+      order: [["row_number", "ASC"]],
+    });
+
+    return {
+      importId,
+      rows,
+      pagination: {
+        total: rows.length,
+        page: 1,
+        limit: rows.length,
+        totalPages: 1,
+      },
+    };
+  }
 
   const offset = (page - 1) * limit;
   const { rows, count } = await GovernmentImportRow.findAndCountAll({
@@ -188,12 +224,16 @@ export async function resolveImportDealer(importId, { row_id, dealer_name, resol
   // Bulk update matching rows to resolve ALL of them at once
   for (const row of rowsToResolve) {
     let newAction = "NEW_PROJECT";
+    let prevStatus = row.previous_status;
     if (row.matched_project_id) {
       const proj = await GovernmentProject.findByPk(row.matched_project_id);
-      if (proj && proj.current_status !== row.imported_status) {
-        newAction = "STATUS_CHANGE";
-      } else {
-        newAction = "UNCHANGED";
+      if (proj) {
+        prevStatus = proj.current_status || null;
+        if (proj.current_status !== row.imported_status) {
+          newAction = "STATUS_CHANGE";
+        } else {
+          newAction = "UNCHANGED";
+        }
       }
     }
 
@@ -201,6 +241,7 @@ export async function resolveImportDealer(importId, { row_id, dealer_name, resol
       matched_dealer_id: resolvedDealerId,
       resolution_status: "RESOLVED",
       action: newAction,
+      previous_status: prevStatus,
       error_message: null,
     });
   }

@@ -15,6 +15,8 @@ export const getImportRowsSchema = z.object({
     limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 50)),
     action: z.string().optional(),
     resolution_status: z.string().optional(),
+    all: z.string().optional(),
+    search: z.string().optional(),
   }),
 });
 

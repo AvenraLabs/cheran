@@ -386,8 +386,9 @@ export async function importProceedingBatch({
     );
 
     // 2. Create ProceedingBatchProjects
-    const batchProjectsPayload = rowsToSave.map((r) => ({
+    const batchProjectsPayload = rowsToSave.map((r, idx) => ({
       proceeding_batch_id: batch.id,
+      row_index: r.row_index !== undefined && r.row_index !== null ? r.row_index : (idx + 1),
       project_id: r.project_id || null,
       application_id: r.application_id,
       dealer_id: r.dealer_id || null,
@@ -587,7 +588,8 @@ export async function getProceedingBatchById(id) {
       },
     ],
     order: [
-      [{ model: ProceedingBatchProject, as: "projects" }, "farmer_name", "ASC"],
+      [{ model: ProceedingBatchProject, as: "projects" }, "row_index", "ASC"],
+      [{ model: ProceedingBatchProject, as: "projects" }, "created_at", "ASC"],
     ],
   });
 
@@ -663,9 +665,7 @@ export async function getProceedingBatchById(id) {
     d.project_ids.push(item.id);
   }
 
-  const dealerSummaries = Array.from(dealerMap.values()).sort((a, b) =>
-    a.dealer_name.localeCompare(b.dealer_name)
-  );
+  const dealerSummaries = Array.from(dealerMap.values());
 
   return {
     batch,
@@ -680,6 +680,10 @@ export async function getProceedingBatchById(id) {
 export async function recalculateProceedingBatch(id) {
   const batch = await ProceedingBatch.findByPk(id, {
     include: [{ model: ProceedingBatchProject, as: "projects" }],
+    order: [
+      [{ model: ProceedingBatchProject, as: "projects" }, "row_index", "ASC"],
+      [{ model: ProceedingBatchProject, as: "projects" }, "created_at", "ASC"],
+    ],
   });
   if (!batch) throw new AppError("Proceeding batch not found", 404);
 
@@ -1113,6 +1117,7 @@ export async function getDealerCommissionStatement(query = {}) {
     ],
     order: [
       [{ model: ProceedingBatch, as: "batch" }, "proceeding_date", "DESC"],
+      ["row_index", "ASC"],
       ["created_at", "DESC"],
     ],
     limit: parsedLimit || undefined,

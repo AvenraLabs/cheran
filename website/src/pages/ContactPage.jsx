@@ -329,12 +329,25 @@ export default function ContactPage() {
                       </div>
                     </div>
                   </div>
+                  {/* Google Map Embed for Cherran Irrigation */}
+                  <div className="w-full h-64 sm:h-72 rounded-lg overflow-hidden border border-line-200 shadow-inner bg-paper-50 relative">
+                    <iframe
+                      src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3913.3361103421166!2d77.4947449564934!3d11.236666655525854!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba90d007e983dfb%3A0xf72310b486aad996!2sCherran%20irrigation!5e0!3m2!1sen!2sin!4v1789807782013!5m2!1sen!2sin"
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      allowFullScreen=""
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      title="Cherran Irrigation Google Map Location"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-3">
                   <a
                     className="inline-flex items-center gap-2 bg-forest-700 hover:bg-forest-900 text-paper-50 text-xs font-semibold px-4 py-2.5 rounded transition-colors"
-                    href="https://maps.google.com/?q=Vijayamangalam+Tamil+Nadu"
+                    href="https://www.google.com/maps/place/Cherran+irrigation/@11.2366667,77.494745,17z/data=!3m1!4b1!4m6!3m5!1s0x3ba90d007e983dfb:0xf72310b486aad996!8m2!3d11.2366667!4d77.494745"
                     rel="noopener noreferrer"
                     target="_blank"
                   >
@@ -429,12 +442,26 @@ export default function ContactPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Google Map Embed for Cheran Plast */}
+                  <div className="w-full h-64 sm:h-72 rounded-lg overflow-hidden border border-line-200 shadow-inner bg-paper-50 relative">
+                    <iframe
+                      src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d489.16222312291933!2d77.50154720540013!3d11.239490719580735!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba90d96fdc1beaf%3A0x803ae35379b1497b!2sCheran%20Plast!5e0!3m2!1sen!2sin!4v1789807736037!5m2!1sen!2sin"
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      allowFullScreen=""
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      title="Cheran Plast Google Map Location"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 pt-3">
                   <a
                     className="inline-flex items-center gap-2 bg-forest-700 hover:bg-forest-900 text-paper-50 text-xs font-semibold px-4 py-2.5 rounded transition-colors"
-                    href="https://maps.google.com/?q=Vijayamangalam+Erode+Tamil+Nadu"
+                    href="https://www.google.com/maps/place/Cheran+Plast/@11.2394907,77.5015472,17z/data=!3m1!4b1!4m6!3m5!1s0x3ba90d96fdc1beaf:0x803ae35379b1497b!8m2!3d11.2394907!4d77.5015472"
                     rel="noopener noreferrer"
                     target="_blank"
                   >

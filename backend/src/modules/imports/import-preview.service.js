@@ -119,8 +119,10 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
 
       // Check if project exists in database
       const existingProj = projectMap.get(appId);
+      let prevStatus = null;
       if (existingProj) {
         matchedProjectId = existingProj.id;
+        prevStatus = existingProj.current_status || null;
         const statusDiffers = existingProj.current_status !== importedStatus;
 
         if (statusDiffers) {
@@ -149,6 +151,7 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
       row_number: rowNumber,
       application_id: appId || null,
       imported_status: importedStatus || null,
+      previous_status: prevStatus,
       imported_status_date: importedStatusDate || null,
       dealer_name: dealerName || null,
       action,

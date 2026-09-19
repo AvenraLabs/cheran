@@ -826,6 +826,49 @@ export default function CheranPlastPage() {
           </div>
         </div>
       </section>
+
+      {/* =========================================================================
+          8. CHERAN PLAST GOOGLE MAP & FACTORY LOCATION IN VIJAYAMANGALAM
+         ========================================================================= */}
+      <section className="w-full bg-paper-100 border-t border-line-200 py-12 lg:py-16 px-4 sm:px-6 lg:px-10">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <span className="text-xs font-mono text-forest-700 uppercase tracking-widest font-bold block mb-1">
+                Factory Coordinates &amp; Dispatch Yard
+              </span>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-forest-900">
+                Cheran Plast (cheranplast) – Vijayamangalam
+              </h2>
+              <p className="text-xs sm:text-sm text-steel-600 mt-1 max-w-2xl">
+                Located along Uthukuli Road in Vijayamangalam, Perundurai Taluk (Tamil Nadu 638056). Serving wholesale distributors, agricultural projects, and infrastructure contractors across South India.
+              </p>
+            </div>
+            <a
+              href="https://www.google.com/maps/place/Cheran+Plast/@11.2394907,77.5015472,17z/data=!3m1!4b1!4m6!3m5!1s0x3ba90d96fdc1beaf:0x803ae35379b1497b!8m2!3d11.2394907!4d77.5015472"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-forest-700 hover:bg-forest-900 text-paper-50 text-xs font-semibold px-5 py-3 rounded transition-colors shrink-0 shadow-xs"
+            >
+              <span className="material-symbols-outlined text-base">directions</span>
+              <span>Open in Google Maps / Get Directions</span>
+            </a>
+          </div>
+
+          <div className="w-full h-80 sm:h-96 rounded-xl overflow-hidden border border-line-200 shadow-sm bg-paper-50 relative">
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d489.16222312291933!2d77.50154720540013!3d11.239490719580735!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba90d96fdc1beaf%3A0x803ae35379b1497b!2sCheran%20Plast!5e0!3m2!1sen!2sin!4v1789807736037!5m2!1sen!2sin"
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              allowFullScreen=""
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+              title="Cheran Plast Google Map Location Vijayamangalam"
+            />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

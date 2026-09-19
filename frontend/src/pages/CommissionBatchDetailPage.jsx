@@ -359,7 +359,7 @@ export function CommissionBatchDetailPage() {
     let totalFit = 0;
     let totalNet = 0;
 
-    const rows = filteredProjects.map((p, index) => {
+    const rows = projectsToExport.map((p, index) => {
       const invAmt = Math.floor(parseFloat(p.invoice_amount || 0));
       const subAmt = Math.floor(parseFloat(p.subsidy_amount || p.state_restricted_amount || 0));
       const matCost = Math.floor(parseFloat(p.total_material_cost || 0));
@@ -412,7 +412,7 @@ export function CommissionBatchDetailPage() {
     const footers = [
       [
         "Total",
-        `${filteredProjects.length} Projects`,
+        `${projectsToExport.length} Projects`,
         "—",
         "—",
         totalInv.toLocaleString("en-IN"),

@@ -94,6 +94,15 @@ const PlastSale = db.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    created_by: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    created_by_name: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      defaultValue: "admin",
+    },
   },
   {
     tableName: "plast_sales",

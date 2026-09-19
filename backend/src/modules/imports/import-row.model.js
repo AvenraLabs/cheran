@@ -30,6 +30,10 @@ const GovernmentImportRow = db.define(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
+    previous_status: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
     imported_status_date: {
       type: DataTypes.DATEONLY,
       allowNull: true,

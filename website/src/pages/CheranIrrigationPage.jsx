@@ -960,6 +960,42 @@ export default function CheranIrrigationPage() {
               </div>
             </div>
           </div>
+
+          {/* Cherran Irrigation Google Map Embed */}
+          <div className="pt-8 border-t border-[rgba(227,223,210,0.2)]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <h4 className="font-serif text-lg sm:text-xl font-bold text-paper-50">
+                  Cherran Irrigation Systems Campus – Vijayamangalam
+                </h4>
+                <p className="text-xs text-surface-container-high">
+                  S.F. No. 145, Uthukuli Road, Vijayamangalam, Perundurai Taluk, Tamil Nadu 638056 (Opposite TNEB Substation)
+                </p>
+              </div>
+              <a
+                href="https://www.google.com/maps/place/Cherran+irrigation/@11.2366667,77.494745,17z/data=!3m1!4b1!4m6!3m5!1s0x3ba90d007e983dfb:0xf72310b486aad996!8m2!3d11.2366667!4d77.494745"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-sun-500 hover:bg-yellow-500 text-forest-900 text-xs font-bold px-4 py-2.5 rounded transition-colors shrink-0"
+              >
+                <span className="material-symbols-outlined text-base">directions</span>
+                <span>Open in Google Maps / Directions</span>
+              </a>
+            </div>
+
+            <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden border border-[rgba(227,223,210,0.3)] shadow-md bg-forest-900 relative">
+              <iframe
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3913.3361103421166!2d77.4947449564934!3d11.236666655525854!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba90d007e983dfb%3A0xf72310b486aad996!2sCherran%20irrigation!5e0!3m2!1sen!2sin!4v1789807782013!5m2!1sen!2sin"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen=""
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                title="Cherran Irrigation Google Map Location Vijayamangalam"
+              />
+            </div>
+          </div>
         </div>
       </section>
     </div>

@@ -42,7 +42,7 @@ export function PlastCreateSalePage() {
   const [notes, setNotes] = useState("");
 
   // Common Bill Discount State
-  const [discountType, setDiscountType] = useState("AMOUNT"); // "AMOUNT" or "PERCENTAGE"
+  const [discountType, setDiscountType] = useState("PERCENTAGE"); // "PERCENTAGE" (default) or "AMOUNT"
   const [discountValue, setDiscountValue] = useState("");
 
   const [saleItems, setSaleItems] = useState([

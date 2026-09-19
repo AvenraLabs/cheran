@@ -21,6 +21,11 @@ export const ProceedingBatchProject = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    row_index: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      allowNull: true,
+    },
     dealer_id: {
       type: DataTypes.UUID,
       allowNull: true,

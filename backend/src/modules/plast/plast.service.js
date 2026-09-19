@@ -15,6 +15,7 @@ import {
 import PlastSale from "./plast-sale.model.js";
 import PlastSaleItem from "./plast-sale-item.model.js";
 import PlastSalePayment from "./plast-sale-payment.model.js";
+import User from "../auth/user.model.js";
 import AppError from "../../shared/appError.js";
 
 // =========================================================================
@@ -585,6 +586,7 @@ export const getSales = async (filters = {}) => {
       { sale_number: { [Op.iLike]: `%${filters.search}%` } },
       { customer_name: { [Op.iLike]: `%${filters.search}%` } },
       { customer_phone: { [Op.iLike]: `%${filters.search}%` } },
+      { created_by_name: { [Op.iLike]: `%${filters.search}%` } },
     ];
   }
 
@@ -592,6 +594,7 @@ export const getSales = async (filters = {}) => {
     where,
     include: [
       { model: PlastCustomer, as: "customer" },
+      { model: User, as: "creator", attributes: ["id", "username", "name"] },
       {
         model: PlastSaleItem,
         as: "items",
@@ -603,6 +606,9 @@ export const getSales = async (filters = {}) => {
       {
         model: PlastSalePayment,
         as: "payments",
+        include: [
+          { model: User, as: "creator", attributes: ["id", "username", "name"], required: false },
+        ],
       },
     ],
     order: [["created_at", "DESC"]],
@@ -613,6 +619,7 @@ export const getSaleById = async (id) => {
   const sale = await PlastSale.findByPk(id, {
     include: [
       { model: PlastCustomer, as: "customer" },
+      { model: User, as: "creator", attributes: ["id", "username", "name"] },
       {
         model: PlastSaleItem,
         as: "items",
@@ -624,6 +631,9 @@ export const getSaleById = async (id) => {
       {
         model: PlastSalePayment,
         as: "payments",
+        include: [
+          { model: User, as: "creator", attributes: ["id", "username", "name"], required: false },
+        ],
       },
     ],
     order: [[{ model: PlastSalePayment, as: "payments" }, "payment_date", "ASC"]],
@@ -672,6 +682,8 @@ export const createSale = async (data) => {
     payment_status,
     payment_mode,
     notes,
+    created_by,
+    created_by_name,
   } = data;
 
   if (!items || !items.length) {
@@ -800,6 +812,8 @@ export const createSale = async (data) => {
         payment_status: resolvedStatus,
         payment_mode: payment_mode || "CASH",
         notes: notes || null,
+        created_by: created_by || null,
+        created_by_name: created_by_name || "admin",
       },
       { transaction: t }
     );
@@ -813,6 +827,8 @@ export const createSale = async (data) => {
           payment_date: sale_date || new Date().toISOString().split("T")[0],
           payment_mode: payment_mode || "CASH",
           notes: "Initial payment upon invoice creation",
+          created_by: created_by || null,
+          created_by_name: created_by_name || "admin",
         },
         { transaction: t }
       );
@@ -875,7 +891,8 @@ export const recordSalePayment = async (saleId, data) => {
         payment_mode: payment_mode || sale.payment_mode || "CASH",
         reference_number: reference_number ? reference_number.trim() : null,
         notes: notes ? notes.trim() : null,
-        created_by: user_id || null,
+        created_by: user_id || data.created_by || null,
+        created_by_name: data.created_by_name || "admin",
       },
       { transaction: t }
     );

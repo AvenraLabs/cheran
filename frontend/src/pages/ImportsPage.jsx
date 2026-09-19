@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -16,8 +17,13 @@ import {
   RefreshCw,
   Copy,
   Check,
+  Download,
+  ExternalLink,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import api from "../api/client.js";
 import Navbar from "../components/layout/Navbar.jsx";
 import Button from "../components/common/Button.jsx";
@@ -28,6 +34,7 @@ import Pagination from "../components/common/Pagination.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 
 export function ImportsPage() {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [previewData, setPreviewData] = useState(null);
@@ -69,6 +76,8 @@ export function ImportsPage() {
     totalPages: 1,
   });
   const [loadingHistory, setLoadingHistory] = useState(true);
+
+
 
   // Dealer Resolution Modal State
   const [resolutionModalOpen, setResolutionModalOpen] = useState(false);
@@ -172,6 +181,11 @@ export function ImportsPage() {
     setCopiedAll(true);
     toast.success(`Copied ${ids.length} Application IDs to clipboard!`);
     setTimeout(() => setCopiedAll(false), 2500);
+  };
+
+  const navigateToBatchDetail = (importId, type = "NEW_PROJECT") => {
+    if (!importId) return;
+    navigate(`/imports/${importId}?type=${type}`);
   };
 
   useEffect(() => {
@@ -525,23 +539,21 @@ export function ImportsPage() {
                 </div>
 
                 <div
-                  onClick={() =>
-                    handleOpenIdsModal(
-                      "NEW_PROJECT",
-                      "New Project Application IDs",
-                      previewData.summary?.newProjects || 0
-                    )
-                  }
+                  onClick={() => {
+                    if (previewData?.importId) {
+                      navigateToBatchDetail(previewData.importId, "NEW_PROJECT");
+                    }
+                  }}
                   className={`p-3 bg-[#EAF3F0] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group ${
                     rowActionFilter === "NEW_PROJECT"
                       ? "border-[#2F6F5E] ring-2 ring-[#2F6F5E]/30 shadow-xs"
                       : "border-[#D3E6E0]"
                   }`}
-                  title="Click to view and copy all New Project IDs"
+                  title="Click to open New Projects page"
                 >
                   <div className="flex items-center justify-center gap-1">
                     <span className="text-[10px] uppercase font-bold text-[#2F6F5E]">New Projects</span>
-                    <Eye size={11} className="text-[#2F6F5E] opacity-60 group-hover:opacity-100" />
+                    <ExternalLink size={11} className="text-[#2F6F5E] opacity-60 group-hover:opacity-100" />
                   </div>
                   <div className="text-lg font-bold font-display text-[#2F6F5E]">
                     {(previewData.summary?.newProjects || 0).toLocaleString()}
@@ -568,23 +580,21 @@ export function ImportsPage() {
                 </div>
 
                 <div
-                  onClick={() =>
-                    handleOpenIdsModal(
-                      "STATUS_CHANGE",
-                      "Status Change Project IDs",
-                      previewData.summary?.statusChanges || 0
-                    )
-                  }
+                  onClick={() => {
+                    if (previewData?.importId) {
+                      navigateToBatchDetail(previewData.importId, "STATUS_CHANGE");
+                    }
+                  }}
                   className={`p-3 bg-[#FDF8EC] border rounded-[8px] cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group ${
                     rowActionFilter === "STATUS_CHANGE"
                       ? "border-[#B8860B] ring-2 ring-[#B8860B]/30 shadow-xs"
                       : "border-[#F7E7C4]"
                   }`}
-                  title="Click to view status changes"
+                  title="Click to open Status Changes page"
                 >
                   <div className="flex items-center justify-center gap-1">
                     <span className="text-[10px] uppercase font-bold text-[#B8860B]">Status Changes</span>
-                    <Eye size={11} className="text-[#B8860B] opacity-60 group-hover:opacity-100" />
+                    <ExternalLink size={11} className="text-[#B8860B] opacity-60 group-hover:opacity-100" />
                   </div>
                   <div className="text-lg font-bold font-display text-[#B8860B]">
                     {(previewData.summary?.statusChanges || 0).toLocaleString()}
@@ -871,11 +881,35 @@ export function ImportsPage() {
                         <td className="py-3 px-4 text-right font-medium text-[#14213D]">
                           {(imp.total_rows || 0).toLocaleString()}
                         </td>
-                        <td className="py-3 px-4 text-right text-[#2F6F5E] font-medium">
-                          {(imp.new_projects_count || 0).toLocaleString()}
+                        <td className="py-3 px-4 text-right">
+                          {imp.new_projects_count > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => navigateToBatchDetail(imp.id, "NEW_PROJECT")}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-[#2F6F5E] bg-[#EAF3F0] hover:bg-[#D4E8E1] hover:text-[#1E4B3E] transition-all cursor-pointer shadow-2xs border border-[#2F6F5E]/20"
+                              title="Open new projects page"
+                            >
+                              <span>{(imp.new_projects_count || 0).toLocaleString()}</span>
+                              <ExternalLink size={11} className="opacity-70" />
+                            </button>
+                          ) : (
+                            <span className="text-[#8C97AB] font-medium text-xs">0</span>
+                          )}
                         </td>
-                        <td className="py-3 px-4 text-right text-[#B8860B] font-medium">
-                          {(imp.status_changes_count || 0).toLocaleString()}
+                        <td className="py-3 px-4 text-right">
+                          {imp.status_changes_count > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => navigateToBatchDetail(imp.id, "STATUS_CHANGE")}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-[#B8860B] bg-[#FDF8EC] hover:bg-[#F6EDD3] hover:text-[#8B6508] transition-all cursor-pointer shadow-2xs border border-[#B8860B]/20"
+                              title="Open status changes page (from what to what)"
+                            >
+                              <span>{(imp.status_changes_count || 0).toLocaleString()}</span>
+                              <ExternalLink size={11} className="opacity-70" />
+                            </button>
+                          ) : (
+                            <span className="text-[#8C97AB] font-medium text-xs">0</span>
+                          )}
                         </td>
                         <td className="py-3 px-4">
                           <span

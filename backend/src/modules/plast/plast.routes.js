@@ -11,11 +11,11 @@ router.use(authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"));
 router.get("/dashboard", authorize("ADMIN"), controller.getDashboardStats);
 router.get("/reports", authorize("ADMIN"), controller.getReports);
 
-// Units (Read accessible to Plast roles for dropdowns; Write is ADMIN only)
+// Units (Accessible to ADMIN, PLAST_USER, PLAST_PAYMENTS)
 router.get("/units", controller.getUnits);
-router.post("/units", authorize("ADMIN"), controller.createUnit);
-router.put("/units/:id", authorize("ADMIN"), controller.updateUnit);
-router.delete("/units/:id", authorize("ADMIN"), controller.deleteUnit);
+router.post("/units", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"), controller.createUnit);
+router.put("/units/:id", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"), controller.updateUnit);
+router.delete("/units/:id", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"), controller.deleteUnit);
 
 // Items (Read & Create/Edit accessible to ADMIN, PLAST_USER, PLAST_PAYMENTS; Delete is ADMIN only)
 router.get("/items", controller.getItems);
