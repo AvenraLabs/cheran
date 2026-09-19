@@ -30,6 +30,10 @@ export function Button({
       "bg-white border border-[#CCD5AE] text-[#14213D] hover:bg-[#EAF3F0] hover:text-[#2F6F5E] hover:border-[#2F6F5E] focus:ring-[#2F6F5E] shadow-xs",
     danger:
       "bg-[#B0403A] text-white hover:bg-[#8F332E] focus:ring-[#B0403A] shadow-xs",
+    whatsapp:
+      "bg-[#25D366] text-white hover:bg-[#20ba5a] focus:ring-[#25D366] border-transparent shadow-xs font-semibold",
+    success:
+      "bg-[#16a34a] text-white hover:bg-[#15803d] focus:ring-[#16a34a] border-transparent shadow-xs font-semibold",
     ghost:
       "bg-transparent text-[#52607D] hover:text-[#14213D] hover:bg-[#EAF3F0] focus:ring-[#2F6F5E]",
   }[variant] || "bg-[#2F6F5E] text-white hover:bg-[#245749] focus:ring-[#2F6F5E] shadow-xs";

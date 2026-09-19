@@ -665,11 +665,11 @@ export function PlastPaymentsPage() {
                                 Statement
                               </Button>
                               <Button
-                                variant="ghost"
+                                variant="whatsapp"
                                 size="xs"
                                 icon={Share2}
-                                className="text-emerald-700 hover:bg-emerald-50"
                                 onClick={() => shareStatementOnWhatsApp(c)}
+                                title="Share on WhatsApp"
                               >
                                 WA
                               </Button>
@@ -906,10 +906,9 @@ export function PlastPaymentsPage() {
             {/* Modal Actions */}
             <div className="flex justify-end gap-2 pt-2">
               <Button
-                variant="secondary"
+                variant="whatsapp"
                 size="sm"
                 icon={Share2}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
                 onClick={() => shareStatementOnWhatsApp(ledgerCustomer)}
               >
                 Share WhatsApp

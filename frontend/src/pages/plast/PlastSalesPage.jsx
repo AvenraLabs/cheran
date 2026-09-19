@@ -125,7 +125,7 @@ export function PlastSalesPage() {
     window.print();
   };
 
-  const handleExportPDF = (sale) => {
+  const handleExportPDF = async (sale) => {
     if (!sale) return;
     try {
       setExportingPdf(true);
@@ -161,6 +161,18 @@ export function PlastSalesPage() {
       doc.setLineWidth(0.5);
       doc.line(14, 30, pageWidth - 14, 30);
 
+      let targetSale = sale;
+      if (!targetSale.items || targetSale.items.length === 0) {
+        try {
+          const fetched = await plastApi.getSaleById(sale.id);
+          if (fetched && fetched.items && fetched.items.length > 0) {
+            targetSale = fetched;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
       // Customer / Billed To box
       doc.setFillColor(248, 250, 252);
       doc.roundedRect(14, 34, pageWidth - 28, 20, 2, 2, "F");
@@ -176,9 +188,9 @@ export function PlastSalesPage() {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10.5);
       doc.setTextColor(20, 33, 61);
-      doc.text(sale.customer_name || "Cash Customer", 18, 45);
+      doc.text(targetSale.customer_name || "Cash Customer", 18, 45);
 
-      const bal = Math.round(Number(sale.balance_amount) || 0);
+      const bal = Math.round(Number(targetSale.balance_amount) || 0);
       const isPaid = bal <= 0;
       doc.setTextColor(isPaid ? 16 : 180, isPaid ? 130 : 60, isPaid ? 80 : 50);
       doc.text(isPaid ? "PAID" : `BALANCE: Rs. ${bal.toLocaleString("en-IN")}`, pageWidth - 18, 45, { align: "right" });
@@ -186,19 +198,22 @@ export function PlastSalesPage() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(82, 96, 125);
-      if (sale.customer_phone) {
-        doc.text(`Phone: ${sale.customer_phone}`, 18, 50);
+      if (targetSale.customer_phone) {
+        doc.text(`Phone: ${targetSale.customer_phone}`, 18, 50);
       }
 
       // Line Items Table
-      const tableRows = (sale.items || []).map((it, idx) => {
+      const tableRows = (targetSale.items || []).map((it, idx) => {
+        const itemName = it.item_name || it.item?.name || it.name || "Item";
         const unitLabel = typeof it.unit === "object" ? (it.unit?.symbol || it.unit?.name || "") : (it.unit || "");
-        const qtyStr = `${Math.round(Number(it.quantity) || 0)} ${unitLabel}`.trim();
+        const qtyNum = Number(it.quantity) || 0;
+        const qtyFormatted = Number.isInteger(qtyNum) ? String(qtyNum) : qtyNum.toFixed(2);
+        const qtyStr = unitLabel ? `${qtyFormatted} ${unitLabel}` : `${qtyFormatted}`;
         const priceNum = Math.round(Number(it.unit_price) || 0);
-        const lineTotalNum = Math.round(Number(it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0))));
+        const lineTotalNum = Math.round(Number(it.line_total || it.total_amount || (qtyNum * priceNum)));
         return [
           idx + 1,
-          it.item_name || "",
+          itemName,
           qtyStr,
           `Rs. ${priceNum.toLocaleString("en-IN")}`,
           `Rs. ${lineTotalNum.toLocaleString("en-IN")}`,
@@ -351,33 +366,53 @@ export function PlastSalesPage() {
     }
   };
 
-  const shareOnWhatsApp = (sale) => {
+  const shareOnWhatsApp = async (sale) => {
     if (!sale) return;
-    const phone = sale.customer_phone || "";
+    let targetSale = sale;
+    if (!targetSale.items || targetSale.items.length === 0) {
+      try {
+        const fetched = await plastApi.getSaleById(sale.id);
+        if (fetched && fetched.items && fetched.items.length > 0) {
+          targetSale = fetched;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const phone = targetSale.customer_phone || "";
     const cleanPhone = phone.replace(/\D/g, "").replace(/^0+/, "");
     const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
 
-    const subVal = Math.round(Number(sale.subtotal) || 0);
-    const discVal = Math.round(Number(sale.total_discount ?? sale.discount_amount) || 0);
-    let discPct = Number(sale.discount_value) || 0;
+    const subVal = Math.round(Number(targetSale.subtotal) || 0);
+    const discVal = Math.round(Number(targetSale.total_discount ?? targetSale.discount_amount) || 0);
+    let discPct = Number(targetSale.discount_value) || 0;
     if (!discPct && subVal > 0 && discVal > 0) {
       discPct = Math.round((discVal / subVal) * 100);
     }
     const totalAfterDisc = Math.max(0, subVal - discVal);
-    const gstVal = Math.round(Number(sale.gst_amount) || 0);
-    const grandVal = Math.round(Number(sale.grand_total) || (totalAfterDisc + gstVal));
-    const paidVal = Math.round(Number(sale.paid_amount) || 0);
-    const balVal = Math.round(Number(sale.balance_amount) || Math.max(0, grandVal - paidVal));
+    const gstVal = Math.round(Number(targetSale.gst_amount) || 0);
+    const grandVal = Math.round(Number(targetSale.grand_total) || (totalAfterDisc + gstVal));
+    const paidVal = Math.round(Number(targetSale.paid_amount) || 0);
+    const balVal = Math.round(Number(targetSale.balance_amount) || Math.max(0, grandVal - paidVal));
 
-    const itemsList = sale.items && sale.items.length > 0
-      ? sale.items.map(it => `• ${it.item_name} × ${it.quantity} = ₹${Math.round(Number(it.line_total || it.total_amount || 0)).toLocaleString("en-IN")}`).join("\n")
+    const itemsList = targetSale.items && targetSale.items.length > 0
+      ? targetSale.items.map((it) => {
+          const name = it.item_name || it.item?.name || it.name || "Item";
+          const unit = typeof it.unit === "object" ? (it.unit?.symbol || it.unit?.name || "") : (it.unit || "");
+          const qtyNum = Number(it.quantity) || 0;
+          const qtyFormatted = Number.isInteger(qtyNum) ? String(qtyNum) : qtyNum.toFixed(2);
+          const qtyStr = unit ? `${qtyFormatted} ${unit}` : `${qtyFormatted}`;
+          const total = Math.round(Number(it.line_total || it.total_amount || (qtyNum * Number(it.unit_price || 0))));
+          return `• ${name} × ${qtyStr} = ₹${total.toLocaleString("en-IN")}`;
+        }).join("\n")
       : "";
 
     let msg = `🧾 *CHERAN PLAST - INVOICE*\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `*Invoice No:* #${sale.sale_number}\n` +
-      `*Date:* ${sale.sale_date}\n` +
-      `*Customer:* ${sale.customer_name || "Valued Customer"}\n\n`;
+      `*Invoice No:* #${targetSale.sale_number}\n` +
+      `*Date:* ${targetSale.sale_date}\n` +
+      `*Customer:* ${targetSale.customer_name || "Valued Customer"}\n\n`;
 
     if (itemsList) {
       msg += `*Items:*\n${itemsList}\n\n`;
@@ -393,7 +428,7 @@ export function PlastSalesPage() {
     msg += `*Total:* ₹${totalAfterDisc.toLocaleString("en-IN")}\n`;
 
     if (gstVal > 0) {
-      msg += `*GST (${sale.gst_rate}%):* +₹${gstVal.toLocaleString("en-IN")}\n`;
+      msg += `*GST (${targetSale.gst_rate}%):* +₹${gstVal.toLocaleString("en-IN")}\n`;
       msg += `*Grand Total:* ₹${grandVal.toLocaleString("en-IN")}\n`;
     }
 
@@ -679,10 +714,9 @@ export function PlastSalesPage() {
                             <td className="py-3 px-4 text-center">
                               <div className="flex items-center justify-center gap-1.5">
                                 <Button
-                                  variant="ghost"
+                                  variant="whatsapp"
                                   size="xs"
                                   icon={Share2}
-                                  className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
                                   title="Share Invoice on WhatsApp"
                                   onClick={() => shareOnWhatsApp(sale)}
                                 >
@@ -886,10 +920,9 @@ export function PlastSalesPage() {
               </Button>
               <Button
                 type="button"
-                variant="secondary"
+                variant="whatsapp"
                 size="sm"
                 icon={Share2}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
                 onClick={() => shareOnWhatsApp(selectedSale)}
               >
                 Share on WhatsApp

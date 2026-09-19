@@ -1150,7 +1150,25 @@ export const createSale = async (data) => {
       await adjustStock(it.item_id, -it.quantity, t);
     }
 
-    return sale;
+    return await PlastSale.findByPk(sale.id, {
+      include: [
+        { model: PlastCustomer, as: "customer" },
+        { model: User, as: "creator", attributes: ["id", "username", "name"] },
+        {
+          model: PlastSaleItem,
+          as: "items",
+          include: [
+            { model: PlastItem, as: "item" },
+            { model: PlastUnit, as: "unit" },
+          ],
+        },
+        {
+          model: PlastSalePayment,
+          as: "payments",
+        },
+      ],
+      transaction: t,
+    });
   });
 };
 

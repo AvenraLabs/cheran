@@ -44,7 +44,6 @@ export function PlastCreateSalePage() {
   const [gstRate, setGstRate] = useState(0);
   const [paymentMode, setPaymentMode] = useState("CASH");
   const [paidAmountInput, setPaidAmountInput] = useState("");
-  const [notes, setNotes] = useState("");
 
   // Common Bill Discount State
   const [discountType, setDiscountType] = useState("PERCENTAGE"); // "PERCENTAGE" (default) or "AMOUNT"
@@ -246,14 +245,34 @@ export function PlastCreateSalePage() {
       }
 
       // Line Items Table
-      const tableRows = (sale.items || []).map((it, idx) => {
+      const rawItems = (sale.items && sale.items.length > 0)
+        ? sale.items
+        : (saleItems && saleItems.length > 0)
+          ? saleItems.map((si) => {
+              const matched = itemsList.find((im) => im.id === si.item_id);
+              const qty = Number(si.quantity) || 0;
+              const price = Number(si.unit_price) || 0;
+              return {
+                item_name: matched?.name || "Item",
+                unit: matched?.unit?.symbol || matched?.unit?.name || "",
+                quantity: qty,
+                unit_price: price,
+                line_total: qty * price,
+              };
+            })
+          : [];
+
+      const tableRows = rawItems.map((it, idx) => {
+        const itemName = it.item_name || it.item?.name || it.name || "Item";
         const unitLabel = typeof it.unit === "object" ? (it.unit?.symbol || it.unit?.name || "") : (it.unit || "");
-        const qtyStr = `${Math.round(Number(it.quantity) || 0)} ${unitLabel}`.trim();
+        const qtyNum = Number(it.quantity) || 0;
+        const qtyFormatted = Number.isInteger(qtyNum) ? String(qtyNum) : qtyNum.toFixed(2);
+        const qtyStr = unitLabel ? `${qtyFormatted} ${unitLabel}` : `${qtyFormatted}`;
         const priceNum = Math.round(Number(it.unit_price) || 0);
-        const lineTotalNum = Math.round(Number(it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0))));
+        const lineTotalNum = Math.round(Number(it.line_total || it.total_amount || (qtyNum * priceNum)));
         return [
           idx + 1,
-          it.item_name || "",
+          itemName,
           qtyStr,
           `Rs. ${priceNum.toLocaleString("en-IN")}`,
           `Rs. ${lineTotalNum.toLocaleString("en-IN")}`,
@@ -393,8 +412,33 @@ export function PlastCreateSalePage() {
     const paidVal = Math.round(Number(sale.paid_amount) || 0);
     const balVal = Math.round(Number(sale.balance_amount) || Math.max(0, grandVal - paidVal));
 
-    const itemsList = sale.items && sale.items.length > 0
-      ? sale.items.map(it => `• ${it.item_name} × ${it.quantity} = ₹${Math.round(Number(it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0)))).toLocaleString("en-IN")}`).join("\n")
+    const rawItems = (sale.items && sale.items.length > 0)
+      ? sale.items
+      : (saleItems && saleItems.length > 0)
+        ? saleItems.map((si) => {
+            const matched = itemsList.find((im) => im.id === si.item_id);
+            const qty = Number(si.quantity) || 0;
+            const price = Number(si.unit_price) || 0;
+            return {
+              item_name: matched?.name || "Item",
+              unit: matched?.unit?.symbol || matched?.unit?.name || "",
+              quantity: qty,
+              unit_price: price,
+              line_total: qty * price,
+            };
+          })
+        : [];
+
+    const itemsListText = rawItems.length > 0
+      ? rawItems.map((it) => {
+          const name = it.item_name || it.item?.name || it.name || "Item";
+          const unit = typeof it.unit === "object" ? (it.unit?.symbol || it.unit?.name || "") : (it.unit || "");
+          const qtyNum = Number(it.quantity) || 0;
+          const qtyFormatted = Number.isInteger(qtyNum) ? String(qtyNum) : qtyNum.toFixed(2);
+          const qtyStr = unit ? `${qtyFormatted} ${unit}` : `${qtyFormatted}`;
+          const total = Math.round(Number(it.line_total || it.total_amount || (qtyNum * Number(it.unit_price || 0))));
+          return `• ${name} × ${qtyStr} = ₹${total.toLocaleString("en-IN")}`;
+        }).join("\n")
       : "";
 
     let msg = `🧾 *CHERAN PLAST - INVOICE*\n` +
@@ -403,8 +447,8 @@ export function PlastCreateSalePage() {
       `*Date:* ${sale.sale_date}\n` +
       `*Customer:* ${sale.customer_name || "Valued Customer"}\n\n`;
 
-    if (itemsList) {
-      msg += `*Items:*\n${itemsList}\n\n`;
+    if (itemsListText) {
+      msg += `*Items:*\n${itemsListText}\n\n`;
     }
 
     msg += `━━━━━━━━━━━━━━━━━━\n` +
@@ -464,7 +508,6 @@ export function PlastCreateSalePage() {
         discount_type: discountType,
         discount_value: rawDiscVal,
         bill_discount: billDiscountAmt,
-        notes: notes.trim() || undefined,
         items: validItems.map((r) => ({
           item_id: r.item_id,
           quantity: parseFloat(r.quantity),
@@ -475,7 +518,22 @@ export function PlastCreateSalePage() {
 
       const res = await plastApi.createSale(payload);
       toast.success("Sales Invoice created & stock deducted!");
-      setCreatedSale(res?.data || res);
+      const finalCreated = res?.data || res;
+      if (!finalCreated.items || finalCreated.items.length === 0) {
+        finalCreated.items = validItems.map((vi) => {
+          const match = itemsList.find((im) => im.id === vi.item_id);
+          const qty = parseFloat(vi.quantity) || 0;
+          const price = parseFloat(vi.unit_price) || 0;
+          return {
+            item_name: match?.name || "Item",
+            unit: match?.unit?.symbol || match?.unit?.name || "",
+            quantity: qty,
+            unit_price: price,
+            line_total: qty * price,
+          };
+        });
+      }
+      setCreatedSale(finalCreated);
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || "Failed to create sales invoice");
     } finally {
@@ -888,20 +946,6 @@ export function PlastCreateSalePage() {
                 </div>
               </div>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                  Optional Invoice Notes
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Delivered via vehicle..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-                />
-              </div>
-
               <Button
                 type="submit"
                 variant="primary"
@@ -966,39 +1010,56 @@ export function PlastCreateSalePage() {
               </div>
 
               {/* Items in Invoice */}
-              {createdSale.items && createdSale.items.length > 0 && (
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D]">
-                    <tr>
-                      <th className="py-2 px-2">Item Name</th>
-                      <th className="py-2 px-2 text-center">Qty</th>
-                      <th className="py-2 px-2 text-right">Unit Price</th>
-                      <th className="py-2 px-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#EDEAE1]">
-                    {createdSale.items.map((it, idx) => {
-                      const unitLabel = typeof it.unit === "object"
-                        ? (it.unit?.symbol || it.unit?.name || "")
-                        : (it.unit || "");
-                      const lineTotal = it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0));
+              {(() => {
+                const itemsToRender = (createdSale.items && createdSale.items.length > 0)
+                  ? createdSale.items
+                  : saleItems.map((si) => {
+                      const match = itemsList.find((im) => im.id === si.item_id);
+                      return {
+                        item_name: match?.name || "Item",
+                        unit: match?.unit?.symbol || match?.unit?.name || "",
+                        quantity: si.quantity,
+                        unit_price: si.unit_price,
+                        line_total: Number(si.quantity || 0) * Number(si.unit_price || 0),
+                      };
+                    });
 
-                      return (
-                        <tr key={idx}>
-                          <td className="py-2 px-2 font-medium">{it.item_name}</td>
-                          <td className="py-2 px-2 text-center font-mono">
-                            {it.quantity} {unitLabel}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono">{formatCurrency(it.unit_price)}</td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-[#14213D]">
-                            {formatCurrency(lineTotal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                return itemsToRender.length > 0 ? (
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D]">
+                      <tr>
+                        <th className="py-2 px-2">Item Name</th>
+                        <th className="py-2 px-2 text-center">Qty</th>
+                        <th className="py-2 px-2 text-right">Unit Price</th>
+                        <th className="py-2 px-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EDEAE1]">
+                      {itemsToRender.map((it, idx) => {
+                        const unitLabel = typeof it.unit === "object"
+                          ? (it.unit?.symbol || it.unit?.name || "")
+                          : (it.unit || "");
+                        const qtyNum = Number(it.quantity) || 0;
+                        const qtyFormatted = Number.isInteger(qtyNum) ? String(qtyNum) : qtyNum.toFixed(2);
+                        const lineTotal = it.line_total || it.total_amount || (qtyNum * Number(it.unit_price || 0));
+
+                        return (
+                          <tr key={idx}>
+                            <td className="py-2 px-2 font-medium">{it.item_name || it.item?.name || "Item"}</td>
+                            <td className="py-2 px-2 text-center font-mono">
+                              {qtyFormatted} {unitLabel}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono">{formatCurrency(it.unit_price)}</td>
+                            <td className="py-2 px-2 text-right font-mono font-bold text-[#14213D]">
+                              {formatCurrency(lineTotal)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : null;
+              })()}
 
               {/* Summary Breakdown */}
               <div className="flex justify-end pt-2 border-t border-[#EDEAE1]">
@@ -1068,10 +1129,9 @@ export function PlastCreateSalePage() {
               </Button>
               <Button
                 type="button"
-                variant="secondary"
+                variant="whatsapp"
                 size="sm"
                 icon={Share2}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
                 onClick={() => shareOnWhatsApp(createdSale)}
               >
                 Share on WhatsApp

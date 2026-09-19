@@ -599,10 +599,9 @@ export function PlastCustomersPage() {
                               Ledger
                             </Button>
                             <Button
-                              variant="ghost"
+                              variant="whatsapp"
                               size="xs"
                               icon={Share2}
-                              className="text-emerald-700 hover:bg-emerald-50"
                               onClick={() => shareStatementOnWhatsApp(cust)}
                               title="Share Outstanding on WhatsApp"
                             >
@@ -942,10 +941,9 @@ export function PlastCustomersPage() {
               </Button>
               <div className="flex gap-2">
                 <Button
-                  variant="secondary"
+                  variant="whatsapp"
                   size="sm"
                   icon={Share2}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
                   onClick={() => shareStatementOnWhatsApp(ledgerCustomer, ledgerData.summary)}
                 >
                   Share WhatsApp
