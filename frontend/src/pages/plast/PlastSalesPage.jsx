@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   ShoppingCart,
   Plus,
@@ -9,8 +9,6 @@ import {
   Printer,
   DollarSign,
   FileText,
-  CheckCircle2,
-  Clock,
   User,
   Share2,
 } from "lucide-react";
@@ -108,8 +106,7 @@ export function PlastSalesPage() {
 
   const safeSales = Array.isArray(sales) ? sales : [];
   const totalRevenue = safeSales.reduce((acc, s) => acc + Number(s.grand_total || 0), 0);
-  const totalPaid = safeSales.reduce((acc, s) => acc + Number(s.paid_amount || 0), 0);
-  const totalBalance = safeSales.reduce((acc, s) => acc + Number(s.balance_amount || 0), 0);
+  const avgBillValue = safeSales.length > 0 ? Math.round(totalRevenue / safeSales.length) : 0;
 
   const handlePrint = () => {
     window.print();
@@ -173,17 +170,11 @@ export function PlastSalesPage() {
       doc.setFontSize(8);
       doc.setTextColor(82, 96, 125);
       doc.text("BILLED TO", 18, 39);
-      doc.text("PAYMENT STATUS", pageWidth - 18, 39, { align: "right" });
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10.5);
       doc.setTextColor(20, 33, 61);
       doc.text(targetSale.customer_name || "Cash Customer", 18, 45);
-
-      const bal = Math.round(Number(targetSale.balance_amount) || 0);
-      const isPaid = bal <= 0;
-      doc.setTextColor(isPaid ? 16 : 180, isPaid ? 130 : 60, isPaid ? 80 : 50);
-      doc.text(isPaid ? "PAID" : `BALANCE: Rs. ${bal.toLocaleString("en-IN")}`, pageWidth - 18, 45, { align: "right" });
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
@@ -280,47 +271,6 @@ export function PlastSalesPage() {
           isGrand: true,
         });
       }
-      summaryLines.push({
-        label: "Amount Paid:",
-        value: `Rs. ${paidVal.toLocaleString("en-IN")}`,
-        isPaid: true,
-      });
-      summaryLines.push({
-        label: "Balance Due:",
-        value: `Rs. ${balVal.toLocaleString("en-IN")}`,
-        isBal: true,
-      });
-
-      // Draw payment ledger on left (if exists)
-      if (sale.payments && sale.payments.length > 0) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.5);
-        doc.setTextColor(20, 33, 61);
-        doc.text("PAYMENT LEDGER", 14, finalY);
-
-        const paymentRows = sale.payments.map((p) => [
-          p.payment_date || "",
-          p.payment_mode || "CASH",
-          `Rs. ${Math.round(Number(p.amount) || 0).toLocaleString("en-IN")}`,
-        ]);
-
-        autoTable(doc, {
-          startY: finalY + 2,
-          margin: { left: 14 },
-          tableWidth: 80,
-          head: [["Date", "Mode", "Amount"]],
-          body: paymentRows,
-          theme: "plain",
-          headStyles: {
-            fontSize: 7.5,
-            fillColor: [240, 243, 246],
-            textColor: [82, 96, 125],
-            fontStyle: "bold",
-            cellPadding: 1.5,
-          },
-          styles: { fontSize: 7.5, cellPadding: 1.5, textColor: [20, 33, 61] },
-        });
-      }
 
       // Render summary on right side
       const summaryBoxX = pageWidth - 90;
@@ -329,8 +279,6 @@ export function PlastSalesPage() {
         doc.setFont("helvetica", line.isTotal || line.isGrand ? "bold" : "normal");
         doc.setFontSize(line.isTotal || line.isGrand ? 9.5 : 8.5);
         if (line.isDiscount) doc.setTextColor(180, 83, 9);
-        else if (line.isPaid) doc.setTextColor(22, 101, 52);
-        else if (line.isBal && balVal > 0) doc.setTextColor(190, 24, 93);
         else if (line.isTotal || line.isGrand) doc.setTextColor(47, 111, 94);
         else doc.setTextColor(82, 96, 125);
 
@@ -422,9 +370,7 @@ export function PlastSalesPage() {
       msg += `*Grand Total:* ₹${grandVal.toLocaleString("en-IN")}\n`;
     }
 
-    msg += `*Paid Amount:* ₹${paidVal.toLocaleString("en-IN")}\n` +
-      `*Balance Due:* ₹${balVal.toLocaleString("en-IN")}\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
+    msg += `━━━━━━━━━━━━━━━━━━\n` +
       `Thank you for your business! 🙏\nCheran Plast`;
 
     const url = targetPhone
@@ -432,34 +378,6 @@ export function PlastSalesPage() {
       : `https://wa.me/?text=${encodeURIComponent(msg)}`;
 
     window.open(url, "_blank");
-  };
-
-  const getStatusBadge = (sale) => {
-    const balance = Number(sale.balance_amount || 0);
-    const paid = Number(sale.paid_amount || 0);
-
-    if (balance <= 0.01) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <CheckCircle2 size={12} />
-          Paid
-        </span>
-      );
-    }
-    if (paid > 0) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-          <Clock size={12} />
-          Partial ({formatCurrency(balance)} due)
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-        <AlertCircle size={12} />
-        Unpaid
-      </span>
-    );
   };
 
   return (
@@ -523,7 +441,7 @@ export function PlastSalesPage() {
         ) : (
           <>
             {/* KPI Metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <MetricCard
                 title="Total Invoiced"
                 value={formatCurrency(totalRevenue)}
@@ -531,16 +449,10 @@ export function PlastSalesPage() {
                 icon={DollarSign}
               />
               <MetricCard
-                title="Amount Collected"
-                value={formatCurrency(totalPaid)}
-                subtitle="Total payments received"
-                icon={CheckCircle2}
-              />
-              <MetricCard
-                title="Pending Balance"
-                value={formatCurrency(totalBalance)}
-                subtitle="Outstanding balance due"
-                icon={Clock}
+                title="Average Bill Value"
+                value={formatCurrency(avgBillValue)}
+                subtitle="Per customer invoice"
+                icon={ShoppingCart}
               />
               <MetricCard
                 title="Total Invoices"
@@ -618,16 +530,12 @@ export function PlastSalesPage() {
                         <th className="py-3 px-3">Date</th>
                         <th className="py-3 px-4">Customer</th>
                         <th className="py-3 px-3 text-right">Total Bill</th>
-                        <th className="py-3 px-3 text-right text-emerald-800">Amount Paid</th>
-                        <th className="py-3 px-3 text-right text-rose-800">Balance Due</th>
                         <th className="py-3 px-3 text-center">Entered By</th>
                         <th className="py-3 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1]">
                       {safeSales.map((sale) => {
-                        const balance = Number(sale.balance_amount || 0);
-                        const paid = Number(sale.paid_amount || 0);
                         const enteredBy = sale.creator?.username || sale.created_by_name || "admin";
 
                         return (
@@ -644,14 +552,6 @@ export function PlastSalesPage() {
                             </td>
                             <td className="py-3 px-3 text-right font-mono font-bold text-[#14213D]">
                               {formatCurrency(sale.grand_total)}
-                            </td>
-                            <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700">
-                              {formatCurrency(paid)}
-                            </td>
-                            <td className="py-3 px-3 text-right font-mono font-bold">
-                              <span className={balance > 0 ? "text-rose-700 font-black" : "text-slate-400"}>
-                                {formatCurrency(balance)}
-                              </span>
                             </td>
                             <td className="py-3 px-3 text-center">
                               <span
@@ -719,17 +619,13 @@ export function PlastSalesPage() {
                 </div>
               </div>
 
-              <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#EDEAE1] flex justify-between items-start">
+              <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#EDEAE1]">
                 <div>
                   <div className="text-[10px] font-bold text-[#52607D] uppercase">Billed To</div>
                   <div className="text-sm font-bold text-[#14213D] mt-0.5">{selectedSale.customer_name}</div>
                   {selectedSale.customer_phone && (
                     <div className="text-xs text-[#52607D] font-mono">Phone: {selectedSale.customer_phone}</div>
                   )}
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] font-bold text-[#52607D] uppercase">Payment Status</div>
-                  <div className="mt-1">{getStatusBadge(selectedSale)}</div>
                 </div>
               </div>
 
@@ -767,40 +663,7 @@ export function PlastSalesPage() {
               </table>
 
               {/* Summary Breakdown */}
-              <div className="flex justify-between items-start pt-2 border-t border-[#EDEAE1]">
-                {/* Payment History in Bill */}
-                <div className="w-1/2 pr-4 space-y-1.5">
-                  <div className="text-[11px] font-bold text-[#14213D] uppercase tracking-wider">
-                    Payment Ledger
-                  </div>
-                  {selectedSale.payments && selectedSale.payments.length > 0 ? (
-                    <div className="border border-[#EDEAE1] rounded overflow-hidden">
-                      <table className="w-full text-[10px] text-left">
-                        <thead className="bg-[#F8FAFC] text-[#52607D]">
-                          <tr>
-                            <th className="p-1.5">Date</th>
-                            <th className="p-1.5">Mode</th>
-                            <th className="p-1.5 text-right">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#EDEAE1]">
-                          {selectedSale.payments.map((p, pIdx) => (
-                            <tr key={pIdx}>
-                              <td className="p-1.5 text-[#52607D]">{p.payment_date}</td>
-                              <td className="p-1.5">{p.payment_mode}</td>
-                              <td className="p-1.5 text-right font-mono font-bold text-emerald-700">
-                                {formatCurrency(p.amount)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-[#8C97AB] italic">No payment transactions recorded</div>
-                  )}
-                </div>
-
+              <div className="flex justify-end pt-2 border-t border-[#EDEAE1]">
                 {(() => {
                   const subVal = Math.round(Number(selectedSale.subtotal) || 0);
                   const discVal = Math.round(Number(selectedSale.total_discount ?? selectedSale.discount_amount) || 0);
@@ -840,14 +703,6 @@ export function PlastSalesPage() {
                           </div>
                         </>
                       )}
-                      <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
-                        <span>Amount Paid:</span>
-                        <span className="font-mono font-bold">{formatCurrency(selectedSale.paid_amount)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-semibold text-rose-700 border-t border-dashed border-[#EDEAE1] pt-1">
-                        <span>Balance Due:</span>
-                        <span className="font-mono font-bold">{formatCurrency(selectedSale.balance_amount)}</span>
-                      </div>
                     </div>
                   );
                 })()}

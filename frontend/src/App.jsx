@@ -45,7 +45,6 @@ import PlastCustomersPage from "./pages/plast/PlastCustomersPage.jsx";
 import PlastSuppliersPage from "./pages/plast/PlastSuppliersPage.jsx";
 import PlastSalesPage from "./pages/plast/PlastSalesPage.jsx";
 import PlastCreateSalePage from "./pages/plast/PlastCreateSalePage.jsx";
-import PlastPaymentsPage from "./pages/plast/PlastPaymentsPage.jsx";
 import PlastReportsPage from "./pages/plast/PlastReportsPage.jsx";
 import PlastUnitsPage from "./pages/plast/PlastUnitsPage.jsx";
 
@@ -110,20 +109,6 @@ function PlastAdminRoute({ children }) {
   const role = (user?.role || "USER").toUpperCase();
 
   if (role !== "ADMIN") {
-    return <Navigate to="/plast/sales" replace />;
-  }
-
-  return children;
-}
-
-/**
- * Route guard for Payments page (ADMIN and PLAST_PAYMENTS only)
- */
-function PlastPaymentsRoute({ children }) {
-  const { user } = useAuth();
-  const role = (user?.role || "USER").toUpperCase();
-
-  if (role !== "ADMIN" && role !== "PLAST_PAYMENTS") {
     return <Navigate to="/plast/sales" replace />;
   }
 
@@ -459,14 +444,6 @@ export function App() {
           <Route path="customers" element={<PlastCustomersPage />} />
           <Route path="sales" element={<PlastSalesPage />} />
           <Route path="sales/new" element={<PlastCreateSalePage />} />
-          <Route
-            path="payments"
-            element={
-              <PlastPaymentsRoute>
-                <PlastPaymentsPage />
-              </PlastPaymentsRoute>
-            }
-          />
           <Route
             path="reports"
             element={

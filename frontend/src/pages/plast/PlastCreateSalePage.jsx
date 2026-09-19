@@ -42,7 +42,6 @@ export function PlastCreateSalePage() {
   const [customerAddress, setCustomerAddress] = useState("");
 
   const [gstRate, setGstRate] = useState(0);
-  const [paidAmountInput, setPaidAmountInput] = useState("");
 
   // Common Bill Discount State
   const [discountType, setDiscountType] = useState("PERCENTAGE"); // "PERCENTAGE" (default) or "AMOUNT"
@@ -157,17 +156,6 @@ export function PlastCreateSalePage() {
   const gstAmount = (taxableAmount * gstRate) / 100;
   const grandTotal = Math.round(taxableAmount + gstAmount);
 
-  // If not entered or blank, defaults to 0 paid (Unpaid)
-  const numPaid = parseFloat(paidAmountInput) || 0;
-  const effectivePaidAmount = Math.max(0, Math.min(grandTotal, numPaid));
-  const balanceAmount = Math.max(0, grandTotal - effectivePaidAmount);
-
-  // Pure calculation: bill value - paid value
-  const isFullyPaid = balanceAmount <= 0.01 && grandTotal > 0;
-  const isPartial = effectivePaidAmount > 0 && balanceAmount > 0.01;
-  const isUnpaid = effectivePaidAmount === 0;
-  const calculatedPaymentStatus = isFullyPaid ? "PAID" : isPartial ? "PARTIAL" : "UNPAID";
-
   // Format currency with NO decimals (.00 removed)
   const formatCurrency = (val) => {
     return new Intl.NumberFormat("en-IN", {
@@ -224,17 +212,11 @@ export function PlastCreateSalePage() {
       doc.setFontSize(8);
       doc.setTextColor(82, 96, 125);
       doc.text("BILLED TO", 18, 39);
-      doc.text("PAYMENT STATUS", pageWidth - 18, 39, { align: "right" });
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10.5);
       doc.setTextColor(20, 33, 61);
       doc.text(sale.customer_name || "Cash Customer", 18, 45);
-
-      const bal = Math.round(Number(sale.balance_amount) || 0);
-      const isPaid = bal <= 0;
-      doc.setTextColor(isPaid ? 16 : 180, isPaid ? 130 : 60, isPaid ? 80 : 50);
-      doc.text(isPaid ? "PAID" : `BALANCE: Rs. ${bal.toLocaleString("en-IN")}`, pageWidth - 18, 45, { align: "right" });
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
@@ -348,16 +330,6 @@ export function PlastCreateSalePage() {
           isGrand: true,
         });
       }
-      summaryLines.push({
-        label: "Amount Paid:",
-        value: `Rs. ${paidVal.toLocaleString("en-IN")}`,
-        isPaid: true,
-      });
-      summaryLines.push({
-        label: "Balance Due:",
-        value: `Rs. ${balVal.toLocaleString("en-IN")}`,
-        isBal: true,
-      });
 
       // Render summary on right side
       const summaryBoxX = pageWidth - 90;
@@ -366,8 +338,6 @@ export function PlastCreateSalePage() {
         doc.setFont("helvetica", line.isTotal || line.isGrand ? "bold" : "normal");
         doc.setFontSize(line.isTotal || line.isGrand ? 9.5 : 8.5);
         if (line.isDiscount) doc.setTextColor(180, 83, 9);
-        else if (line.isPaid) doc.setTextColor(22, 101, 52);
-        else if (line.isBal && balVal > 0) doc.setTextColor(190, 24, 93);
         else if (line.isTotal || line.isGrand) doc.setTextColor(47, 111, 94);
         else doc.setTextColor(82, 96, 125);
 
@@ -464,9 +434,7 @@ export function PlastCreateSalePage() {
       msg += `*Grand Total:* ₹${grandVal.toLocaleString("en-IN")}\n`;
     }
 
-    msg += `*Paid Amount:* ₹${paidVal.toLocaleString("en-IN")}\n` +
-      `*Balance Due:* ₹${balVal.toLocaleString("en-IN")}\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
+    msg += `━━━━━━━━━━━━━━━━━━\n` +
       `Thank you for your business! 🙏\nCheran Plast`;
 
     const url = targetPhone
@@ -501,8 +469,8 @@ export function PlastCreateSalePage() {
         customer_address: customerAddress.trim() || undefined,
         sale_date: saleDate,
         gst_rate: gstRate,
-        payment_status: calculatedPaymentStatus,
-        paid_amount: effectivePaidAmount,
+        payment_status: "UNPAID",
+        paid_amount: 0,
         discount_type: discountType,
         discount_value: rawDiscVal,
         bill_discount: billDiscountAmt,
@@ -800,72 +768,6 @@ export function PlastCreateSalePage() {
                 </div>
               </div>
 
-              {/* Amount Received */}
-              <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-[#14213D]">
-                      Amount Received (₹)
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setPaidAmountInput(String(grandTotal))}
-                        className="text-[10px] font-semibold text-[#2F6F5E] hover:underline bg-[#E8F3EE] px-2 py-0.5 rounded-[4px] transition-colors"
-                      >
-                        Full Paid (₹{grandTotal})
-                      </button>
-                      {paidAmountInput && (
-                        <button
-                          type="button"
-                          onClick={() => setPaidAmountInput("")}
-                          className="text-[10px] font-semibold text-[#8C97AB] hover:underline bg-slate-100 px-1.5 py-0.5 rounded-[4px] transition-colors"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#8C97AB] font-bold">
-                      ₹
-                    </span>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      max={grandTotal}
-                      placeholder="0.00 (Unpaid if not entered)"
-                      value={paidAmountInput}
-                      onChange={(e) => setPaidAmountInput(e.target.value)}
-                      className="w-full pl-7 pr-3 py-2 bg-white border border-[#E4E1D8] rounded-[6px] text-xs font-mono font-bold text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
-                    />
-                  </div>
-
-                  {/* Dynamic Status / Balance Preview Badge */}
-                  <div className="flex items-center justify-between text-[11px] px-0.5 pt-0.5">
-                    <span className="text-[#52607D]">
-                      {isFullyPaid
-                        ? "Payment Status:"
-                        : isPartial
-                        ? "Partial Payment:"
-                        : "Balance Due:"}
-                    </span>
-                    <span
-                      className={`font-bold px-2 py-0.5 rounded-[4px] ${
-                        isFullyPaid
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : isPartial
-                          ? "bg-amber-50 text-amber-800 border border-amber-200"
-                          : "bg-rose-50 text-rose-700 border border-rose-200"
-                      }`}
-                    >
-                      {isFullyPaid && "✓ Fully Paid"}
-                      {isPartial && `Pending: ${formatCurrency(balanceAmount)}`}
-                      {isUnpaid && `Pending: ${formatCurrency(grandTotal)} (Unpaid)`}
-                    </span>
-                  </div>
-              </div>
 
               {/* Financial Breakdown */}
               <div className="bg-[#F8FAFC] p-3.5 rounded-[8px] border border-[#EDEAE1] space-y-2 text-xs">
@@ -968,25 +870,13 @@ export function PlastCreateSalePage() {
                 </div>
               </div>
 
-              <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#EDEAE1] flex justify-between items-start">
+              <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#EDEAE1]">
                 <div>
                   <div className="text-[10px] font-bold text-[#52607D] uppercase">Billed To</div>
                   <div className="text-sm font-bold text-[#14213D] mt-0.5">{createdSale.customer_name}</div>
                   {createdSale.customer_phone && (
                     <div className="text-xs text-[#52607D] font-mono">Phone: {createdSale.customer_phone}</div>
                   )}
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] font-bold text-[#52607D] uppercase">Payment Status</div>
-                  <div className="mt-1 font-bold text-xs">
-                    {Number(createdSale.balance_amount || 0) <= 0.01 ? (
-                      <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">Paid</span>
-                    ) : (
-                      <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                        Pending: {formatCurrency(createdSale.balance_amount)}
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
 
@@ -1083,14 +973,6 @@ export function PlastCreateSalePage() {
                           </div>
                         </>
                       )}
-                      <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
-                        <span>Amount Paid:</span>
-                        <span className="font-mono font-bold">{formatCurrency(createdSale.paid_amount)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-semibold text-rose-700 border-t border-dashed border-[#EDEAE1] pt-1">
-                        <span>Balance Due:</span>
-                        <span className="font-mono font-bold">{formatCurrency(createdSale.balance_amount)}</span>
-                      </div>
                     </div>
                   );
                 })()}
