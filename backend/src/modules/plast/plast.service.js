@@ -912,6 +912,62 @@ export const getSales = async (filters = {}) => {
   });
 };
 
+/**
+ * Daily Dispatch Report - aggregate all items sold on a given date
+ */
+export const getDailyDispatchReport = async (date) => {
+  if (!date) throw new AppError("date query param is required (YYYY-MM-DD)", 400);
+
+  const sales = await PlastSale.findAll({
+    where: { sale_date: date },
+    include: [
+      {
+        model: PlastSaleItem,
+        as: "items",
+        include: [
+          { model: PlastItem, as: "item" },
+          { model: PlastUnit, as: "unit" },
+        ],
+      },
+    ],
+    order: [["created_at", "ASC"]],
+  });
+
+  // Aggregate quantities per item
+  const itemMap = new Map();
+
+  for (const sale of sales) {
+    for (const si of sale.items || []) {
+      const key = si.item_id;
+      const qty = Number(si.quantity || 0);
+      const unitSymbol = si.unit?.symbol || si.unit?.name || "";
+      const itemName = si.item_name || si.item?.name || "Unknown Item";
+
+      if (itemMap.has(key)) {
+        itemMap.get(key).total_qty += qty;
+      } else {
+        itemMap.set(key, {
+          item_id: key,
+          item_name: itemName,
+          unit: unitSymbol,
+          total_qty: qty,
+        });
+      }
+    }
+  }
+
+  const items = Array.from(itemMap.values()).sort((a, b) =>
+    a.item_name.localeCompare(b.item_name)
+  );
+
+  return {
+    date,
+    total_bills: sales.length,
+    total_items: items.length,
+    items,
+  };
+};
+
 export const getSaleById = async (id) => {
   const sale = await PlastSale.findByPk(id, {
     include: [

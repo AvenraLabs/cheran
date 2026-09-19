@@ -149,7 +149,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     return next();
   }
 
-  // 'PLAST_USER' (or legacy 'PLAST') role: Sales & Billing, Customers, Items, Daily Production, and Units
+  // 'PLAST_USER' (or legacy 'PLAST') role: Sales & Billing, Customers, Items, Daily Production, Units, and Stock On-Hand
   if (role === "PLAST" || role === "PLAST_USER") {
     const plastAllowedPrefixes = [
       "/api/plast/sales",
@@ -157,13 +157,14 @@ export const enforceRoleModuleAccess = (req, res, next) => {
       "/api/plast/items",
       "/api/plast/production",
       "/api/plast/units",
+      "/api/plast/inventory",
     ];
 
     const isAllowed = plastAllowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
     if (!isAllowed) {
       return next(
         new AppError(
-          `Access forbidden. Plast (User) role is restricted to Sales & Billing, Customers, Items, and Daily Production.`,
+          `Access forbidden. Plast (User) role is restricted to Sales & Billing, Customers, Items, Daily Production, Units, and Stock On-Hand.`,
           403
         )
       );
@@ -171,7 +172,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     return next();
   }
 
-  // 'PLAST_PAYMENTS' role: Sales & Billing, Customers, Items, Daily Production, Units, and Payments
+  // 'PLAST_PAYMENTS' role: Sales & Billing, Customers, Items, Daily Production, Units, Stock On-Hand, and Payments
   if (role === "PLAST_PAYMENTS") {
     const plastAllowedPrefixes = [
       "/api/plast/sales",
@@ -179,6 +180,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
       "/api/plast/items",
       "/api/plast/production",
       "/api/plast/units",
+      "/api/plast/inventory",
       "/api/plast/payments",
     ];
 
@@ -186,7 +188,7 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     if (!isAllowed) {
       return next(
         new AppError(
-          `Access forbidden. Plast (Payments) role is restricted to Sales & Billing, Customers, Items, Daily Production, and Payments.`,
+          `Access forbidden. Plast (Payments) role is restricted to Sales & Billing, Customers, Items, Daily Production, Units, Stock On-Hand, and Payments.`,
           403
         )
       );

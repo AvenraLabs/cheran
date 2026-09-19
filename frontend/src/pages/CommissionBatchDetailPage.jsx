@@ -287,49 +287,53 @@ export function CommissionBatchDetailPage() {
 
   // Export Proceeding Line Items Table to PDF (Full Batch or Dealer-Specific)
   const handleExportPDF = (targetProjects = null, targetDealerName = null) => {
-    const projectsToExport = targetProjects || filteredProjects;
-    if (!batch || !projectsToExport || projectsToExport.length === 0) return;
+    try {
+      const projectsToExport = Array.isArray(targetProjects)
+        ? targetProjects
+        : filteredProjects;
+      const dealerName = typeof targetDealerName === "string" ? targetDealerName : null;
+      if (!batch || !projectsToExport || projectsToExport.length === 0) return;
 
-    const doc = new jsPDF({
-      orientation: "landscape",
-      unit: "pt",
-      format: "a4",
-    });
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
 
-    const pageWidth = doc.internal.pageSize.getWidth();
+      const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Brand Header
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(20, 33, 61);
-    doc.text("CHERAN IRRIGATION", 30, 36);
+      // Brand Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(20, 33, 61);
+      doc.text("CHERAN IRRIGATION", 30, 36);
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(82, 96, 125);
-    doc.text(
-      targetDealerName
-        ? `Government Proceeding Batch - Dealer Statement: ${targetDealerName}`
-        : "Government Proceeding Batch - Project Line Items Report",
-      30,
-      50
-    );
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(82, 96, 125);
+      doc.text(
+        dealerName
+          ? `Government Proceeding Batch - Dealer Statement: ${dealerName}`
+          : "Government Proceeding Batch - Project Line Items Report",
+        30,
+        50
+      );
 
-    // Meta Header Information
-    doc.setFontSize(8.5);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(20, 33, 61);
-    doc.text(`Batch No: #${batch.proceeding_no || "—"}`, 30, 68);
-    doc.text(`Proceeding Date: ${formatDate(batch.proceeding_date)}`, 200, 68);
-    doc.text(`Fund Type: ${batch.fund_percentage_value}% Fund Release`, 380, 68);
-    doc.text(`5% Fittings Cost: ${hasFittings ? "Included" : "Excluded"}`, 560, 68);
+      // Meta Header Information
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(20, 33, 61);
+      doc.text(`Batch No: #${batch.proceeding_no || "—"}`, 30, 68);
+      doc.text(`Proceeding Date: ${formatDate(batch.proceeding_date)}`, 200, 68);
+      doc.text(`Fund Type: ${batch.fund_percentage_value}% Fund Release`, 380, 68);
+      doc.text(`5% Fittings Cost: ${hasFittings ? "Included" : "Excluded"}`, 560, 68);
 
-    if (targetDealerName) {
-      doc.text(`Dealer: ${targetDealerName}`, 30, 82);
-      doc.text(`Dealer Projects Count: ${projectsToExport.length}`, 380, 82);
-    }
+      if (dealerName) {
+        doc.text(`Dealer: ${dealerName}`, 30, 82);
+        doc.text(`Dealer Projects Count: ${projectsToExport.length}`, 380, 82);
+      }
 
-    // Table Headers
+    // Table Headers (Subsidy Eligible, Now Released, and Net Payable excluded from PDF export)
     const headers = [
       [
         "#",
@@ -337,33 +341,25 @@ export function CommissionBatchDetailPage() {
         "Invoice No & Date",
         "Farmer Name",
         "Inv Amt (Rs.)",
-        "Subsidy (Rs.)",
         "Material Cost (Rs.)",
-        "Now Released (Rs.)",
         "Commission (Rs.)",
         "Penalty (Rs.)",
         "Net Comm. (Rs.)",
         ...(hasFittings ? ["Fittings 5% (Rs.)"] : []),
-        "Net Payable (Rs.)",
         "Dealer",
       ],
     ];
 
     let totalInv = 0;
-    let totalSub = 0;
     let totalMat = 0;
-    let totalRel = 0;
     let totalComm = 0;
     let totalPen = 0;
     let totalNetComm = 0;
     let totalFit = 0;
-    let totalNet = 0;
 
     const rows = projectsToExport.map((p, index) => {
       const invAmt = Math.floor(parseFloat(p.invoice_amount || 0));
-      const subAmt = Math.floor(parseFloat(p.subsidy_amount || p.state_restricted_amount || 0));
       const matCost = Math.floor(parseFloat(p.total_material_cost || 0));
-      const nowRel = Math.floor(parseFloat(p.now_to_be_released_amount || p.fund_share_amount || 0));
       const commAmt = Math.floor(parseFloat(p.commission_amount || 0));
       const fitAmt = Math.floor(parseFloat(p.fittings_amount || 0));
       const penalty = Math.floor(
@@ -374,17 +370,13 @@ export function CommissionBatchDetailPage() {
         )
       );
       const netComm = Math.max(0, commAmt - penalty);
-      const netPayable = Math.max(0, netComm + fitAmt);
 
       totalInv += invAmt;
-      totalSub += subAmt;
       totalMat += matCost;
-      totalRel += nowRel;
       totalComm += commAmt;
       totalPen += penalty;
       totalNetComm += netComm;
       totalFit += fitAmt;
-      totalNet += netPayable;
 
       const invNoDateText = `${p.invoice_number && p.invoice_number !== "—" ? `#${p.invoice_number}` : "—"}\n${formatDate(p.invoice_date)}`;
 
@@ -396,14 +388,11 @@ export function CommissionBatchDetailPage() {
         invAmt
           ? `${invAmt.toLocaleString("en-IN")}${parseFloat(p.farmer_contribution || 0) > 0 ? `\n(FC: ${Math.floor(parseFloat(p.farmer_contribution)).toLocaleString("en-IN")})` : ""}`
           : "—",
-        subAmt ? subAmt.toLocaleString("en-IN") : "—",
         matCost ? `${matCost.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
-        nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
         commAmt ? commAmt.toLocaleString("en-IN") : "0",
         penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
         netComm.toLocaleString("en-IN"),
         ...(hasFittings ? [fitAmt ? fitAmt.toLocaleString("en-IN") : "0"] : []),
-        netPayable.toLocaleString("en-IN"),
         p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned"),
       ];
     });
@@ -416,98 +405,92 @@ export function CommissionBatchDetailPage() {
         "—",
         "—",
         totalInv.toLocaleString("en-IN"),
-        totalSub.toLocaleString("en-IN"),
         totalMat.toLocaleString("en-IN"),
-        totalRel.toLocaleString("en-IN"),
         totalComm.toLocaleString("en-IN"),
         totalPen > 0 ? `-${totalPen.toLocaleString("en-IN")}` : "0",
         totalNetComm.toLocaleString("en-IN"),
         ...(hasFittings ? [totalFit.toLocaleString("en-IN")] : []),
-        totalNet.toLocaleString("en-IN"),
         "—",
       ],
     ];
 
     const columnStylesConfig = hasFittings
       ? {
-          0: { cellWidth: 18, halign: "center" },
-          1: { cellWidth: 95 },
-          2: { cellWidth: 65 },
-          3: { cellWidth: 80 },
-          4: { cellWidth: 50, halign: "right" },
-          5: { cellWidth: 50, halign: "right" },
-          6: { cellWidth: 52, halign: "right" },
-          7: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          8: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          9: { cellWidth: 45, halign: "right", textColor: [225, 29, 72] },
-          10: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
-          11: { cellWidth: 48, halign: "right", textColor: [124, 58, 237] },
-          12: { cellWidth: 56, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
-          13: { cellWidth: 80 },
+          0: { cellWidth: 20, halign: "center" },
+          1: { cellWidth: 105 },
+          2: { cellWidth: 75 },
+          3: { cellWidth: 95 },
+          4: { cellWidth: 65, halign: "right" },
+          5: { cellWidth: 70, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          6: { cellWidth: 65, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          7: { cellWidth: 55, halign: "right", textColor: [225, 29, 72] },
+          8: { cellWidth: 65, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          9: { cellWidth: 60, halign: "right", textColor: [124, 58, 237] },
+          10: { cellWidth: 110 },
         }
       : {
-          0: { cellWidth: 18, halign: "center" },
-          1: { cellWidth: 105 },
-          2: { cellWidth: 70 },
-          3: { cellWidth: 90 },
-          4: { cellWidth: 54, halign: "right" },
-          5: { cellWidth: 54, halign: "right" },
-          6: { cellWidth: 55, halign: "right" },
-          7: { cellWidth: 55, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          8: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          9: { cellWidth: 48, halign: "right", textColor: [225, 29, 72] },
-          10: { cellWidth: 54, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
-          11: { cellWidth: 60, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
-          12: { cellWidth: 85 },
+          0: { cellWidth: 20, halign: "center" },
+          1: { cellWidth: 115 },
+          2: { cellWidth: 80 },
+          3: { cellWidth: 105 },
+          4: { cellWidth: 70, halign: "right" },
+          5: { cellWidth: 75, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          6: { cellWidth: 70, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          7: { cellWidth: 55, halign: "right", textColor: [225, 29, 72] },
+          8: { cellWidth: 75, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          9: { cellWidth: 120 },
         };
 
-    autoTable(doc, {
-      head: headers,
-      body: rows,
-      foot: footers,
-      startY: targetDealerName ? 96 : 80,
-      margin: { left: 28, right: 28 },
-      theme: "grid",
-      styles: {
-        fontSize: 7.2,
-        cellPadding: { top: 3.5, bottom: 3.5, left: 2.5, right: 2.5 },
-        textColor: [20, 33, 61],
-        lineColor: [230, 227, 218],
-        lineWidth: 0.5,
-        overflow: "linebreak",
-      },
-      headStyles: {
-        fillColor: [245, 245, 243],
-        textColor: [50, 60, 80],
-        fontStyle: "bold",
-        fontSize: 7.2,
-      },
-      footStyles: {
-        fillColor: [240, 244, 243],
-        textColor: [20, 33, 61],
-        fontStyle: "bold",
-        fontSize: 7.2,
-      },
-      columnStyles: columnStylesConfig,
-      didDrawPage: (data) => {
-        const pageCount = doc.internal.getNumberOfPages();
-        doc.setFontSize(7.5);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(140, 151, 171);
-        doc.text(
-          `Cheran Irrigation · Exported on ${new Date().toLocaleDateString("en-IN")} · Page ${data.pageNumber} of ${pageCount}`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 12,
-          { align: "center" }
-        );
-      },
-    });
+      autoTable(doc, {
+        head: headers,
+        body: rows,
+        foot: footers,
+        startY: dealerName ? 96 : 80,
+        margin: { left: 28, right: 28 },
+        theme: "grid",
+        styles: {
+          fontSize: 7.2,
+          cellPadding: { top: 3.5, bottom: 3.5, left: 2.5, right: 2.5 },
+          textColor: [20, 33, 61],
+          lineColor: [230, 227, 218],
+          lineWidth: 0.5,
+          overflow: "linebreak",
+        },
+        headStyles: {
+          fillColor: [245, 245, 243],
+          textColor: [50, 60, 80],
+          fontStyle: "bold",
+          fontSize: 7.2,
+        },
+        footStyles: {
+          fillColor: [240, 244, 243],
+          textColor: [20, 33, 61],
+          fontStyle: "bold",
+          fontSize: 7.2,
+        },
+        columnStyles: columnStylesConfig,
+        didDrawPage: (data) => {
+          const pageCount = doc.internal.getNumberOfPages();
+          doc.setFontSize(7.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(140, 151, 171);
+          doc.text(
+            `Cheran Irrigation · Exported on ${new Date().toLocaleDateString("en-IN")} · Page ${data.pageNumber} of ${pageCount}`,
+            pageWidth / 2,
+            doc.internal.pageSize.getHeight() - 12,
+            { align: "center" }
+          );
+        },
+      });
 
-    const safeProcNo = (batch.proceeding_no || "Batch").replace(/[/\\?%*:|"<>]/g, "_");
-    const safeDealer = targetDealerName
-      ? `_${targetDealerName.replace(/[/\\?%*:|"<>]/g, "_").replace(/\s+/g, "_")}`
-      : "";
-    doc.save(`Proceeding_Line_Items_${safeProcNo}${safeDealer}.pdf`);
+      const safeProcNo = (batch.proceeding_no || "Batch").replace(/[/\\?%*:|"<>]/g, "_");
+      const safeDealer = dealerName
+        ? `_${dealerName.replace(/[/\\?%*:|"<>]/g, "_").replace(/\s+/g, "_")}`
+        : "";
+      doc.save(`Proceeding_Line_Items_${safeProcNo}${safeDealer}.pdf`);
+    } catch (err) {
+      console.error("Error generating Proceeding Line Items PDF:", err);
+    }
   };
 
   if (loading && !batch) {
@@ -773,13 +756,12 @@ export function CommissionBatchDetailPage() {
                   <th className="py-2.5 px-3">Dealer Name</th>
                   <th className="py-2.5 px-3 text-center">Projects</th>
                   <th className="py-2.5 px-3 text-right">Subsidy / Eligible</th>
-                  <th className="py-2.5 px-3 text-right">Total Material Cost</th>
+                  <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Total Material Cost</th>
                   <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Now Released</th>
-                  <th className="py-2.5 px-3 text-right">Commission</th>
+                  <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Commission</th>
                   <th className="py-2.5 px-3 text-right">Penalty</th>
                   <th className="py-2.5 px-3 text-right font-bold text-[#14213D]">Net Comm.</th>
                   {hasFittings && <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>}
-                  <th className="py-2.5 px-3 text-right font-bold text-emerald-800">Total Payout</th>
                   <th className="py-2.5 px-3 text-center">Payout Status</th>
                   <th className="py-2.5 px-3 text-center">Action</th>
                 </tr>
@@ -787,7 +769,7 @@ export function CommissionBatchDetailPage() {
               <tbody className="divide-y divide-[#EDEAE1]">
                 {dealerSummaries.length === 0 ? (
                   <tr>
-                    <td colSpan={hasFittings ? 12 : 11} className="py-6 text-center text-xs text-[#8C97AB]">
+                    <td colSpan={hasFittings ? 11 : 10} className="py-6 text-center text-xs text-[#8C97AB]">
                       No dealers found in this batch.
                     </td>
                   </tr>
@@ -834,7 +816,7 @@ export function CommissionBatchDetailPage() {
                           <td className="py-3 px-3 text-right font-mono text-[#52607D]">
                             {formatRupees(d.total_subsidy_amount || d.total_state_restricted)}
                           </td>
-                          <td className="py-3 px-3 text-right font-mono text-[#14213D] font-medium">
+                          <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
                             {formatRupees(d.total_material_cost)}
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
@@ -860,9 +842,6 @@ export function CommissionBatchDetailPage() {
                               {formatRupees(d.total_fittings_amount)}
                             </td>
                           )}
-                          <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
-                            {formatRupees(d.total_net_payable)}
-                          </td>
                           <td className="py-3 px-3 text-center">
                             {d.is_paid ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
@@ -915,7 +894,7 @@ export function CommissionBatchDetailPage() {
                         {/* Expanded Projects Sub-Table */}
                         {isExpanded && (
                           <tr className="bg-[#F8FAF9] border-y border-[#E4E1D8]">
-                            <td colSpan={hasFittings ? 12 : 11} className="p-4 pl-6 pr-6">
+                            <td colSpan={hasFittings ? 11 : 10} className="p-4 pl-6 pr-6">
                               <div className="space-y-3 bg-white border border-[#EDEAE1] rounded-[10px] p-4 shadow-sm">
                                 {/* Header banner */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#EDEAE1] pb-3">
@@ -955,21 +934,20 @@ export function CommissionBatchDetailPage() {
                                         <th className="py-2 px-2.5">Farmer & Location</th>
                                         <th className="py-2 px-2.5 text-right">Invoice Amount</th>
                                         <th className="py-2 px-2.5 text-right">Subsidy Eligible</th>
-                                        <th className="py-2 px-2.5 text-right">Total Material Cost</th>
+                                        <th className="py-2 px-2.5 text-right font-bold text-[#2F6F5E]">Total Material Cost</th>
                                         <th className="py-2 px-2.5 text-right font-bold text-[#2F6F5E]">Now Released</th>
                                         <th className="py-2 px-2.5">Delay</th>
                                         <th className="py-2 px-2.5 text-right font-bold text-[#2F6F5E]">Commission</th>
                                         <th className="py-2 px-2.5 text-right text-rose-600">Penalty</th>
                                         <th className="py-2 px-2.5 text-right font-bold text-[#14213D]">Net Commission</th>
                                         {hasFittings && <th className="py-2 px-2.5 text-right text-[#7C3AED]">Fittings (5%)</th>}
-                                        <th className="py-2 px-2.5 text-right font-bold text-emerald-800">Net Payable</th>
                                         <th className="py-2 px-2.5 text-center">Status</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#EDEAE1]">
                                       {dealerProjects.length === 0 ? (
                                         <tr>
-                                          <td colSpan={hasFittings ? 14 : 13} className="py-6 text-center text-xs text-[#8C97AB]">
+                                          <td colSpan={hasFittings ? 13 : 12} className="py-6 text-center text-xs text-[#8C97AB]">
                                             No projects found for this dealer in this batch.
                                           </td>
                                         </tr>
@@ -985,7 +963,6 @@ export function CommissionBatchDetailPage() {
                                           const commAmt = Math.floor(parseFloat(p.commission_amount || 0));
                                           const fitAmt = Math.floor(parseFloat(p.fittings_amount || 0));
                                           const itemNetComm = Math.max(0, commAmt - penalty);
-                                          const itemNetPayable = Math.max(0, itemNetComm + fitAmt);
 
                                           const isFirstFund = batch.fund_percentage_value >= 50.0;
                                           const startLabel = isFirstFund ? "Invoice Date" : "1st Fund Credited";
@@ -1028,7 +1005,7 @@ export function CommissionBatchDetailPage() {
                                               <td className="py-2.5 px-2.5 text-right font-mono text-[#52607D]">
                                                 {formatRupees(p.subsidy_amount || p.state_restricted_amount)}
                                               </td>
-                                              <td className="py-2.5 px-2.5 text-right font-mono text-[#14213D] font-medium">
+                                              <td className="py-2.5 px-2.5 text-right font-mono font-bold text-[#2F6F5E]">
                                                 <div>{formatRupees(p.total_material_cost)}</div>
                                               </td>
                                               <td className="py-2.5 px-2.5 text-right font-mono font-bold text-[#2F6F5E]">
@@ -1096,9 +1073,6 @@ export function CommissionBatchDetailPage() {
                                                   {formatRupees(p.fittings_amount)}
                                                 </td>
                                               )}
-                                              <td className="py-2.5 px-2.5 text-right font-mono font-bold text-emerald-800">
-                                                {formatRupees(itemNetPayable)}
-                                              </td>
                                               <td className="py-2.5 px-2.5 text-center">
                                                 <span
                                                   className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
@@ -1158,9 +1132,9 @@ export function CommissionBatchDetailPage() {
               <Button
                 variant="secondary"
                 icon={Download}
-                onClick={handleExportPDF}
+                onClick={() => handleExportPDF()}
                 size="sm"
-                className="shrink-0 text-xs font-semibold"
+                className="shrink-0 text-xs font-semibold cursor-pointer"
               >
                 Download PDF
               </Button>
@@ -1176,21 +1150,20 @@ export function CommissionBatchDetailPage() {
                   <th className="py-2.5 px-3">Dealer</th>
                   <th className="py-2.5 px-3 text-right">Invoice Amount</th>
                   <th className="py-2.5 px-3 text-right">Subsidy Eligible</th>
-                  <th className="py-2.5 px-3 text-right">Total Material Cost</th>
+                  <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Total Material Cost</th>
                   <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Now Released</th>
                   <th className="py-2.5 px-3">Delay</th>
                   <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Commission</th>
                   <th className="py-2.5 px-3 text-right text-rose-600">Penalty</th>
                   <th className="py-2.5 px-3 text-right font-bold text-[#14213D]">Net Commission</th>
                   {hasFittings && <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>}
-                  <th className="py-2.5 px-3 text-right font-bold text-emerald-800">Net Payable</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EDEAE1]">
                 {paginatedProjects.length === 0 ? (
                   <tr>
-                    <td colSpan={hasFittings ? 14 : 13} className="py-8 text-center text-xs text-[#8C97AB]">
+                    <td colSpan={hasFittings ? 13 : 12} className="py-8 text-center text-xs text-[#8C97AB]">
                       No matching projects found in this batch.
                     </td>
                   </tr>
@@ -1206,7 +1179,6 @@ export function CommissionBatchDetailPage() {
                     const comm = Math.floor(parseFloat(p.commission_amount || 0));
                     const fit = Math.floor(parseFloat(p.fittings_amount || 0));
                     const netComm = Math.max(0, comm - penalty);
-                    const netPayable = Math.max(0, netComm + fit);
 
                     const isFirstFund = batch.fund_percentage_value >= 50.0;
                     const startLabel = isFirstFund ? "Invoice Date" : "1st Fund Credited";
@@ -1270,7 +1242,7 @@ export function CommissionBatchDetailPage() {
                           {formatRupees(p.subsidy_amount || p.state_restricted_amount)}
                         </td>
 
-                        <td className="py-2.5 px-3 text-right font-mono text-[#14213D] font-medium">
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E]">
                           <div>{formatRupees(p.total_material_cost)}</div>
                         </td>
 
@@ -1337,10 +1309,6 @@ export function CommissionBatchDetailPage() {
                             {formatRupees(p.fittings_amount)}
                           </td>
                         )}
-
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
-                          {formatRupees(netPayable)}
-                        </td>
 
                         <td className="py-2.5 px-3 text-center">
                           <span
@@ -1426,10 +1394,11 @@ export function CommissionBatchDetailPage() {
       </Modal>
 
       {/* Modal 2: Record Dealer Payout */}
+      {/* Modal 2: Record Dealer Payout */}
       <Modal
         isOpen={dealerPayModalOpen}
         onClose={() => setDealerPayModalOpen(false)}
-        title={`Record Payout for Dealer: ${activeDealerForPay?.dealer_name || "Dealer"}`}
+        title={`Record Payout: ${activeDealerForPay?.dealer_name || "Dealer"}`}
       >
         <form onSubmit={handleMarkDealerPaid} className="space-y-4">
           {dealerPayError && (
@@ -1439,31 +1408,37 @@ export function CommissionBatchDetailPage() {
             </div>
           )}
 
-          <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1] space-y-1.5 text-xs">
-            <div className="flex justify-between">
+          <div className="p-3 bg-[#FAFAF8] rounded-[8px] border border-[#EDEAE1] space-y-2 text-xs">
+            <div className="flex justify-between items-center">
               <span className="text-[#52607D]">Dealer Name:</span>
-              <strong className="text-[#14213D]">{activeDealerForPay?.dealer_name}</strong>
+              <strong className="text-[#14213D] font-bold">{activeDealerForPay?.dealer_name}</strong>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[#52607D]">Included Projects:</span>
-              <strong className="font-mono text-[#14213D]">{activeDealerForPay?.projects_count} projects</strong>
-            </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-[#52607D]">Total Commission:</span>
-              <strong className="font-mono text-[#2F6F5E]">
+              <strong className="font-mono font-bold text-[#2F6F5E]">
                 {formatRupees(activeDealerForPay?.total_commission_amount)}
               </strong>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[#52607D]">Penalty:</span>
+              <strong
+                className={`font-mono font-bold ${
+                  parseFloat(dealerPayPenalty || 0) > 0 ? "text-rose-600" : "text-[#8C97AB]"
+                }`}
+              >
+                {parseFloat(dealerPayPenalty || 0) > 0 ? `-${formatRupees(dealerPayPenalty)}` : "₹0"}
+              </strong>
+            </div>
             {hasFittings && (
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-[#52607D]">Fittings Cost (5%):</span>
                 <strong className="font-mono text-[#7C3AED]">
                   {formatRupees(activeDealerForPay?.total_fittings_amount)}
                 </strong>
               </div>
             )}
-            <div className="flex justify-between border-t border-[#EDEAE1] pt-1.5">
-              <span className="font-bold text-[#14213D]">Net Disbursable Payout:</span>
+            <div className="flex justify-between items-center border-t border-[#EDEAE1] pt-2">
+              <span className="font-bold text-[#14213D]">Net Payout:</span>
               <strong className="font-mono text-emerald-800 text-sm font-extrabold">
                 {formatRupees(
                   Math.max(
@@ -1479,7 +1454,7 @@ export function CommissionBatchDetailPage() {
 
           <div>
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Adjusted Penalty Amount (Deducted from Commission, ₹ Whole Number)
+              Adjusted Penalty Amount (₹ Whole Number)
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-xs text-[#52607D]">₹</span>
@@ -1496,7 +1471,7 @@ export function CommissionBatchDetailPage() {
 
           <div>
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Disbursement / Payout Date <span className="text-rose-500">*</span>
+              Payout Date <span className="text-rose-500">*</span>
             </label>
             <input
               type="date"
@@ -1504,19 +1479,6 @@ export function CommissionBatchDetailPage() {
               onChange={(e) => setDealerPayDate(e.target.value)}
               className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
               required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#14213D] mb-1">
-              Bank Payment Ref / UTR / Cheque No.
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. UTR-2026-9812903"
-              value={dealerPayRef}
-              onChange={(e) => setDealerPayRef(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
             />
           </div>
 

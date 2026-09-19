@@ -9,7 +9,6 @@ import {
   DollarSign,
   FileText,
   CreditCard,
-  Share2,
   TrendingUp,
   Receipt,
   Download,
@@ -28,9 +27,15 @@ import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Pagination } from "../../components/common/Pagination.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 
 export function PlastCustomersPage() {
+  const { user } = useAuth();
+  const role = (user?.role || "USER").toUpperCase();
+  const isPlastUser = role === "PLAST" || role === "PLAST_USER";
+  const canViewPayments = !isPlastUser; // ADMIN and PLAST_PAYMENTS
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -132,9 +137,14 @@ export function PlastCustomersPage() {
         name: formData.name.trim(),
         phone: formData.phone.trim() || undefined,
         address: formData.address.trim() || undefined,
-        opening_balance: Number(formData.opening_balance) || 0,
-        opening_balance_date: formData.opening_balance_date || undefined,
       };
+
+      if (canViewPayments) {
+        payload.opening_balance = Number(formData.opening_balance) || 0;
+        payload.opening_balance_date = formData.opening_balance_date || undefined;
+      } else if (!editingCustomer) {
+        payload.opening_balance = 0;
+      }
 
       if (editingCustomer) {
         await plastApi.updateCustomer(editingCustomer.id, payload);
@@ -299,7 +309,6 @@ export function PlastCustomersPage() {
         return [
           entry.date || "",
           entry.type || "",
-          entry.description || "",
           debitStr,
           creditStr,
           balStr,
@@ -308,7 +317,7 @@ export function PlastCustomersPage() {
 
       autoTable(doc, {
         startY: 61,
-        head: [["Date", "Type", "Particulars / Description", "Debit (+)", "Credit (-)", "Balance"]],
+        head: [["Date", "Type", "Debit (+)", "Credit (-)", "Balance"]],
         body: tableRows,
         theme: "striped",
         headStyles: {
@@ -319,12 +328,11 @@ export function PlastCustomersPage() {
           cellPadding: 2.5,
         },
         columnStyles: {
-          0: { cellWidth: 22 },
-          1: { cellWidth: 22 },
-          2: { cellWidth: "auto" },
-          3: { cellWidth: 26, halign: "right", fontStyle: "bold" },
-          4: { cellWidth: 26, halign: "right", fontStyle: "bold" },
-          5: { cellWidth: 28, halign: "right", fontStyle: "bold" },
+          0: { cellWidth: 28 },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 38, halign: "right", fontStyle: "bold" },
+          3: { cellWidth: 38, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 40, halign: "right", fontStyle: "bold" },
         },
         styles: {
           fontSize: 8,
@@ -399,8 +407,12 @@ export function PlastCustomersPage() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <Navbar
-        title="Customer Accounts & Ledger"
-        subtitle="Customer running balances, opening pending amounts, sales ledger & receipts"
+        title={canViewPayments ? "Customer Accounts & Ledger" : "Customers"}
+        subtitle={
+          canViewPayments
+            ? "Customer running balances, opening pending amounts, sales ledger & receipts"
+            : "Customer directory and phone contact details"
+        }
         actions={
           <>
             <Button
@@ -426,38 +438,49 @@ export function PlastCustomersPage() {
 
       <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
         {/* KPI Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <MetricCard
-            title="Total Customers"
-            value={safeCustomers.length}
-            subtitle="Active registered buyers"
-            icon={Users}
-          />
-          <MetricCard
-            title="Opening Balances"
-            value={formatCurrency(totalOpening)}
-            subtitle="Pre-app pending balances"
-            icon={Clock}
-          />
-          <MetricCard
-            title="Total Billed"
-            value={formatCurrency(totalBilled)}
-            subtitle="Gross turnover across bills"
-            icon={DollarSign}
-          />
-          <MetricCard
-            title="Total Collected"
-            value={formatCurrency(totalPaid)}
-            subtitle="All receipts received"
-            icon={TrendingUp}
-          />
-          <MetricCard
-            title="Net Pending Balance"
-            value={formatCurrency(totalPending)}
-            subtitle="Total outstanding to collect"
-            icon={Receipt}
-          />
-        </div>
+        {canViewPayments ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <MetricCard
+              title="Total Customers"
+              value={safeCustomers.length}
+              subtitle="Active registered buyers"
+              icon={Users}
+            />
+            <MetricCard
+              title="Opening Balances"
+              value={formatCurrency(totalOpening)}
+              subtitle="Pre-app pending balances"
+              icon={Clock}
+            />
+            <MetricCard
+              title="Total Billed"
+              value={formatCurrency(totalBilled)}
+              subtitle="Gross turnover across bills"
+              icon={DollarSign}
+            />
+            <MetricCard
+              title="Total Collected"
+              value={formatCurrency(totalPaid)}
+              subtitle="All receipts received"
+              icon={TrendingUp}
+            />
+            <MetricCard
+              title="Net Pending Balance"
+              value={formatCurrency(totalPending)}
+              subtitle="Total outstanding to collect"
+              icon={Receipt}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard
+              title="Total Customers"
+              value={safeCustomers.length}
+              subtitle="Registered customers"
+              icon={Users}
+            />
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="bg-white p-3 sm:p-4 rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
@@ -492,11 +515,15 @@ export function PlastCustomersPage() {
                   <tr>
                     <th className="py-3 px-4">Customer</th>
                     <th className="py-3 px-4">Phone</th>
-                    <th className="py-3 px-4 text-right">Opening Balance</th>
-                    <th className="py-3 px-4 text-right">Total Billed</th>
-                    <th className="py-3 px-4 text-right">Total Paid</th>
-                    <th className="py-3 px-4 text-right">Current Pending</th>
-                    <th className="py-3 px-4 text-center">Status</th>
+                    {canViewPayments && (
+                      <>
+                        <th className="py-3 px-4 text-right">Opening Balance</th>
+                        <th className="py-3 px-4 text-right">Total Billed</th>
+                        <th className="py-3 px-4 text-right">Total Paid</th>
+                        <th className="py-3 px-4 text-right">Current Pending</th>
+                        <th className="py-3 px-4 text-center">Status</th>
+                      </>
+                    )}
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -521,86 +548,86 @@ export function PlastCustomersPage() {
                             <span className="text-[#8C97AB]">No phone</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-right font-mono text-[#52607D]">
-                          {formatCurrency(cust.opening_balance)}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-medium text-[#14213D]">
-                          {formatCurrency(cust.total_billed)}
-                          <div className="text-[9px] text-[#8C97AB]">
-                            {cust.invoice_count || 0} bill{cust.invoice_count === 1 ? "" : "s"}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-medium text-emerald-700">
-                          {formatCurrency(cust.total_paid)}
-                          <div className="text-[9px] text-[#8C97AB]">
-                            {cust.payment_count || 0} receipt{cust.payment_count === 1 ? "" : "s"}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-bold">
-                          <span
-                            className={
-                              balance > 0
-                                ? "text-rose-700"
-                                : balance < 0
-                                ? "text-blue-700"
-                                : "text-emerald-700"
-                            }
-                          >
-                            {formatCurrency(balance)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          {balance > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                              <AlertCircle size={10} />
-                              Pending
-                            </span>
-                          ) : balance < 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                              Advance
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 size={10} />
-                              Settled
-                            </span>
-                          )}
-                        </td>
+                        {canViewPayments && (
+                          <>
+                            <td className="py-3 px-4 text-right font-mono text-[#52607D]">
+                              {formatCurrency(cust.opening_balance)}
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-medium text-[#14213D]">
+                              {formatCurrency(cust.total_billed)}
+                              <div className="text-[9px] text-[#8C97AB]">
+                                {cust.invoice_count || 0} bill{cust.invoice_count === 1 ? "" : "s"}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-medium text-emerald-700">
+                              {formatCurrency(cust.total_paid)}
+                              <div className="text-[9px] text-[#8C97AB]">
+                                {cust.payment_count || 0} receipt{cust.payment_count === 1 ? "" : "s"}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold">
+                              <span
+                                className={
+                                  balance > 0
+                                    ? "text-rose-700"
+                                    : balance < 0
+                                    ? "text-blue-700"
+                                    : "text-emerald-700"
+                                }
+                              >
+                                {formatCurrency(balance)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {balance > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <AlertCircle size={10} />
+                                  Pending
+                                </span>
+                              ) : balance < 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                  Advance
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 size={10} />
+                                  Settled
+                                </span>
+                              )}
+                            </td>
+                          </>
+                        )}
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              variant="secondary"
-                              size="xs"
-                              icon={CreditCard}
-                              className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
-                              onClick={() => openPaymentModal(cust)}
-                              title="Record payment / collection"
-                            >
-                              + Pay
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              icon={FileText}
-                              onClick={() => openLedgerModal(cust)}
-                              title="View Statement / Ledger"
-                            >
-                              Ledger
-                            </Button>
-                            <Button
-                              variant="whatsapp"
-                              size="xs"
-                              icon={Share2}
-                              onClick={() => shareStatementOnWhatsApp(cust)}
-                              title="Share Outstanding on WhatsApp"
-                            >
-                              WA
-                            </Button>
+                            {canViewPayments && (
+                              <>
+                                <Button
+                                  variant="secondary"
+                                  size="xs"
+                                  icon={CreditCard}
+                                  className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+                                  onClick={() => openPaymentModal(cust)}
+                                  title="Record payment / collection"
+                                >
+                                  + Pay
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
+                                  icon={FileText}
+                                  onClick={() => openLedgerModal(cust)}
+                                  title="View Statement / Ledger"
+                                >
+                                  Ledger
+                                </Button>
+                              </>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => openEditModal(cust)}
                               className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer"
-                              title="Edit Customer & Opening Balance"
+                              title={canViewPayments ? "Edit Customer & Opening Balance" : "Edit Customer"}
                             >
                               <Edit2 size={13} />
                             </button>
@@ -620,7 +647,15 @@ export function PlastCustomersPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingCustomer ? "Edit Customer & Opening Balance" : "Add Customer & Opening Balance"}
+        title={
+          canViewPayments
+            ? editingCustomer
+              ? "Edit Customer & Opening Balance"
+              : "Add Customer & Opening Balance"
+            : editingCustomer
+            ? "Edit Customer"
+            : "Add Customer"
+        }
         size="sm"
       >
         <form onSubmit={handleSaveCustomer} className="space-y-3">
@@ -651,34 +686,36 @@ export function PlastCustomersPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 bg-[#F8FAFC] p-2.5 rounded-[6px] border border-[#E4E1D8]">
-            <div>
-              <label className="block text-[11px] font-semibold text-[#14213D] mb-0.5">
-                Opening Pending (₹)
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="0"
-                placeholder="0"
-                value={formData.opening_balance}
-                onChange={(e) => setFormData({ ...formData, opening_balance: e.target.value })}
-                className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[5px] text-[#14213D] font-mono font-bold focus:outline-none focus:border-[#2F6F5E]"
-              />
-              <span className="text-[10px] text-[#8C97AB]">Old balance owed</span>
+          {canViewPayments && (
+            <div className="grid grid-cols-2 gap-2 bg-[#F8FAFC] p-2.5 rounded-[6px] border border-[#E4E1D8]">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#14213D] mb-0.5">
+                  Opening Pending (₹)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0"
+                  value={formData.opening_balance}
+                  onChange={(e) => setFormData({ ...formData, opening_balance: e.target.value })}
+                  className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[5px] text-[#14213D] font-mono font-bold focus:outline-none focus:border-[#2F6F5E]"
+                />
+                <span className="text-[10px] text-[#8C97AB]">Old balance owed</span>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[#14213D] mb-0.5">
+                  Opening Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.opening_balance_date}
+                  onChange={(e) => setFormData({ ...formData, opening_balance_date: e.target.value })}
+                  className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[5px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-[#14213D] mb-0.5">
-                Opening Date
-              </label>
-              <input
-                type="date"
-                value={formData.opening_balance_date}
-                onChange={(e) => setFormData({ ...formData, opening_balance_date: e.target.value })}
-                className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[5px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-              />
-            </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
@@ -704,246 +741,239 @@ export function PlastCustomersPage() {
         </form>
       </Modal>
 
-      {/* Quick Record Payment Modal */}
-      <Modal
-        isOpen={Boolean(paymentCustomer)}
-        onClose={() => setPaymentCustomer(null)}
-        title={paymentCustomer ? `Record Payment: ${paymentCustomer.name}` : "Record Payment"}
-        size="sm"
-      >
-        {paymentCustomer && (
-          <form onSubmit={handleRecordPayment} className="space-y-3">
-            <div className="bg-[#F8FAFC] p-3 rounded-[6px] border border-[#E4E1D8] flex justify-between items-center text-xs">
-              <div>
-                <span className="text-[#52607D]">Current Outstanding:</span>
-                <div className="font-bold text-sm text-rose-700 font-mono">
-                  {formatCurrency(paymentCustomer.current_balance)}
-                </div>
-              </div>
-              <div className="text-right text-[11px] text-[#8C97AB]">
-                <div>Opening: {formatCurrency(paymentCustomer.opening_balance)}</div>
-                <div>Billed: {formatCurrency(paymentCustomer.total_billed)}</div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Amount Received (₹) *
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="0.01"
-                required
-                placeholder="Enter amount paid"
-                value={paymentData.amount}
-                onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                className="w-full px-2.5 py-1.5 text-sm bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono font-bold focus:outline-none focus:border-[#2F6F5E]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Payment Date
-              </label>
-              <input
-                type="date"
-                value={paymentData.payment_date}
-                onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
-                className="w-full px-2 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPaymentCustomer(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" size="sm" loading={recordingPayment}>
-                Record Payment
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      {/* Customer Statement / Account Ledger Modal */}
-      <Modal
-        isOpen={Boolean(ledgerCustomer)}
-        onClose={() => {
-          setLedgerCustomer(null);
-          setLedgerData(null);
-        }}
-        title={`Statement of Account: ${ledgerCustomer?.name || ""}`}
-        size="lg"
-      >
-        {loadingLedger ? (
-          <div className="p-6">
-            <SkeletonLoader count={4} />
-          </div>
-        ) : ledgerData ? (
-          <div className="space-y-4">
-            {/* Account Summary Banner */}
-            <div className="bg-[#F8FAFC] p-3 rounded-[8px] border border-[#E4E1D8] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div>
-                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Opening Pending</span>
-                <span className="font-mono font-bold text-[#14213D]">
-                  {formatCurrency(ledgerData.summary.opening_balance)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Total Invoiced</span>
-                <span className="font-mono font-bold text-[#14213D]">
-                  {formatCurrency(ledgerData.summary.total_billed)}
-                </span>
-                <span className="text-[10px] text-[#8C97AB] ml-1">({ledgerData.summary.total_invoices} bills)</span>
-              </div>
-              <div>
-                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Total Paid</span>
-                <span className="font-mono font-bold text-emerald-700">
-                  {formatCurrency(ledgerData.summary.total_paid)}
-                </span>
-                <span className="text-[10px] text-[#8C97AB] ml-1">({ledgerData.summary.total_payments} receipts)</span>
-              </div>
-              <div>
-                <span className="text-[#8C97AB] block text-[10px] uppercase font-bold">Current Outstanding</span>
-                <span
-                  className={`font-mono font-bold text-sm ${
-                    ledgerData.summary.current_balance > 0
-                      ? "text-rose-700"
-                      : "text-emerald-700"
-                  }`}
-                >
-                  {formatCurrency(ledgerData.summary.current_balance)}
-                </span>
-              </div>
-            </div>
-
-            {/* Ledger Transactions Table & Pagination */}
-            {(() => {
-              const allEntries = ledgerData.entries || [];
-              const totalLedgerEntries = allEntries.length;
-              const totalLedgerPages = Math.ceil(totalLedgerEntries / ledgerLimit) || 1;
-              const currentEntries = allEntries.slice(
-                (ledgerPage - 1) * ledgerLimit,
-                ledgerPage * ledgerLimit
-              );
-
-              return (
-                <div className="space-y-2">
-                  <div className="max-h-[360px] overflow-y-auto border border-[#E4E1D8] rounded-[8px]">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold sticky top-0">
-                        <tr>
-                          <th className="py-2.5 px-3">Date</th>
-                          <th className="py-2.5 px-3">Type</th>
-                          <th className="py-2.5 px-3 text-right">Debit (+)</th>
-                          <th className="py-2.5 px-3 text-right">Credit (-)</th>
-                          <th className="py-2.5 px-3 text-right">Running Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#EDEAE1]">
-                        {currentEntries.map((row, idx) => (
-                          <tr
-                            key={idx}
-                            className={
-                              row.type === "OPENING"
-                                ? "bg-amber-50/50 font-medium"
-                                : "hover:bg-[#FAFAF8] transition-colors"
-                            }
-                          >
-                            <td className="py-2 px-3 font-mono text-[#52607D]">{row.date}</td>
-                            <td className="py-2 px-3">
-                              <span
-                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  row.type === "INVOICE"
-                                    ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                    : row.type === "PAYMENT"
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : "bg-amber-50 text-amber-800 border border-amber-200"
-                                }`}
-                              >
-                                {row.type}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-medium text-[#14213D]">
-                              {row.debit > 0 ? formatCurrency(row.debit) : "—"}
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">
-                              {row.credit > 0 ? formatCurrency(row.credit) : "—"}
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D]">
-                              {formatCurrency(row.running_balance)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {totalLedgerEntries > ledgerLimit && (
-                    <div className="pt-1">
-                      <Pagination
-                        page={ledgerPage}
-                        totalPages={totalLedgerPages}
-                        totalItems={totalLedgerEntries}
-                        limit={ledgerLimit}
-                        onPageChange={(p) => setLedgerPage(p)}
-                        onLimitChange={(l) => {
-                          setLedgerLimit(l);
-                          setLedgerPage(1);
-                        }}
-                        limitOptions={[10, 15, 25, 50, 100]}
-                      />
+      {/* Quick Record Payment Modal & Statement/Ledger Modal */}
+      {canViewPayments && (
+        <>
+          <Modal
+            isOpen={Boolean(paymentCustomer)}
+            onClose={() => setPaymentCustomer(null)}
+            title={paymentCustomer ? `Record Payment: ${paymentCustomer.name}` : "Record Payment"}
+            size="sm"
+          >
+            {paymentCustomer && (
+              <form onSubmit={handleRecordPayment} className="space-y-3">
+                <div className="bg-[#F8FAFC] p-3 rounded-[6px] border border-[#E4E1D8] flex justify-between items-center text-xs">
+                  <div>
+                    <span className="text-[#52607D]">Current Outstanding:</span>
+                    <div className="font-bold text-sm text-rose-700 font-mono">
+                      {formatCurrency(paymentCustomer.current_balance)}
                     </div>
-                  )}
+                  </div>
+                  <div className="text-right text-[11px] text-[#8C97AB]">
+                    <div>Opening: {formatCurrency(paymentCustomer.opening_balance)}</div>
+                    <div>Billed: {formatCurrency(paymentCustomer.total_billed)}</div>
+                  </div>
                 </div>
-              );
-            })()}
 
-            {/* Modal Actions */}
-            <div className="flex justify-between items-center pt-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={CreditCard}
-                className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
-                onClick={() => openPaymentModal(ledgerCustomer)}
-              >
-                + Record Payment
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="whatsapp"
-                  size="sm"
-                  icon={Share2}
-                  onClick={() => shareStatementOnWhatsApp(ledgerCustomer, ledgerData.summary)}
-                >
-                  Share WhatsApp
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={Download}
-                  loading={exportingLedgerPdf}
-                  onClick={() => handleExportStatementPdf(ledgerData)}
-                >
-                  Download Statement PDF
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setLedgerCustomer(null);
-                    setLedgerData(null);
-                  }}
-                >
-                  Close
-                </Button>
+                <div>
+                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                    Amount Received (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.01"
+                    required
+                    placeholder="Enter amount collected"
+                    value={paymentData.amount}
+                    onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono font-bold focus:outline-none focus:border-[#2F6F5E]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                    Payment Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={paymentData.payment_date}
+                    onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setPaymentCustomer(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" size="sm" loading={recordingPayment}>
+                    Confirm Payment
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Modal>
+
+          {/* Customer Statement / Ledger Modal */}
+          <Modal
+            isOpen={Boolean(ledgerCustomer)}
+            onClose={() => {
+              setLedgerCustomer(null);
+              setLedgerData(null);
+            }}
+            title={ledgerCustomer ? `Statement of Account: ${ledgerCustomer.name}` : "Statement"}
+            size="lg"
+          >
+            {loadingLedger ? (
+              <div className="p-6">
+                <SkeletonLoader count={5} />
               </div>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
+            ) : ledgerData ? (
+              <div className="space-y-4">
+                {/* Statement Summary Card */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#F8FAFC] p-3 rounded-[8px] border border-[#E4E1D8] text-xs">
+                  <div>
+                    <span className="text-[#8C97AB] text-[10px] uppercase font-semibold">Opening Balance</span>
+                    <div className="font-mono font-bold text-[#52607D]">
+                      {formatCurrency(ledgerData.summary.opening_balance)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[#8C97AB] text-[10px] uppercase font-semibold">Total Invoiced</span>
+                    <div className="font-mono font-bold text-[#14213D]">
+                      {formatCurrency(ledgerData.summary.total_billed)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[#8C97AB] text-[10px] uppercase font-semibold">Total Received</span>
+                    <div className="font-mono font-bold text-emerald-700">
+                      {formatCurrency(ledgerData.summary.total_paid)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[#8C97AB] text-[10px] uppercase font-semibold">Pending Outstanding</span>
+                    <div
+                      className={`font-mono font-bold text-sm ${
+                        ledgerData.summary.current_balance > 0
+                          ? "text-rose-700"
+                          : ledgerData.summary.current_balance < 0
+                          ? "text-blue-700"
+                          : "text-emerald-700"
+                      }`}
+                    >
+                      {formatCurrency(ledgerData.summary.current_balance)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ledger Entries Table & Pagination */}
+                {(() => {
+                  const allEntries = ledgerData.entries || [];
+                  const totalLedgerEntries = allEntries.length;
+                  const totalLedgerPages = Math.ceil(totalLedgerEntries / ledgerLimit) || 1;
+                  const currentEntries = allEntries.slice(
+                    (ledgerPage - 1) * ledgerLimit,
+                    ledgerPage * ledgerLimit
+                  );
+
+                  return (
+                    <div className="space-y-2">
+                      <div className="border border-[#EDEAE1] rounded-[6px] overflow-hidden max-h-80 overflow-y-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold sticky top-0">
+                            <tr>
+                              <th className="py-2.5 px-3">Date</th>
+                              <th className="py-2.5 px-3">Type</th>
+                              <th className="py-2.5 px-3 text-right">Debit (+)</th>
+                              <th className="py-2.5 px-3 text-right">Credit (-)</th>
+                              <th className="py-2.5 px-3 text-right">Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#EDEAE1]">
+                            {currentEntries.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="py-6 text-center text-[#8C97AB]">
+                                  No transactions recorded yet
+                                </td>
+                              </tr>
+                            ) : (
+                              currentEntries.map((entry, idx) => (
+                                <tr key={idx} className="hover:bg-[#FAFAF8]">
+                                  <td className="py-2 px-3 text-[#52607D] font-mono">{entry.date}</td>
+                                  <td className="py-2 px-3">
+                                    <span
+                                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                        entry.type === "INVOICE"
+                                          ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                          : entry.type === "PAYMENT"
+                                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                          : "bg-gray-100 text-[#52607D]"
+                                      }`}
+                                    >
+                                      {entry.type}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-[#14213D]">
+                                    {entry.debit > 0 ? formatCurrency(entry.debit) : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-emerald-700 font-medium">
+                                    {entry.credit > 0 ? formatCurrency(entry.credit) : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D]">
+                                    {formatCurrency(entry.running_balance)}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Ledger Pagination */}
+                      {totalLedgerPages > 1 && (
+                        <div className="pt-2">
+                          <Pagination
+                            currentPage={ledgerPage}
+                            totalPages={totalLedgerPages}
+                            totalItems={totalLedgerEntries}
+                            pageSize={ledgerLimit}
+                            onPageChange={(page) => setLedgerPage(page)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Modal Footer Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-3 border-t border-[#EDEAE1]">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="text-emerald-700 hover:text-emerald-800"
+                    onClick={() => shareStatementOnWhatsApp(ledgerCustomer, ledgerData.summary)}
+                  >
+                    Share on WhatsApp
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={Download}
+                      loading={exportingLedgerPdf}
+                      onClick={() => handleExportStatementPdf(ledgerData)}
+                    >
+                      Download Statement PDF
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setLedgerCustomer(null);
+                        setLedgerData(null);
+                      }}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </Modal>
+        </>
+      )}
     </div>
   );
 }

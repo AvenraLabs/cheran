@@ -57,7 +57,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
         title: "Inventory & Materials",
         items: [
           { label: "Stock On-Hand", path: "/inventory", icon: Boxes },
-          { label: "Purchase Receipts", path: "/inventory/receipts", icon: ClipboardList },
+          { label: "Raw Material", path: "/inventory/receipts", icon: ClipboardList },
           { label: "Daily Production", path: "/inventory/production", icon: Factory },
           { label: "Item Master", path: "/items", icon: Package },
           { label: "Units of Measure", path: "/units", icon: Scale },

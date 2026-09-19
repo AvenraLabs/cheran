@@ -42,6 +42,7 @@ import PlastStockPage from "./pages/plast/PlastStockPage.jsx";
 import PlastPurchasesPage from "./pages/plast/PlastPurchasesPage.jsx";
 import PlastProductionPage from "./pages/plast/PlastProductionPage.jsx";
 import PlastCustomersPage from "./pages/plast/PlastCustomersPage.jsx";
+import PlastDispatchPage from "./pages/plast/PlastDispatchPage.jsx";
 import PlastSuppliersPage from "./pages/plast/PlastSuppliersPage.jsx";
 import PlastSalesPage from "./pages/plast/PlastSalesPage.jsx";
 import PlastCreateSalePage from "./pages/plast/PlastCreateSalePage.jsx";
@@ -415,14 +416,7 @@ export function App() {
           <Route index element={<PlastIndexRoute />} />
           <Route path="items" element={<PlastItemsPage />} />
           <Route path="units" element={<PlastUnitsPage />} />
-          <Route
-            path="stock"
-            element={
-              <PlastAdminRoute>
-                <PlastStockPage />
-              </PlastAdminRoute>
-            }
-          />
+          <Route path="stock" element={<PlastStockPage />} />
           <Route
             path="purchases"
             element={
@@ -442,6 +436,7 @@ export function App() {
           <Route path="vendors" element={<Navigate to="/plast/suppliers" replace />} />
           <Route path="production" element={<PlastProductionPage />} />
           <Route path="customers" element={<PlastCustomersPage />} />
+          <Route path="dispatch" element={<PlastDispatchPage />} />
           <Route path="sales" element={<PlastSalesPage />} />
           <Route path="sales/new" element={<PlastCreateSalePage />} />
           <Route

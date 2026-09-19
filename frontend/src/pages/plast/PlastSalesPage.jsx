@@ -563,25 +563,14 @@ export function PlastSalesPage() {
                               </span>
                             </td>
                             <td className="py-3 px-4 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <Button
-                                  variant="whatsapp"
-                                  size="xs"
-                                  icon={Share2}
-                                  title="Share Invoice on WhatsApp"
-                                  onClick={() => shareOnWhatsApp(sale)}
-                                >
-                                  WA
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="xs"
-                                  icon={Eye}
-                                  onClick={() => setSelectedSale(sale)}
-                                >
-                                  Bill
-                                </Button>
-                              </div>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                icon={Eye}
+                                onClick={() => setSelectedSale(sale)}
+                              >
+                                Bill
+                              </Button>
                             </td>
                           </tr>
                         );

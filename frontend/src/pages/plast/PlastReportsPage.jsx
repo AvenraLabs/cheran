@@ -9,14 +9,19 @@ import {
   Boxes,
   Factory,
   RefreshCw,
+  Eye,
+  FileText,
 } from "lucide-react";
 import { plastApi } from "../../api/plastApi.js";
 import Navbar from "../../components/layout/Navbar.jsx";
 import MetricCard from "../../components/common/MetricCard.jsx";
 import Button from "../../components/common/Button.jsx";
+import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export function PlastReportsPage() {
   const [activeTab, setActiveTab] = useState("sales"); // sales | purchases | production | stock
@@ -33,6 +38,172 @@ export function PlastReportsPage() {
 
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+
+  // Bill Inspection Modal
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const handleExportPDF = async (sale) => {
+    if (!sale) return;
+    setExportingPdf(true);
+    try {
+      let fullSale = sale;
+      if (!fullSale.items || fullSale.items.length === 0) {
+        try {
+          const res = await plastApi.getSaleById(sale.id);
+          if (res && res.items) fullSale = res;
+        } catch (e) {}
+      }
+
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Top Header Band
+      doc.setFillColor(47, 111, 94);
+      doc.rect(0, 0, pageWidth, 28, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(255, 255, 255);
+      doc.text("CHERAN PLAST", 14, 11);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(210, 230, 225);
+      doc.text("PVC & Polymer Pipes Manufacturing Division", 14, 17);
+      doc.text("Tax Invoice / Sales Bill", 14, 23);
+
+      doc.setFontSize(10);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.text(fullSale.sale_number || "INVOICE", pageWidth - 14, 12, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.text(`Date: ${fullSale.sale_date || ""}`, pageWidth - 14, 18, { align: "right" });
+
+      // Customer Info Box
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, 32, pageWidth - 28, 18, 2, 2, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(82, 96, 125);
+      doc.text("BILLED TO:", 18, 38);
+      doc.setFontSize(9.5);
+      doc.setTextColor(20, 33, 61);
+      doc.text(fullSale.customer_name || "Customer", 18, 44);
+      if (fullSale.customer_phone) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(82, 96, 125);
+        doc.text(`Phone: ${fullSale.customer_phone}`, pageWidth - 20, 44, { align: "right" });
+      }
+
+      // Items Table
+      const tableRows = (fullSale.items || []).map((it, idx) => {
+        const unitLabel = typeof it.unit === "object" ? (it.unit?.symbol || it.unit?.name || "") : (it.unit || "");
+        const unitPrice = Number(it.unit_price || 0);
+        const lineTot = it.line_total || it.total_amount || (Number(it.quantity || 0) * unitPrice);
+        return [
+          idx + 1,
+          it.item_name || "Item",
+          `${it.quantity} ${unitLabel}`.trim(),
+          `Rs. ${Math.round(unitPrice).toLocaleString("en-IN")}`,
+          `Rs. ${Math.round(lineTot).toLocaleString("en-IN")}`,
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 54,
+        head: [["#", "Item Description", "Qty", "Unit Price", "Amount"]],
+        body: tableRows,
+        theme: "striped",
+        headStyles: {
+          fillColor: [47, 111, 94],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 8.5,
+          cellPadding: 2.5,
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: "auto" },
+          2: { cellWidth: 28, halign: "center" },
+          3: { cellWidth: 32, halign: "right" },
+          4: { cellWidth: 35, halign: "right", fontStyle: "bold" },
+        },
+        styles: {
+          fontSize: 8,
+          cellPadding: 2.2,
+          textColor: [20, 33, 61],
+        },
+        alternateRowStyles: {
+          fillColor: [250, 250, 248],
+        },
+      });
+
+      const finalY = doc.lastAutoTable.finalY + 6;
+      const subVal = Math.round(Number(fullSale.subtotal) || 0);
+      const discVal = Math.round(Number(fullSale.total_discount ?? fullSale.discount_amount) || 0);
+      let discPct = Number(fullSale.discount_value) || 0;
+      if (!discPct && subVal > 0 && discVal > 0) {
+        discPct = Math.round((discVal / subVal) * 100);
+      }
+      const totalAfterDiscVal = Math.max(0, subVal - discVal);
+      const gstVal = Math.round(Number(fullSale.gst_amount) || 0);
+      const grandVal = Math.round(Number(fullSale.grand_total) || (totalAfterDiscVal + gstVal));
+
+      const summaryBoxX = pageWidth - 90;
+      let sY = finalY;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(82, 96, 125);
+      doc.text("Subtotal:", summaryBoxX, sY);
+      doc.text(`Rs. ${subVal.toLocaleString("en-IN")}`, pageWidth - 14, sY, { align: "right" });
+      sY += 5;
+
+      if (discVal > 0) {
+        doc.setTextColor(180, 83, 9);
+        doc.text(`Discount (${discPct}%):`, summaryBoxX, sY);
+        doc.text(`-Rs. ${discVal.toLocaleString("en-IN")}`, pageWidth - 14, sY, { align: "right" });
+        sY += 5;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(47, 111, 94);
+      doc.text(discVal > 0 ? "Total after Discount:" : "Total:", summaryBoxX, sY);
+      doc.text(`Rs. ${totalAfterDiscVal.toLocaleString("en-IN")}`, pageWidth - 14, sY, { align: "right" });
+      sY += 5;
+
+      if (gstVal > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(82, 96, 125);
+        doc.text(`GST (${fullSale.gst_rate}%):`, summaryBoxX, sY);
+        doc.text(`+Rs. ${gstVal.toLocaleString("en-IN")}`, pageWidth - 14, sY, { align: "right" });
+        sY += 5;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(47, 111, 94);
+        doc.text("Grand Total:", summaryBoxX, sY);
+        doc.text(`Rs. ${grandVal.toLocaleString("en-IN")}`, pageWidth - 14, sY, { align: "right" });
+      }
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(140, 151, 171);
+      doc.text("Thank you for your business! · Cheran Plast", pageWidth / 2, 285, { align: "center" });
+
+      const safeNumber = (fullSale.sale_number || "Bill").replace(/[/\\?%*:|"<> ]/g, "_");
+      doc.save(`Cheran_Plast_Invoice_${safeNumber}.pdf`);
+      toast.success("PDF invoice downloaded successfully");
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to export PDF invoice");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   // Set date ranges automatically on preset change
   useEffect(() => {
@@ -121,7 +292,7 @@ export function PlastReportsPage() {
     if (activeTab === "sales") {
       csvContent += "Invoice No,Date,Customer,Phone,Items Count,Subtotal,Discount,Taxable,GST Rate,GST Amount,Grand Total\n";
       list.forEach((s) => {
-        csvContent += `"${s.sale_number}","${s.sale_date}","${s.customer_name}","${s.customer_phone || ""}","${s.items_count || 0}","${s.subtotal}","${s.total_discount}","${s.taxable_amount}","${s.gst_rate}%","${s.gst_amount}","${s.grand_total}"\n`;
+        csvContent += `"${s.sale_number}","${s.sale_date}","${s.customer_name}","${s.customer_phone || ""}","${s.items?.length || s.items_count || 0}","${s.subtotal}","${s.total_discount}","${s.taxable_amount}","${s.gst_rate}%","${s.gst_amount}","${s.grand_total}"\n`;
       });
     } else if (activeTab === "purchases") {
       csvContent += "Receipt Date,Supplier,Reference,Items Count,Total Amount\n";
@@ -422,6 +593,7 @@ export function PlastReportsPage() {
                         <th className="py-3 px-3 text-right">Total</th>
                         <th className="py-3 px-3 text-right">GST</th>
                         <th className="py-3 px-4 text-right">Grand Total</th>
+                        <th className="py-3 px-3 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1]">
@@ -437,6 +609,16 @@ export function PlastReportsPage() {
                           <td className="py-3 px-3 text-right font-medium text-[#14213D]">{formatCurrency(s.taxable_amount)}</td>
                           <td className="py-3 px-3 text-right text-[#52607D]">{formatCurrency(s.gst_amount)}</td>
                           <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">{formatCurrency(s.grand_total)}</td>
+                          <td className="py-3 px-3 text-center">
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              icon={Eye}
+                              onClick={() => setSelectedSale(s)}
+                            >
+                              Bill
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -555,6 +737,138 @@ export function PlastReportsPage() {
           )}
         </div>
       </main>
+
+      {/* Invoice Detail / Printable Modal */}
+      <Modal
+        isOpen={Boolean(selectedSale)}
+        onClose={() => setSelectedSale(null)}
+        title={`Invoice: ${selectedSale?.sale_number || ""}`}
+        size="lg"
+      >
+        {selectedSale && (
+          <div className="space-y-4">
+            <div id="printable-bill" className="p-4 bg-white rounded border border-[#E4E1D8] space-y-4 text-xs">
+              <div className="flex justify-between items-start border-b border-[#EDEAE1] pb-3">
+                <div>
+                  <h2 className="text-base font-bold text-[#2F6F5E]">CHERAN PLAST</h2>
+                  <p className="text-[10px] text-[#52607D]">PVC & Polymer Manufacturing Division</p>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-bold text-[#14213D]">{selectedSale.sale_number}</div>
+                  <div className="text-[#52607D]">Date: {selectedSale.sale_date}</div>
+                </div>
+              </div>
+
+              <div className="bg-[#F8FAFC] p-2.5 rounded border border-[#EDEAE1]">
+                <div>
+                  <div className="text-[10px] font-bold text-[#52607D] uppercase">Billed To</div>
+                  <div className="text-sm font-bold text-[#14213D] mt-0.5">{selectedSale.customer_name}</div>
+                  {selectedSale.customer_phone && (
+                    <div className="text-xs text-[#52607D] font-mono">Phone: {selectedSale.customer_phone}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Items in Invoice */}
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D]">
+                  <tr>
+                    <th className="py-2 px-2">Item Name</th>
+                    <th className="py-2 px-2 text-center">Qty</th>
+                    <th className="py-2 px-2 text-right">Unit Price</th>
+                    <th className="py-2 px-2 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EDEAE1]">
+                  {selectedSale.items?.map((it, idx) => {
+                    const unitLabel = typeof it.unit === "object"
+                      ? (it.unit?.symbol || it.unit?.name || "")
+                      : (it.unit || "");
+                    const lineTotal = it.line_total || it.total_amount || (Number(it.quantity || 0) * Number(it.unit_price || 0));
+
+                    return (
+                      <tr key={idx}>
+                        <td className="py-2 px-2 font-medium">{it.item_name}</td>
+                        <td className="py-2 px-2 text-center font-mono">
+                          {it.quantity} {unitLabel}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono">{formatCurrency(it.unit_price)}</td>
+                        <td className="py-2 px-2 text-right font-mono font-bold text-[#14213D]">
+                          {formatCurrency(lineTotal)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Summary Breakdown */}
+              <div className="flex justify-end pt-2 border-t border-[#EDEAE1]">
+                {(() => {
+                  const subVal = Math.round(Number(selectedSale.subtotal) || 0);
+                  const discVal = Math.round(Number(selectedSale.total_discount ?? selectedSale.discount_amount) || 0);
+                  let discPct = Number(selectedSale.discount_value) || 0;
+                  if (!discPct && subVal > 0 && discVal > 0) {
+                    discPct = Math.round((discVal / subVal) * 100);
+                  }
+                  const totalAfterDiscVal = Math.max(0, subVal - discVal);
+                  const gstVal = Math.round(Number(selectedSale.gst_amount) || 0);
+                  const grandVal = Math.round(Number(selectedSale.grand_total) || (totalAfterDiscVal + gstVal));
+
+                  return (
+                    <div className="w-64 space-y-1">
+                      <div className="flex justify-between text-[#52607D]">
+                        <span>Subtotal:</span>
+                        <span>{formatCurrency(subVal)}</span>
+                      </div>
+                      {discVal > 0 && (
+                        <div className="flex justify-between text-amber-800 font-medium">
+                          <span>Discount ({discPct}%):</span>
+                          <span>-{formatCurrency(discVal)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-[#14213D] font-bold border-t border-[#EDEAE1] pt-1">
+                        <span>{discVal > 0 ? "Total after Discount:" : "Total:"}</span>
+                        <span className="font-mono">{formatCurrency(totalAfterDiscVal)}</span>
+                      </div>
+                      {gstVal > 0 && (
+                        <>
+                          <div className="flex justify-between text-[#52607D]">
+                            <span>GST ({selectedSale.gst_rate}%):</span>
+                            <span>+{formatCurrency(gstVal)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-sm text-[#14213D] border-t border-[#EDEAE1] pt-1.5">
+                            <span>Grand Total:</span>
+                            <span className="text-[#2F6F5E]">{formatCurrency(grandVal)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" size="sm" onClick={() => setSelectedSale(null)}>
+                Close
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={FileText}
+                loading={exportingPdf}
+                onClick={() => handleExportPDF(selectedSale)}
+              >
+                Download PDF
+              </Button>
+              <Button variant="primary" size="sm" icon={Printer} onClick={() => window.print()}>
+                Print Bill
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

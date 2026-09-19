@@ -328,7 +328,7 @@ export function CommissionProceedingsPage() {
       doc.text(`Status: ${payoutStatus || "ALL PAYOUTS"}`, 520, 68);
       doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 670, 68);
 
-      // Table Headers
+      // Table Headers (Subsidy Eligible, Now Released, and Net Payout excluded from PDF export)
       const headers = [
         [
           "#",
@@ -336,34 +336,26 @@ export function CommissionProceedingsPage() {
           "Invoice No & Date",
           "Farmer Name",
           "Inv Amt (Rs.)",
-          "Subsidy (Rs.)",
           "Material Cost (Rs.)",
-          "Now Released (Rs.)",
           "Commission (Rs.)",
           "Penalty (Rs.)",
           "Net Comm. (Rs.)",
           "Fittings 5% (Rs.)",
-          "Net Payout (Rs.)",
           "Dealer",
         ],
       ];
 
       let totalInv = 0;
-      let totalSub = 0;
       let totalMat = 0;
-      let totalRel = 0;
       let totalComm = 0;
       let totalPen = 0;
       let totalNetComm = 0;
       let totalFit = 0;
-      let totalNet = 0;
 
       const rows = projectsToExport.map((p, index) => {
         const invAmt = Math.floor(parseFloat(p.invoice_amount || 0));
         const farmerContrib = Math.floor(parseFloat(p.farmer_contribution || 0));
-        const subAmt = Math.floor(parseFloat(p.subsidy_amount || p.state_restricted_amount || 0));
         const matCost = Math.floor(parseFloat(p.total_material_cost || 0));
-        const nowRel = Math.floor(parseFloat(p.now_to_be_released_amount || p.fund_share_amount || 0));
         const commAmt = Math.floor(parseFloat(p.commission_amount || 0));
         const fitAmt = Math.floor(parseFloat(p.fittings_amount || 0));
         const penalty = Math.floor(
@@ -374,17 +366,13 @@ export function CommissionProceedingsPage() {
           )
         );
         const netComm = Math.max(0, commAmt - penalty);
-        const netPayable = Math.max(0, netComm + fitAmt);
 
         totalInv += invAmt;
-        totalSub += subAmt;
         totalMat += matCost;
-        totalRel += nowRel;
         totalComm += commAmt;
         totalPen += penalty;
         totalNetComm += netComm;
         totalFit += fitAmt;
-        totalNet += netPayable;
 
         const invNoDateText = `${p.invoice_number && p.invoice_number !== "—" ? `#${p.invoice_number}` : "—"}\n${formatDate(p.invoice_date)}`;
         const invCellText = invAmt
@@ -397,94 +385,85 @@ export function CommissionProceedingsPage() {
           invNoDateText,
           p.farmer_name || "—",
           invCellText,
-          subAmt ? subAmt.toLocaleString("en-IN") : "—",
           matCost ? `${matCost.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
-          nowRel ? `${nowRel.toLocaleString("en-IN")}\n(GST ${p.gst_percentage || 12}%)` : "—",
           commAmt ? commAmt.toLocaleString("en-IN") : "0",
           penalty > 0 ? `-${penalty.toLocaleString("en-IN")}` : "0",
           netComm.toLocaleString("en-IN"),
           fitAmt ? fitAmt.toLocaleString("en-IN") : "0",
-          netPayable.toLocaleString("en-IN"),
           p.dealer?.name || (p.project_id ? "Unassigned Dealer" : "Unassigned"),
         ];
       });
 
-    // Summary Footer Row
-    const footers = [
-      [
-        "Total",
-        `${statementProjects.length} Items`,
-        "—",
-        "—",
-        totalInv.toLocaleString("en-IN"),
-        totalSub.toLocaleString("en-IN"),
-        totalMat.toLocaleString("en-IN"),
-        totalRel.toLocaleString("en-IN"),
-        totalComm.toLocaleString("en-IN"),
-        totalPen > 0 ? `-${totalPen.toLocaleString("en-IN")}` : "0",
-        totalNetComm.toLocaleString("en-IN"),
-        totalFit.toLocaleString("en-IN"),
-        totalNet.toLocaleString("en-IN"),
-        "—",
-      ],
-    ];
+      // Summary Footer Row
+      const footers = [
+        [
+          "Total",
+          `${statementProjects.length} Items`,
+          "—",
+          "—",
+          totalInv.toLocaleString("en-IN"),
+          totalMat.toLocaleString("en-IN"),
+          totalComm.toLocaleString("en-IN"),
+          totalPen > 0 ? `-${totalPen.toLocaleString("en-IN")}` : "0",
+          totalNetComm.toLocaleString("en-IN"),
+          totalFit.toLocaleString("en-IN"),
+          "—",
+        ],
+      ];
 
-    autoTable(doc, {
-      head: headers,
-      body: rows,
-      foot: footers,
-      startY: 80,
-      margin: { left: 20, right: 20 },
-      theme: "grid",
-      styles: {
-        fontSize: 6.8,
-        cellPadding: { top: 3.5, bottom: 3.5, left: 2, right: 2 },
-        textColor: [20, 33, 61],
-        lineColor: [230, 227, 218],
-        lineWidth: 0.5,
-        overflow: "linebreak",
-      },
-      headStyles: {
-        fillColor: [245, 245, 243],
-        textColor: [50, 60, 80],
-        fontStyle: "bold",
-        fontSize: 6.8,
-      },
-      footStyles: {
-        fillColor: [240, 244, 243],
-        textColor: [20, 33, 61],
-        fontStyle: "bold",
-        fontSize: 6.8,
-      },
-      columnStyles: {
-        0: { cellWidth: 18, halign: "center" },
-        1: { cellWidth: 95 },
-        2: { cellWidth: 65 },
-        3: { cellWidth: 80 },
-        4: { cellWidth: 50, halign: "right" },
-        5: { cellWidth: 50, halign: "right" },
-        6: { cellWidth: 52, halign: "right" },
-        7: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-        8: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-        9: { cellWidth: 45, halign: "right", textColor: [225, 29, 72] },
-        10: { cellWidth: 50, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
-        11: { cellWidth: 48, halign: "right", textColor: [124, 58, 237] },
-        12: { cellWidth: 56, halign: "right", fontStyle: "bold", textColor: [6, 95, 70] },
-        13: { cellWidth: 80 },
-      },
-      didDrawPage: (data) => {
-        const pageCount = doc.internal.getNumberOfPages();
-        doc.setFontSize(7.5);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(140, 151, 171);
-        doc.text(
-          `Cheran Irrigation · Dealer Commission Statement · Page ${data.pageNumber} of ${pageCount}`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 12,
-          { align: "center" }
-        );
-      },
-    });
+      autoTable(doc, {
+        head: headers,
+        body: rows,
+        foot: footers,
+        startY: 80,
+        margin: { left: 20, right: 20 },
+        theme: "grid",
+        styles: {
+          fontSize: 7.2,
+          cellPadding: { top: 3.5, bottom: 3.5, left: 2.5, right: 2.5 },
+          textColor: [20, 33, 61],
+          lineColor: [230, 227, 218],
+          lineWidth: 0.5,
+          overflow: "linebreak",
+        },
+        headStyles: {
+          fillColor: [245, 245, 243],
+          textColor: [50, 60, 80],
+          fontStyle: "bold",
+          fontSize: 7.2,
+        },
+        footStyles: {
+          fillColor: [240, 244, 243],
+          textColor: [20, 33, 61],
+          fontStyle: "bold",
+          fontSize: 7.2,
+        },
+        columnStyles: {
+          0: { cellWidth: 20, halign: "center" },
+          1: { cellWidth: 105 },
+          2: { cellWidth: 75 },
+          3: { cellWidth: 95 },
+          4: { cellWidth: 65, halign: "right" },
+          5: { cellWidth: 75, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          6: { cellWidth: 70, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          7: { cellWidth: 55, halign: "right", textColor: [225, 29, 72] },
+          8: { cellWidth: 70, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          9: { cellWidth: 60, halign: "right", textColor: [124, 58, 237] },
+          10: { cellWidth: 110 },
+        },
+        didDrawPage: (data) => {
+          const pageCount = doc.internal.getNumberOfPages();
+          doc.setFontSize(7.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(140, 151, 171);
+          doc.text(
+            `Cheran Irrigation · Dealer Commission Statement · Page ${data.pageNumber} of ${pageCount}`,
+            pageWidth / 2,
+            doc.internal.pageSize.getHeight() - 12,
+            { align: "center" }
+          );
+        },
+      });
 
     const safeDealerName = (currentDealerName || "Statement").replace(/[/\\?%*:|"<> ]/g, "_");
     doc.save(`Dealer_Statement_${safeDealerName}_${new Date().toISOString().split("T")[0]}.pdf`);
@@ -802,19 +781,6 @@ export function CommissionProceedingsPage() {
               </Button>
             ) : (
               <>
-                {activeTab === "dealer_statements" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={Download}
-                    onClick={handleExportDealerPDF}
-                    disabled={statementProjects.length === 0}
-                    loading={exportingPDF}
-                    title="Download Dealer Commission Statement PDF (All filtered records)"
-                  >
-                    Download PDF
-                  </Button>
-                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -1421,22 +1387,6 @@ export function CommissionProceedingsPage() {
                   </button>
                 )}
               </div>
-
-              {!isUser && activeTab === "dealer_statements" && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={Download}
-                    onClick={handleExportDealerPDF}
-                    disabled={statementProjects.length === 0}
-                    title="Download Dealer Commission Statement PDF"
-                    className="text-xs font-semibold"
-                  >
-                    Download PDF Statement
-                  </Button>
-                </div>
-              )}
             </div>
 
             {activeTab === "batches" ? (
@@ -1961,7 +1911,7 @@ export function CommissionProceedingsPage() {
                       variant="primary"
                       size="sm"
                       icon={Download}
-                      onClick={handleExportDealerPDF}
+                      onClick={() => handleExportDealerPDF()}
                       disabled={statementProjects.length === 0}
                       loading={exportingPDF}
                       title="Download Dealer Commission Statement PDF (All filtered records)"
@@ -1997,14 +1947,13 @@ export function CommissionProceedingsPage() {
                               <th className="py-2.5 px-3">Dealer</th>
                               <th className="py-2.5 px-3 text-right">Invoice Amount</th>
                               <th className="py-2.5 px-3 text-right">Subsidy Eligible</th>
-                              <th className="py-2.5 px-3 text-right">Total Material Cost</th>
+                              <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Total Material Cost</th>
                               <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Now Released</th>
                               <th className="py-2.5 px-3">Delay</th>
                               <th className="py-2.5 px-3 text-right font-bold text-[#2F6F5E]">Commission</th>
                               <th className="py-2.5 px-3 text-right text-rose-600">Penalty</th>
                               <th className="py-2.5 px-3 text-right font-bold text-[#14213D]">Net Commission</th>
                               <th className="py-2.5 px-3 text-right text-[#7C3AED]">Fittings (5%)</th>
-                              <th className="py-2.5 px-3 text-right font-bold text-emerald-800">Net Payout</th>
                               <th className="py-2.5 px-3 text-center">Payout Status</th>
                             </tr>
                           </thead>
@@ -2024,7 +1973,6 @@ export function CommissionProceedingsPage() {
                                 )
                               );
                               const netComm = Math.max(0, commAmt - penAmt);
-                              const netPayout = Math.max(0, netComm + fitAmt);
 
                               const isFirstFund = (p.batch?.fund_percentage_value || 55) >= 50.0;
                               const startLabel = isFirstFund ? "Inv Date" : "1st Fund Credited";
@@ -2089,9 +2037,9 @@ export function CommissionProceedingsPage() {
                                     {subAmt ? formatRupees(subAmt) : "—"}
                                   </td>
 
-                                  <td className="py-3 px-3 text-right font-mono font-medium text-[#14213D]">
+                                  <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
                                     <div>{matCost ? formatRupees(matCost) : "—"}</div>
-                                    <span className="text-[9px] text-[#8C97AB] block font-mono">
+                                    <span className="text-[9px] text-[#2F6F5E]/70 block font-mono">
                                       GST: {p.gst_percentage || 12}%
                                     </span>
                                   </td>
@@ -2143,10 +2091,6 @@ export function CommissionProceedingsPage() {
 
                                   <td className="py-3 px-3 text-right font-mono text-[#7C3AED] font-semibold">
                                     {fitAmt > 0 ? formatRupees(fitAmt) : "—"}
-                                  </td>
-
-                                  <td className="py-3 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
-                                    {formatRupees(netPayout)}
                                   </td>
 
                                   <td className="py-3 px-3 text-center">

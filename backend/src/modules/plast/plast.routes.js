@@ -36,9 +36,9 @@ router.put("/customers/:id", controller.updateCustomer);
 router.get("/customers/:id/ledger", controller.getCustomerLedger);
 router.post("/customers/:id/payments", authorize("ADMIN", "PLAST_PAYMENTS"), controller.recordCustomerPayment);
 
-// Stock On-Hand (ADMIN only)
-router.get("/inventory/stock", authorize("ADMIN"), controller.getStockOnHand);
-router.post("/inventory/stock/adjust", authorize("ADMIN"), controller.adjustStock);
+// Stock On-Hand (ADMIN, PLAST, PLAST_USER, PLAST_PAYMENTS)
+router.get("/inventory/stock", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"), controller.getStockOnHand);
+router.post("/inventory/stock/adjust", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"), controller.adjustStock);
 
 // Purchases (Raw Material Receipts from Vendors) (ADMIN only)
 router.get("/purchases", authorize("ADMIN"), controller.getPurchases);
@@ -51,6 +51,7 @@ router.post("/production", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYM
 
 // Sales & Billing (Accessible to ADMIN, PLAST_USER, PLAST_PAYMENTS)
 router.get("/sales", controller.getSales);
+router.get("/sales/daily-dispatch", controller.getDailyDispatchReport);
 router.get("/sales/:id", controller.getSaleById);
 router.post("/sales", controller.createSale);
 

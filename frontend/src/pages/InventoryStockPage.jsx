@@ -313,7 +313,7 @@ export function InventoryStockPage() {
             </Button>
             <Link to="/inventory/receipts">
               <Button variant="outline" size="sm" icon={Plus}>
-                Receipt
+                Purchase
               </Button>
             </Link>
             <Link to="/inventory/production">

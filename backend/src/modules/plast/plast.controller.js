@@ -238,6 +238,15 @@ export const getSales = async (req, res, next) => {
   }
 };
 
+export const getDailyDispatchReport = async (req, res, next) => {
+  try {
+    const data = await plastService.getDailyDispatchReport(req.query.date);
+    res.status(200).json({ status: "success", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getSaleById = async (req, res, next) => {
   try {
     const data = await plastService.getSaleById(req.params.id);

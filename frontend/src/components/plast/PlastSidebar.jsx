@@ -16,6 +16,7 @@ import {
   ArrowLeftRight,
   Scale,
   CreditCard,
+  ClipboardList,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -34,8 +35,10 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
             items: [
               { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
               { label: "Customers", path: "/plast/customers", icon: Users },
+              { label: "Daily Dispatch", path: "/plast/dispatch", icon: ClipboardList },
               { label: "Items", path: "/plast/items", icon: Package },
               { label: "Units of Measure", path: "/plast/units", icon: Scale },
+              { label: "Stock On-Hand", path: "/plast/stock", icon: Boxes },
               { label: "Daily Production", path: "/plast/production", icon: Factory },
             ],
           },
@@ -47,8 +50,10 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
             items: [
               { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
               { label: "Customers", path: "/plast/customers", icon: Users },
+              { label: "Daily Dispatch", path: "/plast/dispatch", icon: ClipboardList },
               { label: "Items", path: "/plast/items", icon: Package },
               { label: "Units of Measure", path: "/plast/units", icon: Scale },
+              { label: "Stock On-Hand", path: "/plast/stock", icon: Boxes },
               { label: "Daily Production", path: "/plast/production", icon: Factory },
             ],
           },
@@ -60,6 +65,7 @@ export function PlastSidebar({ isOpen, isCollapsed, onClose, onToggleCollapse })
               { label: "Dashboard", path: "/plast", icon: LayoutDashboard },
               { label: "Sales & Billing", path: "/plast/sales", icon: ShoppingCart },
               { label: "Customers", path: "/plast/customers", icon: Users },
+              { label: "Daily Dispatch", path: "/plast/dispatch", icon: ClipboardList },
             ],
           },
           {

@@ -55,6 +55,7 @@ export const plastApi = {
 
   // Sales
   getSales: (params) => api.get("/plast/sales", { params }).then(unwrapList),
+  getDailyDispatchReport: (date) => api.get("/plast/sales/daily-dispatch", { params: { date } }).then(unwrapData),
   getSaleById: (id) => api.get(`/plast/sales/${id}`).then(unwrapData),
   createSale: (data) => api.post("/plast/sales", data).then(unwrapData),
 
