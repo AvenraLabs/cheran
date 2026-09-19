@@ -28,12 +28,6 @@ import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const PAYMENT_MODES = [
-  { value: "CASH", label: "Cash" },
-  { value: "UPI", label: "UPI / GPay / PhonePe" },
-  { value: "BANK_TRANSFER", label: "Bank Transfer (NEFT/RTGS/IMPS)" },
-  { value: "CHEQUE", label: "Cheque" },
-];
 
 export function PlastCustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -58,9 +52,6 @@ export function PlastCustomersPage() {
   const [paymentData, setPaymentData] = useState({
     amount: "",
     payment_date: new Date().toISOString().split("T")[0],
-    payment_mode: "CASH",
-    reference_number: "",
-    notes: "",
   });
   const [recordingPayment, setRecordingPayment] = useState(false);
 
@@ -164,9 +155,6 @@ export function PlastCustomersPage() {
     setPaymentData({
       amount: customer.current_balance > 0 ? String(Math.round(customer.current_balance)) : "",
       payment_date: new Date().toISOString().split("T")[0],
-      payment_mode: "CASH",
-      reference_number: "",
-      notes: "",
     });
   };
 
@@ -185,9 +173,6 @@ export function PlastCustomersPage() {
       await plastApi.recordCustomerPayment(paymentCustomer.id, {
         amount: amt,
         payment_date: paymentData.payment_date,
-        payment_mode: paymentData.payment_mode,
-        reference_number: paymentData.reference_number || undefined,
-        notes: paymentData.notes || undefined,
       });
 
       toast.success(
@@ -753,54 +738,15 @@ export function PlastCustomersPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                  Payment Date
-                </label>
-                <input
-                  type="date"
-                  value={paymentData.payment_date}
-                  onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                  Payment Mode
-                </label>
-                <CustomSelect
-                  options={PAYMENT_MODES}
-                  value={paymentData.payment_mode}
-                  onChange={(val) => setPaymentData({ ...paymentData, payment_mode: val })}
-                  placeholder="Select mode"
-                />
-              </div>
-            </div>
-
             <div>
               <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Reference / Transaction # (Optional)
+                Payment Date
               </label>
               <input
-                type="text"
-                placeholder="e.g. UPI Ref, Cheque #, GPay txn ID"
-                value={paymentData.reference_number}
-                onChange={(e) => setPaymentData({ ...paymentData, reference_number: e.target.value })}
-                className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Notes
-              </label>
-              <input
-                type="text"
-                placeholder="Optional notes or remarks"
-                value={paymentData.notes}
-                onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
-                className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                type="date"
+                value={paymentData.payment_date}
+                onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
+                className="w-full px-2 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
               />
             </div>
 
