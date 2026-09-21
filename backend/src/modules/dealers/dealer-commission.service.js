@@ -163,10 +163,14 @@ export async function calculateProjectDealerCommission(projectId) {
   let phase1PenaltyPoints = 0;
 
   if (invoiceDate && workCompletionDate) {
-    phase1DelayDays = Math.max(0, calculateDaysBetween(invoiceDate, workCompletionDate));
-    if (phase1DelayDays > 45) {
-      phase1Cycles = Math.floor(phase1DelayDays / 45);
-      phase1PenaltyPoints = phase1Cycles * 1.0; // 1% point penalty per 45-day cycle
+    const dInv = new Date(invoiceDate);
+    const dWc = new Date(workCompletionDate);
+    if (dWc > dInv) {
+      phase1DelayDays = Math.round((dWc.getTime() - dInv.getTime()) / (1000 * 60 * 60 * 24));
+      if (phase1DelayDays > 45) {
+        phase1Cycles = Math.floor(phase1DelayDays / 45);
+        phase1PenaltyPoints = phase1Cycles * 1.0; // 1% point penalty per 45-day cycle
+      }
     }
   }
 
@@ -186,10 +190,14 @@ export async function calculateProjectDealerCommission(projectId) {
   let phase2PenaltyPoints = 0;
 
   if (firstFundDate && jvCompletedDate) {
-    phase2DelayDays = Math.max(0, calculateDaysBetween(firstFundDate, jvCompletedDate));
-    if (phase2DelayDays > 45) {
-      phase2Cycles = Math.floor(phase2DelayDays / 45);
-      phase2PenaltyPoints = phase2Cycles * 1.0; // 1% point penalty per 45-day cycle
+    const dFf = new Date(firstFundDate);
+    const dJv = new Date(jvCompletedDate);
+    if (dJv > dFf) {
+      phase2DelayDays = Math.round((dJv.getTime() - dFf.getTime()) / (1000 * 60 * 60 * 24));
+      if (phase2DelayDays > 45) {
+        phase2Cycles = Math.floor(phase2DelayDays / 45);
+        phase2PenaltyPoints = phase2Cycles * 1.0; // 1% point penalty per 45-day cycle
+      }
     }
   }
 

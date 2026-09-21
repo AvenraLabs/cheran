@@ -245,13 +245,17 @@ export async function previewProceedingExcel(
             h.status?.toUpperCase() === "WORK COMPLETED" ||
             h.status?.toUpperCase() === "JV RECOMMENDED"
         );
-        const wcDate = wcHistory?.status_date || proj.work_order_date || null;
+        const wcDate = wcHistory?.status_date || null;
         milestoneEndDate = wcDate;
 
         if (invDate && wcDate) {
-          delayDays = Math.max(0, calculateDaysBetween(invDate, wcDate));
-          if (delayDays > 45) {
-            penaltyPoints = Math.floor(delayDays / 45); // 1% per 45-day block
+          const dInv = new Date(invDate);
+          const dWc = new Date(wcDate);
+          if (dWc > dInv) {
+            delayDays = Math.round((dWc.getTime() - dInv.getTime()) / (1000 * 60 * 60 * 24));
+            if (delayDays > 45) {
+              penaltyPoints = Math.floor(delayDays / 45); // 1% per 45-day block
+            }
           }
         }
       } else {
@@ -272,9 +276,13 @@ export async function previewProceedingExcel(
         milestoneEndDate = jvDate;
 
         if (ffDate && jvDate) {
-          delayDays = Math.max(0, calculateDaysBetween(ffDate, jvDate));
-          if (delayDays > 45) {
-            penaltyPoints = Math.floor(delayDays / 45);
+          const dFf = new Date(ffDate);
+          const dJv = new Date(jvDate);
+          if (dJv > dFf) {
+            delayDays = Math.round((dJv.getTime() - dFf.getTime()) / (1000 * 60 * 60 * 24));
+            if (delayDays > 45) {
+              penaltyPoints = Math.floor(delayDays / 45);
+            }
           }
         }
       }
@@ -926,13 +934,17 @@ export async function recalculateProceedingBatch(id) {
               h.status?.toUpperCase() === "WORK COMPLETED" ||
               h.status?.toUpperCase() === "JV RECOMMENDED"
           );
-          const wcDate = wcHistory?.status_date || proj.work_order_date || null;
+          const wcDate = wcHistory?.status_date || null;
           milestoneEndDate = wcDate;
 
           if (invDate && wcDate) {
-            delayDays = Math.max(0, calculateDaysBetween(invDate, wcDate));
-            if (delayDays > 45) {
-              penaltyPoints = Math.floor(delayDays / 45);
+            const dInv = new Date(invDate);
+            const dWc = new Date(wcDate);
+            if (dWc > dInv) {
+              delayDays = Math.round((dWc.getTime() - dInv.getTime()) / (1000 * 60 * 60 * 24));
+              if (delayDays > 45) {
+                penaltyPoints = Math.floor(delayDays / 45);
+              }
             }
           }
         } else {
@@ -952,9 +964,13 @@ export async function recalculateProceedingBatch(id) {
           milestoneEndDate = jvDate;
 
           if (ffDate && jvDate) {
-            delayDays = Math.max(0, calculateDaysBetween(ffDate, jvDate));
-            if (delayDays > 45) {
-              penaltyPoints = Math.floor(delayDays / 45);
+            const dFf = new Date(ffDate);
+            const dJv = new Date(jvDate);
+            if (dJv > dFf) {
+              delayDays = Math.round((dJv.getTime() - dFf.getTime()) / (1000 * 60 * 60 * 24));
+              if (delayDays > 45) {
+                penaltyPoints = Math.floor(delayDays / 45);
+              }
             }
           }
         }
