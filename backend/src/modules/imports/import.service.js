@@ -323,12 +323,16 @@ export async function autoCreateAllUnresolvedDealers(importId) {
     // Resolve all rows in this group
     for (const row of group.rows) {
       let newAction = "NEW_PROJECT";
+      let prevStatus = row.previous_status;
       if (row.matched_project_id) {
         const proj = await GovernmentProject.findByPk(row.matched_project_id);
-        if (proj && proj.current_status !== row.imported_status) {
-          newAction = "STATUS_CHANGE";
-        } else {
-          newAction = "UNCHANGED";
+        if (proj) {
+          prevStatus = proj.current_status || null;
+          if (proj.current_status !== row.imported_status) {
+            newAction = "STATUS_CHANGE";
+          } else {
+            newAction = "UNCHANGED";
+          }
         }
       }
 
@@ -336,6 +340,7 @@ export async function autoCreateAllUnresolvedDealers(importId) {
         matched_dealer_id: dealer.id,
         resolution_status: "RESOLVED",
         action: newAction,
+        previous_status: prevStatus,
         error_message: null,
       });
       totalResolvedRows++;

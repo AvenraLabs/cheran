@@ -78,6 +78,7 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
     let errorMessage = null;
     let matchedProjectId = null;
     let matchedDealerId = null;
+    let prevStatus = null;
 
     // Rule 1: Application ID must exist
     if (!appId || appId === "") {
@@ -119,7 +120,6 @@ export async function processImportPreview({ fileBuffer, fileName, uploadedBy = 
 
       // Check if project exists in database
       const existingProj = projectMap.get(appId);
-      let prevStatus = null;
       if (existingProj) {
         matchedProjectId = existingProj.id;
         prevStatus = existingProj.current_status || null;
