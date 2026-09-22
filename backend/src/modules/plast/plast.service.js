@@ -569,17 +569,23 @@ export const getStockOnHand = async (filters = {}) => {
     ],
   });
 
-  return items.map((item) => ({
-    id: item.id,
-    name: item.name,
-    code: item.code,
-    category: item.category,
-    item_type: item.item_type,
-    unit_price: Number(item.unit_price || 0),
-    unit: item.unit?.symbol || item.unit?.name || "Units",
-    quantity_on_hand: Number(item.stock?.quantity_on_hand || 0),
-    stock_value: Number(item.unit_price || 0) * Number(item.stock?.quantity_on_hand || 0),
-  }));
+  return items.map((item) => {
+    const qty = Number(item.stock?.quantity_on_hand || 0);
+    const weightPerUnit = Number(item.weight_per_unit || 0);
+    return {
+      id: item.id,
+      name: item.name,
+      code: item.code,
+      category: item.category,
+      item_type: item.item_type,
+      unit_price: Number(item.unit_price || 0),
+      unit: item.unit?.symbol || item.unit?.name || "Units",
+      weight_per_unit: weightPerUnit,
+      quantity_on_hand: qty,
+      net_weight: Number((weightPerUnit * qty).toFixed(3)),
+      stock_value: Number(item.unit_price || 0) * qty,
+    };
+  });
 };
 
 /**
@@ -1399,19 +1405,23 @@ export const getPaymentsSummary = async (filters = {}) => {
 // =========================================================================
 
 export const getReports = async (type = "sales", filters = {}) => {
-  const dateWhere = {};
+  let dateCondition = null;
   if (filters.from_date && filters.to_date) {
-    dateWhere[Op.between] = [filters.from_date, filters.to_date];
+    if (filters.from_date === filters.to_date) {
+      dateCondition = filters.from_date;
+    } else {
+      dateCondition = { [Op.between]: [filters.from_date, filters.to_date] };
+    }
   } else if (filters.from_date) {
-    dateWhere[Op.gte] = filters.from_date;
+    dateCondition = { [Op.gte]: filters.from_date };
   } else if (filters.to_date) {
-    dateWhere[Op.lte] = filters.to_date;
+    dateCondition = { [Op.lte]: filters.to_date };
   }
 
   if (type === "sales") {
     const where = {};
-    if (Object.keys(dateWhere).length > 0) {
-      where.sale_date = dateWhere;
+    if (dateCondition) {
+      where.sale_date = dateCondition;
     }
     if (filters.customer_id) {
       where.customer_id = filters.customer_id;
@@ -1444,6 +1454,7 @@ export const getReports = async (type = "sales", filters = {}) => {
       total_discount: totalDiscount,
       grand_total: grandTotal,
       total_gross_sales: grandTotal,
+      has_date_filter: Boolean(dateCondition),
     };
 
     return { type: "sales", summary, data: sales };
@@ -1451,8 +1462,8 @@ export const getReports = async (type = "sales", filters = {}) => {
 
   if (type === "purchases") {
     const where = {};
-    if (Object.keys(dateWhere).length > 0) {
-      where.receipt_date = dateWhere;
+    if (dateCondition) {
+      where.receipt_date = dateCondition;
     }
     if (filters.supplier_id) {
       where.supplier_id = filters.supplier_id;
@@ -1477,6 +1488,7 @@ export const getReports = async (type = "sales", filters = {}) => {
       total_receipts: purchases.length,
       grand_total: totalPurchases,
       total_purchase_amount: totalPurchases,
+      has_date_filter: Boolean(dateCondition),
     };
 
     return { type: "purchases", summary, data: purchases };
@@ -1484,8 +1496,8 @@ export const getReports = async (type = "sales", filters = {}) => {
 
   if (type === "production") {
     const where = {};
-    if (Object.keys(dateWhere).length > 0) {
-      where.production_date = dateWhere;
+    if (dateCondition) {
+      where.production_date = dateCondition;
     }
 
     const entries = await PlastProductionEntry.findAll({
@@ -1533,6 +1545,7 @@ export const getReports = async (type = "sales", filters = {}) => {
       total_raw_used: Math.round(totalRawUsed * 1000) / 1000,
       total_wastage: Math.round(totalWastage * 1000) / 1000,
       total_produced: Math.round(totalProduced * 1000) / 1000,
+      has_date_filter: Boolean(dateCondition),
     };
 
     return { type: "production", summary, data: entries };
@@ -1547,6 +1560,83 @@ export const getReports = async (type = "sales", filters = {}) => {
       .filter((s) => s.item_type === "FINISHED_GOOD")
       .reduce((acc, s) => acc + Number(s.stock_value || 0), 0);
     const totalValuation = stockList.reduce((acc, s) => acc + Number(s.stock_value || 0), 0);
+    const totalNetWeight = stockList.reduce((acc, s) => acc + Number(s.net_weight || 0), 0);
+
+    let periodInwardTotal = 0;
+    let periodOutwardTotal = 0;
+
+    if (dateCondition) {
+      const [receiptsInPeriod, outputsInPeriod, materialsInPeriod, salesInPeriod] = await Promise.all([
+        PlastStockReceiptItem.findAll({
+          include: [
+            {
+              model: PlastStockReceipt,
+              as: "stock_receipt",
+              where: { receipt_date: dateCondition },
+              attributes: [],
+            },
+          ],
+          attributes: ["item_id", "quantity"],
+        }),
+        PlastProductionOutput.findAll({
+          include: [
+            {
+              model: PlastProductionEntry,
+              as: "production_entry",
+              where: { production_date: dateCondition },
+              attributes: [],
+            },
+          ],
+          attributes: ["item_id", "quantity_produced"],
+        }),
+        PlastProductionMaterial.findAll({
+          include: [
+            {
+              model: PlastProductionEntry,
+              as: "production_entry",
+              where: { production_date: dateCondition },
+              attributes: [],
+            },
+          ],
+          attributes: ["item_id", "quantity_used"],
+        }),
+        PlastSaleItem.findAll({
+          include: [
+            {
+              model: PlastSale,
+              as: "sale",
+              where: { sale_date: dateCondition },
+              attributes: [],
+            },
+          ],
+          attributes: ["item_id", "quantity"],
+        }),
+      ]);
+
+      const inwardMap = {};
+      const outwardMap = {};
+
+      receiptsInPeriod.forEach((r) => {
+        inwardMap[r.item_id] = (inwardMap[r.item_id] || 0) + Number(r.quantity || 0);
+      });
+      outputsInPeriod.forEach((o) => {
+        inwardMap[o.item_id] = (inwardMap[o.item_id] || 0) + Number(o.quantity_produced || 0);
+      });
+      materialsInPeriod.forEach((m) => {
+        outwardMap[m.item_id] = (outwardMap[m.item_id] || 0) + Number(m.quantity_used || 0);
+      });
+      salesInPeriod.forEach((s) => {
+        outwardMap[s.item_id] = (outwardMap[s.item_id] || 0) + Number(s.quantity || 0);
+      });
+
+      stockList.forEach((item) => {
+        item.period_inward = Math.round((inwardMap[item.id] || 0) * 1000) / 1000;
+        item.period_outward = Math.round((outwardMap[item.id] || 0) * 1000) / 1000;
+        item.period_net = Math.round((item.period_inward - item.period_outward) * 1000) / 1000;
+        periodInwardTotal += item.period_inward;
+        periodOutwardTotal += item.period_outward;
+      });
+    }
 
     const summary = {
       total_items: stockList.length,
@@ -1555,6 +1645,11 @@ export const getReports = async (type = "sales", filters = {}) => {
       raw_material_valuation: rawValuation,
       finished_goods_valuation: finishedValuation,
       total_stock_value: totalValuation,
+      total_inventory_value: totalValuation,
+      total_net_weight: Math.round(totalNetWeight * 1000) / 1000,
+      period_inward: Math.round(periodInwardTotal * 1000) / 1000,
+      period_outward: Math.round(periodOutwardTotal * 1000) / 1000,
+      has_date_filter: Boolean(dateCondition),
     };
     return { type: "stock", summary, data: stockList };
   }

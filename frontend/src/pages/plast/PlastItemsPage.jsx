@@ -35,6 +35,7 @@ export function PlastItemsPage() {
     category: "",
     unit_id: "",
     unit_price: "",
+    weight_per_unit: "",
     initial_stock: "",
   });
   const [saving, setSaving] = useState(false);
@@ -91,6 +92,7 @@ export function PlastItemsPage() {
       category: "",
       unit_id: units[0]?.id || "",
       unit_price: "",
+      weight_per_unit: "",
       initial_stock: "0",
     });
     setIsModalOpen(true);
@@ -104,6 +106,10 @@ export function PlastItemsPage() {
       category: item.category || "",
       unit_id: item.unit_id || units[0]?.id || "",
       unit_price: String(item.unit_price || ""),
+      weight_per_unit:
+        item.weight_per_unit !== null && item.weight_per_unit !== undefined && Number(item.weight_per_unit) > 0
+          ? String(item.weight_per_unit)
+          : "",
       initial_stock: "0",
     });
     setIsModalOpen(true);
@@ -118,6 +124,7 @@ export function PlastItemsPage() {
 
     setSaving(true);
     try {
+      const weightVal = formData.weight_per_unit !== "" ? parseFloat(formData.weight_per_unit) || 0 : 0;
       if (editingItem) {
         await plastApi.updateItem(editingItem.id, {
           name: formData.name.trim(),
@@ -125,6 +132,7 @@ export function PlastItemsPage() {
           category: formData.category.trim() || undefined,
           unit_id: formData.unit_id || undefined,
           unit_price: parseFloat(formData.unit_price) || 0,
+          weight_per_unit: weightVal,
         });
         toast.success("Item updated successfully");
       } else {
@@ -134,6 +142,7 @@ export function PlastItemsPage() {
           category: formData.category.trim() || undefined,
           unit_id: formData.unit_id || undefined,
           unit_price: parseFloat(formData.unit_price) || 0,
+          weight_per_unit: weightVal,
           initial_stock: parseFloat(formData.initial_stock) || 0,
         });
         toast.success("Item created successfully");
@@ -309,14 +318,19 @@ export function PlastItemsPage() {
                     <th className="py-3 px-3">Type</th>
                     <th className="py-3 px-3">Category</th>
                     <th className="py-3 px-3">Unit</th>
+                    <th className="py-3 px-3 text-right">Weight / Unit</th>
                     <th className="py-3 px-3 text-right">Selling Price</th>
                     <th className="py-3 px-4 text-right">Current Stock</th>
+                    <th className="py-3 px-4 text-right">Net Weight</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EDEAE1]">
                   {displayedItems.map((item) => {
                     const isRaw = item.item_type === "RAW_MATERIAL";
+                    const weightPerUnit = Number(item.weight_per_unit || 0);
+                    const stockQty = Number(item.stock?.quantity_on_hand || 0);
+                    const netWeight = weightPerUnit * stockQty;
                     return (
                       <tr key={item.id} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="py-3 px-4 font-bold text-[#14213D]">{item.name}</td>
@@ -333,11 +347,19 @@ export function PlastItemsPage() {
                         </td>
                         <td className="py-3 px-3 text-[#52607D]">{item.category || "—"}</td>
                         <td className="py-3 px-3 text-[#52607D] font-mono">{item.unit?.name || "—"}</td>
+                        <td className="py-3 px-3 text-right font-mono text-[#52607D]">
+                          {weightPerUnit > 0 ? `${weightPerUnit.toFixed(3)} kg` : "—"}
+                        </td>
                         <td className="py-3 px-3 text-right font-medium text-[#14213D]">
                           {formatCurrency(item.unit_price)}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
-                          {item.stock?.quantity_on_hand || 0} {item.unit?.symbol || ""}
+                          {stockQty} {item.unit?.symbol || ""}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-[#2F6F5E]">
+                          {netWeight > 0
+                            ? `${netWeight.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`
+                            : "—"}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -449,22 +471,39 @@ export function PlastItemsPage() {
             </div>
           </div>
 
-          {!editingItem && (
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[#14213D] mb-1">
-                Initial Opening Stock Quantity
+                Weight per Unit (kg)
               </label>
               <input
                 type="number"
                 step="any"
                 min="0"
-                placeholder="0"
-                value={formData.initial_stock}
-                onChange={(e) => setFormData({ ...formData, initial_stock: e.target.value })}
+                placeholder="e.g. 0.250"
+                value={formData.weight_per_unit}
+                onChange={(e) => setFormData({ ...formData, weight_per_unit: e.target.value })}
                 className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
               />
             </div>
-          )}
+
+            {!editingItem && (
+              <div>
+                <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                  Initial Opening Stock Quantity
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0"
+                  value={formData.initial_stock}
+                  onChange={(e) => setFormData({ ...formData, initial_stock: e.target.value })}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
             <Button type="button" variant="secondary" size="sm" onClick={() => setIsModalOpen(false)}>

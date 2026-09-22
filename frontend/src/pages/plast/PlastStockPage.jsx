@@ -216,6 +216,7 @@ export function PlastStockPage() {
                     <th className="py-3 px-3">Category</th>
                     <th className="py-3 px-3 text-right">Unit Price</th>
                     <th className="py-3 px-4 text-right">Available Qty</th>
+                    <th className="py-3 px-4 text-right">Net Weight</th>
                     <th className="py-3 px-4 text-right">Stock Value</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -225,6 +226,12 @@ export function PlastStockPage() {
                   {safeStockList.map((item) => {
                     const isRaw = item.item_type === "RAW_MATERIAL";
                     const isLow = Number(item.quantity_on_hand || 0) <= 5;
+                    const netWeightVal =
+                      item.net_weight !== undefined && item.net_weight !== null && Number(item.net_weight) > 0
+                        ? Number(item.net_weight)
+                        : Number(item.weight_per_unit || 0) > 0
+                        ? Number(item.weight_per_unit) * Number(item.quantity_on_hand || 0)
+                        : 0;
 
                     return (
                       <tr key={item.id} className="hover:bg-[#FAFAF8] transition-colors">
@@ -251,6 +258,11 @@ export function PlastStockPage() {
                           <span className="text-[10px] text-[#52607D] font-normal">
                             {typeof item.unit === "object" ? (item.unit?.symbol || item.unit?.name || "Units") : (item.unit || "Units")}
                           </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-xs text-[#2F6F5E]">
+                          {netWeightVal > 0
+                            ? `${netWeightVal.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`
+                            : "—"}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
                           {formatCurrency(item.stock_value)}

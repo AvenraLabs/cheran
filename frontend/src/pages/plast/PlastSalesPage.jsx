@@ -46,23 +46,23 @@ export function PlastSalesPage() {
   const [selectedSale, setSelectedSale] = useState(null);
 
   const fetchSales = async (isManual = false) => {
-    if (!canViewLogs) {
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
     if (isManual) setRefreshing(true);
     else setLoading(true);
     try {
-      const data = await plastApi.getSales({
-        customer_id: customerId || undefined,
-        from_date: fromDate || undefined,
-        to_date: toDate || undefined,
-        search: search || undefined,
-      });
-      setSales(Array.isArray(data) ? data : data?.data || []);
+      const params = canViewLogs
+        ? {
+            customer_id: customerId || undefined,
+            from_date: fromDate || undefined,
+            to_date: toDate || undefined,
+            search: search || undefined,
+          }
+        : {};
+      const data = await plastApi.getSales(params);
+      const list = Array.isArray(data) ? data : data?.data || [];
+      // For plast user role, hide the full logs and show only the last billed one
+      setSales(canViewLogs ? list : list.slice(0, 1));
     } catch (err) {
-      toast.error("Failed to load sales history");
+      toast.error("Failed to load sales");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -82,8 +82,6 @@ export function PlastSalesPage() {
   useEffect(() => {
     if (canViewLogs) {
       fetchCustomers();
-    } else {
-      setLoading(false);
     }
   }, [canViewLogs]);
 
@@ -416,43 +414,151 @@ export function PlastSalesPage() {
 
       <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 overflow-y-auto w-full">
         {!canViewLogs ? (
-          <div className="max-w-xl mx-auto my-12 bg-white rounded-[12px] border border-[#E4E1D8] p-8 shadow-sm text-center space-y-5">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-[#2F6F5E]">
-              <ShoppingCart size={32} />
-            </div>
-            <div className="space-y-1.5">
-              <h2 className="text-lg font-bold text-[#14213D]">Customer Sales & Billing</h2>
-              <p className="text-xs text-[#52607D] max-w-sm mx-auto">
-                Create and issue customer sales invoices, select finished goods, apply bill discounts, and generate printed receipts.
-              </p>
-            </div>
-            <div className="pt-2">
+          <div className="max-w-2xl mx-auto space-y-6">
+            {/* Quick Action Box */}
+            <div className="bg-white rounded-[12px] border border-[#E4E1D8] p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#2F6F5E] shrink-0">
+                  <ShoppingCart size={24} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-[#14213D]">Customer Sales & Billing</h2>
+                  <p className="text-xs text-[#52607D]">
+                    Create customer sales bills, select items, and issue printed invoices.
+                  </p>
+                </div>
+              </div>
               <Button
                 variant="primary"
-                size="lg"
+                size="md"
                 icon={Plus}
                 onClick={() => navigate("/plast/sales/new")}
-                className="px-6 py-2.5 text-sm font-bold shadow-xs inline-flex items-center gap-2"
+                className="px-5 py-2 text-xs font-bold shadow-xs whitespace-nowrap shrink-0"
               >
                 + New Sale Bill
               </Button>
+            </div>
+
+            {/* Last Billed Invoice Section */}
+            <div className="bg-white rounded-[12px] border border-[#E4E1D8] p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-[#EDEAE1] pb-3">
+                <div>
+                  <div className="text-xs uppercase font-bold tracking-wider text-[#52607D]">
+                    Last Billed Invoice
+                  </div>
+                  <div className="text-[11px] text-[#8C97AB]">
+                    Most recently issued customer sale invoice
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  icon={RefreshCw}
+                  loading={refreshing}
+                  onClick={() => fetchSales(true)}
+                >
+                  Refresh
+                </Button>
+              </div>
+
+              {loading ? (
+                <div className="py-6">
+                  <SkeletonLoader count={2} />
+                </div>
+              ) : safeSales.length === 0 ? (
+                <div className="py-8 text-center text-[#8C97AB] text-xs">
+                  No sales billed yet. Click <strong>+ New Sale Bill</strong> to create your first customer invoice.
+                </div>
+              ) : (
+                (() => {
+                  const last = safeSales[0];
+                  return (
+                    <div className="bg-[#F8FAFC] border border-[#E4E1D8] rounded-[10px] p-4 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E4E1D8] pb-3">
+                        <div>
+                          <div className="font-mono font-bold text-base text-[#2F6F5E]">
+                            {last.sale_number}
+                          </div>
+                          <div className="text-xs text-[#52607D]">{last.sale_date}</div>
+                        </div>
+                        <div className="sm:text-right">
+                          <div className="text-xs text-[#52607D]">Grand Total</div>
+                          <div className="font-mono font-bold text-lg text-[#14213D]">
+                            {formatCurrency(last.grand_total)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <span className="text-[#8C97AB] text-[10px] uppercase font-semibold">Customer</span>
+                          <div className="font-bold text-[#14213D]">{last.customer_name || "Cash Customer"}</div>
+                          {last.customer_phone && (
+                            <div className="text-[#52607D] font-mono">{last.customer_phone}</div>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[#8C97AB] text-[10px] uppercase font-semibold">Payment Status</span>
+                          <div>
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                last.payment_status === "PAID"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : last.payment_status === "PARTIAL"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-rose-100 text-rose-800"
+                              }`}
+                            >
+                              {last.payment_status || "PENDING"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#E4E1D8]">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={Eye}
+                          onClick={() => setSelectedSale(last)}
+                        >
+                          View Bill
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={FileText}
+                          loading={exportingPdf}
+                          onClick={() => handleExportPDF(last)}
+                        >
+                          PDF Invoice
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={Share2}
+                          className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+                          onClick={() => shareOnWhatsApp(last)}
+                        >
+                          WhatsApp
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
             </div>
           </div>
         ) : (
           <>
             {/* KPI Metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <MetricCard
                 title="Total Invoiced"
                 value={formatCurrency(totalRevenue)}
                 subtitle="Gross turnover billed"
                 icon={DollarSign}
-              />
-              <MetricCard
-                title="Average Bill Value"
-                value={formatCurrency(avgBillValue)}
-                subtitle="Per customer invoice"
-                icon={ShoppingCart}
               />
               <MetricCard
                 title="Total Invoices"

@@ -29,10 +29,42 @@ export function PlastReportsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [reportData, setReportData] = useState(null);
 
+  // Date helper functions (local calendar time, avoiding UTC shifts)
+  const formatLocalDate = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const getPresetDates = (preset) => {
+    const now = new Date();
+    if (preset === "TODAY") {
+      const todayStr = formatLocalDate(now);
+      return { from: todayStr, to: todayStr };
+    }
+    if (preset === "THIS_WEEK") {
+      const day = now.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+      const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+      return { from: formatLocalDate(monday), to: formatLocalDate(sunday) };
+    }
+    if (preset === "THIS_MONTH") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { from: formatLocalDate(firstDay), to: formatLocalDate(lastDay) };
+    }
+    if (preset === "ALL") {
+      return { from: "", to: "" };
+    }
+    return null;
+  };
+
   // Filters
   const [datePreset, setDatePreset] = useState("THIS_MONTH");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(() => getPresetDates("THIS_MONTH").from);
+  const [toDate, setToDate] = useState(() => getPresetDates("THIS_MONTH").to);
   const [customerId, setCustomerId] = useState("");
   const [supplierId, setSupplierId] = useState("");
 
@@ -205,29 +237,16 @@ export function PlastReportsPage() {
     }
   };
 
-  // Set date ranges automatically on preset change
-  useEffect(() => {
-    const today = new Date();
-    const formatDate = (d) => d.toISOString().split("T")[0];
-
-    if (datePreset === "TODAY") {
-      setFromDate(formatDate(today));
-      setToDate(formatDate(today));
-    } else if (datePreset === "THIS_WEEK") {
-      const firstDay = new Date(today.setDate(today.getDate() - today.getDay()));
-      const lastDay = new Date(today.setDate(today.getDate() - today.getDay() + 6));
-      setFromDate(formatDate(firstDay));
-      setToDate(formatDate(lastDay));
-    } else if (datePreset === "THIS_MONTH") {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      setFromDate(formatDate(firstDay));
-      setToDate(formatDate(lastDay));
-    } else if (datePreset === "ALL") {
-      setFromDate("");
-      setToDate("");
+  const handleSelectPreset = (p) => {
+    setDatePreset(p);
+    if (p !== "CUSTOM") {
+      const range = getPresetDates(p);
+      if (range) {
+        setFromDate(range.from);
+        setToDate(range.to);
+      }
     }
-  }, [datePreset]);
+  };
 
   const loadFilterOptions = async () => {
     try {
@@ -310,9 +329,19 @@ export function PlastReportsPage() {
         csvContent += `"${e.production_date}","${e.reference_number || ""}","${rawDesc}","${totalRaw}","${wasteQty}","${outDesc}","${totalOut}","${(e.notes || "").replace(/"/g, '""')}"\n`;
       });
     } else if (activeTab === "stock") {
-      csvContent += "Item Name,Type,Category,Unit Price,Quantity On Hand,Stock Value\n";
+      csvContent += summary.has_date_filter
+        ? "Item Name,Type,Category,Unit Price,Inward (Period),Outward (Period),Quantity On Hand,Net Weight (Kg),Stock Value\n"
+        : "Item Name,Type,Category,Unit Price,Quantity On Hand,Net Weight (Kg),Stock Value\n";
       list.forEach((st) => {
-        csvContent += `"${st.name}","${st.item_type}","${st.category || ""}","${st.unit_price}","${st.quantity_on_hand}","${st.stock_value}"\n`;
+        const netW =
+          st.net_weight !== undefined && st.net_weight !== null
+            ? st.net_weight
+            : ((Number(st.weight_per_unit) || 0) * (Number(st.quantity_on_hand) || 0)).toFixed(3);
+        if (summary.has_date_filter) {
+          csvContent += `"${st.name}","${st.item_type}","${st.category || ""}","${st.unit_price}","${st.period_inward || 0}","${st.period_outward || 0}","${st.quantity_on_hand}","${netW}","${st.stock_value}"\n`;
+        } else {
+          csvContent += `"${st.name}","${st.item_type}","${st.category || ""}","${st.unit_price}","${st.quantity_on_hand}","${netW}","${st.stock_value}"\n`;
+        }
       });
     }
 
@@ -398,7 +427,7 @@ export function PlastReportsPage() {
               <button
                 key={p}
                 type="button"
-                onClick={() => setDatePreset(p)}
+                onClick={() => handleSelectPreset(p)}
                 className={`px-2.5 py-1 rounded-[5px] text-[11px] font-semibold transition-all cursor-pointer ${
                   datePreset === p
                     ? "bg-white text-[#2F6F5E] shadow-xs font-bold border border-[#E4E1D8]"
@@ -544,24 +573,49 @@ export function PlastReportsPage() {
         )}
 
         {activeTab === "stock" && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <MetricCard
               title="Total Stock Value"
-              value={formatCurrency(summary.total_stock_value || 0)}
+              value={formatCurrency(summary.total_stock_value || summary.total_inventory_value || 0)}
               subtitle="Live on-hand valuation"
               icon={DollarSign}
             />
+            {summary.has_date_filter ? (
+              <>
+                <MetricCard
+                  title="Period Inward"
+                  value={`${Number(summary.period_inward || 0).toLocaleString()} Units`}
+                  subtitle="Purchases + Production Output"
+                  icon={Boxes}
+                />
+                <MetricCard
+                  title="Period Outward"
+                  value={`${Number(summary.period_outward || 0).toLocaleString()} Units`}
+                  subtitle="Raw Used + Sales Dispatched"
+                  icon={TrendingUp}
+                />
+              </>
+            ) : (
+              <>
+                <MetricCard
+                  title="Raw Material Valuation"
+                  value={formatCurrency(summary.raw_material_valuation || 0)}
+                  subtitle="Purchased materials"
+                  icon={Boxes}
+                />
+                <MetricCard
+                  title="Finished Goods Valuation"
+                  value={formatCurrency(summary.finished_goods_valuation || 0)}
+                  subtitle="Manufactured goods"
+                  icon={TrendingUp}
+                />
+              </>
+            )}
             <MetricCard
-              title="Raw Material Valuation"
-              value={formatCurrency(summary.raw_material_valuation || 0)}
-              subtitle="Purchased materials"
+              title="Total Net Weight"
+              value={`${Number(summary.total_net_weight || 0).toLocaleString()} Kg`}
+              subtitle="Current available stock"
               icon={Boxes}
-            />
-            <MetricCard
-              title="Finished Goods Valuation"
-              value={formatCurrency(summary.finished_goods_valuation || 0)}
-              subtitle="Manufactured goods"
-              icon={TrendingUp}
             />
           </div>
         )}
@@ -700,35 +754,66 @@ export function PlastReportsPage() {
                         <th className="py-3 px-3">Type</th>
                         <th className="py-3 px-3">Category</th>
                         <th className="py-3 px-3 text-right">Unit Price</th>
+                        {summary.has_date_filter && (
+                          <>
+                            <th className="py-3 px-3 text-right text-[#2F6F5E]">Inward (Period)</th>
+                            <th className="py-3 px-3 text-right text-rose-700">Outward (Period)</th>
+                          </>
+                        )}
                         <th className="py-3 px-4 text-right">On-Hand Qty</th>
+                        <th className="py-3 px-4 text-right">Net Weight</th>
                         <th className="py-3 px-4 text-right">Stock Valuation</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#EDEAE1]">
-                      {safeDataList.map((st) => (
-                        <tr key={st.id} className="hover:bg-[#FAFAF8] transition-colors">
-                          <td className="py-3 px-4 font-bold text-[#14213D]">{st.name}</td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                st.item_type === "RAW_MATERIAL"
-                                  ? "bg-amber-100 text-amber-900 border border-amber-200"
-                                  : "bg-[#EAF3F0] text-[#2F6F5E] border border-[#D3E6E0]"
-                              }`}
-                            >
-                              {st.item_type === "RAW_MATERIAL" ? "Raw Material" : "Finished Good"}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-[#52607D]">{st.category || "—"}</td>
-                          <td className="py-3 px-3 text-right font-mono text-[#14213D]">{formatCurrency(st.unit_price)}</td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
-                            {st.quantity_on_hand} {st.unit?.symbol || ""}
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono font-bold text-[#2F6F5E]">
-                            {formatCurrency(st.stock_value)}
-                          </td>
-                        </tr>
-                      ))}
+                      {safeDataList.map((st) => {
+                        const netWeightVal =
+                          st.net_weight !== undefined && st.net_weight !== null && Number(st.net_weight) > 0
+                            ? Number(st.net_weight)
+                            : Number(st.weight_per_unit || 0) > 0
+                            ? Number(st.weight_per_unit) * Number(st.quantity_on_hand || 0)
+                            : 0;
+
+                        return (
+                          <tr key={st.id} className="hover:bg-[#FAFAF8] transition-colors">
+                            <td className="py-3 px-4 font-bold text-[#14213D]">{st.name}</td>
+                            <td className="py-3 px-3">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                  st.item_type === "RAW_MATERIAL"
+                                    ? "bg-amber-100 text-amber-900 border border-amber-200"
+                                    : "bg-[#EAF3F0] text-[#2F6F5E] border border-[#D3E6E0]"
+                                }`}
+                              >
+                                {st.item_type === "RAW_MATERIAL" ? "Raw Material" : "Finished Good"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-[#52607D]">{st.category || "—"}</td>
+                            <td className="py-3 px-3 text-right font-mono text-[#14213D]">{formatCurrency(st.unit_price)}</td>
+                            {summary.has_date_filter && (
+                              <>
+                                <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                                  {Number(st.period_inward || 0) > 0 ? `+${st.period_inward}` : "0"} {st.unit?.symbol || ""}
+                                </td>
+                                <td className="py-3 px-3 text-right font-mono font-bold text-rose-700">
+                                  {Number(st.period_outward || 0) > 0 ? `-${st.period_outward}` : "0"} {st.unit?.symbol || ""}
+                                </td>
+                              </>
+                            )}
+                            <td className="py-3 px-4 text-right font-mono font-bold text-[#14213D]">
+                              {st.quantity_on_hand} {st.unit?.symbol || ""}
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-[#2F6F5E]">
+                              {netWeightVal > 0
+                                ? `${netWeightVal.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`
+                                : "—"}
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-[#2F6F5E]">
+                              {formatCurrency(st.stock_value)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </>
                 )}

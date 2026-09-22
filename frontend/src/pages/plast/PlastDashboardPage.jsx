@@ -106,83 +106,15 @@ export function PlastDashboardPage() {
               <MetricCard
                 title="Production Today"
                 value={`${stats?.production_today_units || 0} Units`}
-                subtitle={`Wastage: ${stats?.wastage_today_units || 0} Units`}
+                subtitle="Finished goods produced"
                 icon={Factory}
               />
               <MetricCard
-                title="Active Catalog"
-                value={`${stats?.raw_materials_count || 0} Raw • ${stats?.finished_goods_count || 0} Fin`}
-                subtitle="Active Master Items"
-                icon={Boxes}
+                title="Wastage Today"
+                value={`${Number(stats?.wastage_today_units || 0).toLocaleString()} Kg`}
+                subtitle="From today's production entries"
+                icon={AlertTriangle}
               />
-            </div>
-
-            {/* Quick Action Shortcuts */}
-            <div className="bg-white p-4 rounded-[10px] border border-[#E4E1D8] shadow-[0_1px_2px_rgba(20,33,61,0.04)]">
-              <div className="text-xs font-semibold uppercase tracking-wider text-[#52607D] mb-3">
-                Quick Operations
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Link
-                  to="/plast/sales/new"
-                  className="p-3 rounded-[8px] border border-[#E4E1D8] hover:border-[#2F6F5E] hover:bg-[#EAF3F0] transition-all flex items-center gap-3 group"
-                >
-                  <div className="w-8 h-8 rounded-[6px] bg-emerald-100 text-[#2F6F5E] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    <ShoppingCart size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-[#14213D] group-hover:text-[#2F6F5E]">
-                      New Sale Bill
-                    </div>
-                    <div className="text-[10px] text-[#52607D]">Issue customer invoice</div>
-                  </div>
-                </Link>
-
-                <Link
-                  to="/plast/production"
-                  className="p-3 rounded-[8px] border border-[#E4E1D8] hover:border-[#2F6F5E] hover:bg-[#EAF3F0] transition-all flex items-center gap-3 group"
-                >
-                  <div className="w-8 h-8 rounded-[6px] bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    <Factory size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-[#14213D] group-hover:text-[#2F6F5E]">
-                      Daily Production
-                    </div>
-                    <div className="text-[10px] text-[#52607D]">Log usage & output</div>
-                  </div>
-                </Link>
-
-                <Link
-                  to="/plast/purchases"
-                  className="p-3 rounded-[8px] border border-[#E4E1D8] hover:border-[#2F6F5E] hover:bg-[#EAF3F0] transition-all flex items-center gap-3 group"
-                >
-                  <div className="w-8 h-8 rounded-[6px] bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    <Truck size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-[#14213D] group-hover:text-[#2F6F5E]">
-                      Buy Raw Materials
-                    </div>
-                    <div className="text-[10px] text-[#52607D]">Inward from supplier</div>
-                  </div>
-                </Link>
-
-                <Link
-                  to="/plast/items"
-                  className="p-3 rounded-[8px] border border-[#E4E1D8] hover:border-[#2F6F5E] hover:bg-[#EAF3F0] transition-all flex items-center gap-3 group"
-                >
-                  <div className="w-8 h-8 rounded-[6px] bg-purple-100 text-purple-800 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    <Package size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-[#14213D] group-hover:text-[#2F6F5E]">
-                      Items
-                    </div>
-                    <div className="text-[10px] text-[#52607D]">Manage catalog</div>
-                  </div>
-                </Link>
-              </div>
             </div>
 
             {/* Tables Section: Low Stock + Recent Sales */}

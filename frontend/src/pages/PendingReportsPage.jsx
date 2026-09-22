@@ -74,6 +74,7 @@ export function PendingReportsPage() {
   const [pendencyType, setPendencyType] = useState("PENDING_WORK_COMPLETION"); // 'PENDING_WORK_COMPLETION' | 'PENDING_MATERIAL_SUPPLY' | 'PENDING_JVR_COMPLETION' | 'ALL_PENDING'
   const [drillCategory, setDrillCategory] = useState("ALL");
   const [drillYear, setDrillYear] = useState("ALL");
+  const [drillDistrict, setDrillDistrict] = useState("ALL");
   const [minDaysPending, setMinDaysPending] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -93,6 +94,15 @@ export function PendingReportsPage() {
       ...yearsList.map((y) => ({ value: y, label: y })),
     ];
   }, [funnelData?.available_years]);
+
+  // Dynamically compute District options from backend available_districts
+  const districtOptions = useMemo(() => {
+    const districtsList = funnelData?.available_districts || [];
+    return [
+      { value: "ALL", label: "All Districts" },
+      ...districtsList.map((d) => ({ value: d, label: d })),
+    ];
+  }, [funnelData?.available_districts]);
 
   // Memoize Dealer options for CustomSelect
   const dealerOptions = useMemo(() => {
@@ -165,7 +175,7 @@ export function PendingReportsPage() {
       if (drillCategory !== "ALL") params.category = drillCategory;
       if (drillYear !== "ALL") params.year = drillYear;
       if (selectedDealer !== "ALL") params.dealer_id = selectedDealer;
-      if (selectedDistrict !== "ALL") params.district = selectedDistrict;
+      if (drillDistrict !== "ALL") params.district = drillDistrict;
       if (minDaysPending) params.min_days_pending = minDaysPending;
       if (debouncedSearch) params.search = debouncedSearch;
 
@@ -196,7 +206,7 @@ export function PendingReportsPage() {
     drillCategory,
     drillYear,
     selectedDealer,
-    selectedDistrict,
+    drillDistrict,
     minDaysPending,
     debouncedSearch,
     pagination.page,
@@ -291,7 +301,7 @@ export function PendingReportsPage() {
       if (drillCategory !== "ALL") params.category = drillCategory;
       if (drillYear !== "ALL") params.year = drillYear;
       if (selectedDealer !== "ALL") params.dealer_id = selectedDealer;
-      if (selectedDistrict !== "ALL") params.district = selectedDistrict;
+      if (drillDistrict !== "ALL") params.district = drillDistrict;
       if (minDaysPending) params.min_days_pending = minDaysPending;
       if (debouncedSearch) params.search = debouncedSearch;
 
@@ -309,6 +319,7 @@ export function PendingReportsPage() {
       const headers = [
         "Application ID",
         "Farmer Name",
+        "Applied Area (Ha)",
         "Dealer Assigned",
         isJvrView ? "1st Fund Date" : "WO Date",
         "Invoice Number",
@@ -323,6 +334,7 @@ export function PendingReportsPage() {
           [
             `"${p.application_id || ""}"`,
             `"${(p.farmer_name || "").replace(/"/g, '""')}"`,
+            p.applied_area_ha ? parseFloat(p.applied_area_ha).toFixed(2) : "0.00",
             `"${(p.dealer_name || "Unassigned").replace(/"/g, '""')}"`,
             isJvrView
               ? `"${p.first_fund_utr_date || ""}"`
@@ -369,7 +381,7 @@ export function PendingReportsPage() {
       if (drillCategory !== "ALL") params.category = drillCategory;
       if (drillYear !== "ALL") params.year = drillYear;
       if (selectedDealer !== "ALL") params.dealer_id = selectedDealer;
-      if (selectedDistrict !== "ALL") params.district = selectedDistrict;
+      if (drillDistrict !== "ALL") params.district = drillDistrict;
       if (minDaysPending) params.min_days_pending = minDaysPending;
       if (debouncedSearch) params.search = debouncedSearch;
 
@@ -414,33 +426,39 @@ export function PendingReportsPage() {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(20, 33, 61);
       doc.text(`Category: ${drillCategory}`, 30, 68);
-      doc.text(`Financial Year: ${drillYear}`, 160, 68);
+      doc.text(`Financial Year: ${drillYear}`, 140, 68);
+      doc.text(`District: ${drillDistrict}`, 280, 68);
       const curDealerName = dealers.find((d) => d.id === selectedDealer)?.name || "All Dealers";
-      doc.text(`Dealer: ${curDealerName}`, 320, 68);
-      doc.text(`Min Days: ${minDaysPending ? `>= ${minDaysPending}d` : "All"}`, 500, 68);
-      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 660, 68);
+      doc.text(`Dealer: ${curDealerName}`, 420, 68);
+      doc.text(`Min Days: ${minDaysPending ? `>= ${minDaysPending}d` : "All"}`, 560, 68);
+      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 690, 68);
 
       const isJvrView = pendencyType === "PENDING_JVR_COMPLETION";
 
-      const tableData = exportList.map((p, idx) => [
-        idx + 1,
-        p.application_id,
-        p.farmer_name || "—",
-        p.dealer_name || "Unassigned",
-        isJvrView
-          ? (p.first_fund_utr_date ? formatDate(p.first_fund_utr_date) : "—")
-          : (p.work_order_date ? formatDate(p.work_order_date) : "—"),
-        p.invoice_date ? `${p.invoice_number ? `#${p.invoice_number} ` : ""}${formatDate(p.invoice_date)}` : "Not Invoiced",
-        p.current_status || "—",
-        `${p.days_pending || 0}d`,
-      ]);
+      const tableData = exportList.map((p, idx) => {
+        const farmerText = [p.farmer_name, p.district].filter(Boolean).join("\n") || "—";
+        return [
+          idx + 1,
+          p.application_id,
+          farmerText,
+          p.applied_area_ha ? `${parseFloat(p.applied_area_ha).toFixed(2)} Ha` : "—",
+          p.dealer_name || "Unassigned",
+          isJvrView
+            ? (p.first_fund_utr_date ? formatDate(p.first_fund_utr_date) : "—")
+            : (p.work_order_date ? formatDate(p.work_order_date) : "—"),
+          p.invoice_date ? `${p.invoice_number ? `#${p.invoice_number} ` : ""}${formatDate(p.invoice_date)}` : "Not Invoiced",
+          p.current_status || "—",
+          `${p.days_pending || 0}d`,
+        ];
+      });
 
       autoTable(doc, {
         head: [
           [
             "#",
             "Application ID",
-            "Farmer Name",
+            "Farmer / District",
+            "Area (Ha)",
             "Dealer Assigned",
             isJvrView ? "1st Fund Date" : "WO Date",
             "Invoice Details",
@@ -470,14 +488,15 @@ export function PendingReportsPage() {
           fillColor: [250, 250, 248],
         },
         columnStyles: {
-          0: { cellWidth: 25, halign: "center" },
-          1: { cellWidth: 130, fontStyle: "bold" },
-          2: { cellWidth: 140 },
-          3: { cellWidth: 110 },
-          4: { cellWidth: 65, halign: "center" },
-          5: { cellWidth: 95 },
-          6: { cellWidth: 130 },
-          7: { cellWidth: 65, halign: "center", fontStyle: "bold" },
+          0: { cellWidth: 22, halign: "center" },
+          1: { cellWidth: 125, fontStyle: "bold" },
+          2: { cellWidth: 130 },
+          3: { cellWidth: 55, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 100 },
+          5: { cellWidth: 70, halign: "center" },
+          6: { cellWidth: 95 },
+          7: { cellWidth: 115 },
+          8: { cellWidth: 60, halign: "center", fontStyle: "bold" },
         },
         didDrawPage: (data) => {
           doc.setFontSize(8);
@@ -1484,9 +1503,9 @@ export function PendingReportsPage() {
 
           {/* Drill-down Filters & Search Controls */}
           <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {/* Search Bar */}
-              <div className="md:col-span-2 relative">
+              <div className="sm:col-span-2 lg:col-span-2 relative">
                 <Search
                   size={15}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C97AB]"
@@ -1511,6 +1530,20 @@ export function PendingReportsPage() {
                   }}
                   size="sm"
                   searchable={false}
+                />
+              </div>
+
+              {/* District Filter */}
+              <div>
+                <CustomSelect
+                  options={districtOptions}
+                  value={drillDistrict}
+                  onChange={(val) => {
+                    setDrillDistrict(val || "ALL");
+                    setPagination((p) => ({ ...p, page: 1 }));
+                  }}
+                  size="sm"
+                  searchable={true}
                 />
               </div>
 
@@ -1589,6 +1622,7 @@ export function PendingReportsPage() {
                     <tr className="bg-[#F8F7F4] text-[#52607D] font-bold text-[11px] uppercase tracking-wider border-b border-[#E4E1D8]">
                       <th className="py-3 px-4">Application ID</th>
                       <th className="py-3 px-4">Farmer Name</th>
+                      <th className="py-3 px-4 text-right">Area (Ha)</th>
                       <th className="py-3 px-4">Dealer Assigned</th>
                       <th className="py-3 px-4">
                         {pendencyType === "PENDING_JVR_COMPLETION" ? "1st Fund Date" : "WO Date"}
@@ -1645,6 +1679,19 @@ export function PendingReportsPage() {
                           <td className="py-3 px-4">
                             <span className="font-bold text-[#14213D] truncate block max-w-[200px]">
                               {p.farmer_name || <span className="text-[#8C97AB] italic font-normal">No farmer record</span>}
+                            </span>
+                            {p.district && (
+                              <span className="text-[11px] text-[#52607D] block">
+                                {p.district}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <span className="font-mono font-bold text-[#14213D] text-xs">
+                              {p.applied_area_ha !== null && p.applied_area_ha !== undefined && p.applied_area_ha !== ""
+                                ? `${parseFloat(p.applied_area_ha).toFixed(2)} Ha`
+                                : "0.00 Ha"}
                             </span>
                           </td>
 

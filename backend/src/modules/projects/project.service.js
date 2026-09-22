@@ -22,6 +22,7 @@ export async function listProjects(filters = {}) {
     search,
     min_status_days,
     orphan_only,
+    all,
     page = 1,
     limit = 20,
     sort_by = "created_at",
@@ -96,9 +97,10 @@ export async function listProjects(filters = {}) {
   const safeSortBy = allowedSortFields.includes(sort_by) ? sort_by : "created_at";
   const safeSortOrder = sort_order.toUpperCase() === "ASC" ? "ASC" : "DESC";
 
+  const isAll = all === "true" || all === true;
   const offset = (page - 1) * limit;
 
-  const { rows, count } = await GovernmentProject.findAndCountAll({
+  const queryOptions = {
     where,
     include: [
       {
@@ -108,17 +110,22 @@ export async function listProjects(filters = {}) {
       },
     ],
     order: [[safeSortBy, safeSortOrder]],
-    limit,
-    offset,
-  });
+  };
+
+  if (!isAll) {
+    queryOptions.limit = limit;
+    queryOptions.offset = offset;
+  }
+
+  const { rows, count } = await GovernmentProject.findAndCountAll(queryOptions);
 
   return {
     projects: rows,
     pagination: {
       total: count,
-      page,
-      limit,
-      totalPages: Math.ceil(count / limit),
+      page: isAll ? 1 : page,
+      limit: isAll ? count : limit,
+      totalPages: isAll ? 1 : Math.ceil(count / limit),
     },
   };
 }

@@ -7,9 +7,9 @@ const router = Router();
 // Allow ADMIN, PLAST, PLAST_USER, PLAST_PAYMENTS into Plast router
 router.use(authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"));
 
-// Dashboard & Reports (ADMIN only)
-router.get("/dashboard", authorize("ADMIN"), controller.getDashboardStats);
-router.get("/reports", authorize("ADMIN"), controller.getReports);
+// Dashboard & Reports
+router.get("/dashboard", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"), controller.getDashboardStats);
+router.get("/reports", authorize("ADMIN", "PLAST", "PLAST_USER", "PLAST_PAYMENTS"), controller.getReports);
 
 // Units (Accessible to ADMIN, PLAST_USER, PLAST_PAYMENTS)
 router.get("/units", controller.getUnits);

@@ -58,6 +58,7 @@ export function PlastCustomersPage() {
   const [paymentData, setPaymentData] = useState({
     amount: "",
     payment_date: new Date().toISOString().split("T")[0],
+    notes: "",
   });
   const [recordingPayment, setRecordingPayment] = useState(false);
 
@@ -162,12 +163,13 @@ export function PlastCustomersPage() {
     }
   };
 
-  // Open Quick Payment Modal
+  // Open Quick Payment Modal (Leave amount empty for user input, add notes)
   const openPaymentModal = (customer) => {
     setPaymentCustomer(customer);
     setPaymentData({
-      amount: customer.current_balance > 0 ? String(Math.round(customer.current_balance)) : "",
+      amount: "",
       payment_date: new Date().toISOString().split("T")[0],
+      notes: "",
     });
   };
 
@@ -186,6 +188,7 @@ export function PlastCustomersPage() {
       await plastApi.recordCustomerPayment(paymentCustomer.id, {
         amount: amt,
         payment_date: paymentData.payment_date,
+        notes: paymentData.notes ? paymentData.notes.trim() : undefined,
       });
 
       toast.success(
@@ -306,9 +309,17 @@ export function PlastCustomersPage() {
         const debitStr = entry.debit > 0 ? `Rs. ${Math.round(entry.debit).toLocaleString("en-IN")}` : "—";
         const creditStr = entry.credit > 0 ? `Rs. ${Math.round(entry.credit).toLocaleString("en-IN")}` : "—";
         const balStr = `Rs. ${Math.round(entry.running_balance).toLocaleString("en-IN")}`;
+        const descText = [
+          entry.description,
+          entry.metadata?.notes ? `Note: ${entry.metadata.notes}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n") || "—";
+
         return [
           entry.date || "",
           entry.type || "",
+          descText,
           debitStr,
           creditStr,
           balStr,
@@ -317,7 +328,7 @@ export function PlastCustomersPage() {
 
       autoTable(doc, {
         startY: 61,
-        head: [["Date", "Type", "Debit (+)", "Credit (-)", "Balance"]],
+        head: [["Date", "Type", "Details / Notes", "Debit (+)", "Credit (-)", "Balance"]],
         body: tableRows,
         theme: "striped",
         headStyles: {
@@ -328,14 +339,15 @@ export function PlastCustomersPage() {
           cellPadding: 2.5,
         },
         columnStyles: {
-          0: { cellWidth: 28 },
-          1: { cellWidth: 28 },
-          2: { cellWidth: 38, halign: "right", fontStyle: "bold" },
-          3: { cellWidth: 38, halign: "right", fontStyle: "bold" },
-          4: { cellWidth: 40, halign: "right", fontStyle: "bold" },
+          0: { cellWidth: 24 },
+          1: { cellWidth: 22 },
+          2: { cellWidth: 60 },
+          3: { cellWidth: 25, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 25, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 26, halign: "right", fontStyle: "bold" },
         },
         styles: {
-          fontSize: 8,
+          fontSize: 7.5,
           cellPadding: 2.2,
           textColor: [20, 33, 61],
         },
@@ -794,6 +806,19 @@ export function PlastCustomersPage() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-xs font-semibold text-[#14213D] mb-1">
+                    Notes / Remarks (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Reference, cheque no, transaction id, or remarks..."
+                    value={paymentData.notes}
+                    onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  />
+                </div>
+
                 <div className="flex justify-end gap-2 pt-3 border-t border-[#EDEAE1]">
                   <Button type="button" variant="secondary" size="sm" onClick={() => setPaymentCustomer(null)}>
                     Cancel
@@ -876,6 +901,7 @@ export function PlastCustomersPage() {
                             <tr>
                               <th className="py-2.5 px-3">Date</th>
                               <th className="py-2.5 px-3">Type</th>
+                              <th className="py-2.5 px-3">Details / Notes</th>
                               <th className="py-2.5 px-3 text-right">Debit (+)</th>
                               <th className="py-2.5 px-3 text-right">Credit (-)</th>
                               <th className="py-2.5 px-3 text-right">Balance</th>
@@ -884,15 +910,15 @@ export function PlastCustomersPage() {
                           <tbody className="divide-y divide-[#EDEAE1]">
                             {currentEntries.length === 0 ? (
                               <tr>
-                                <td colSpan={5} className="py-6 text-center text-[#8C97AB]">
+                                <td colSpan={6} className="py-6 text-center text-[#8C97AB]">
                                   No transactions recorded yet
                                 </td>
                               </tr>
                             ) : (
                               currentEntries.map((entry, idx) => (
                                 <tr key={idx} className="hover:bg-[#FAFAF8]">
-                                  <td className="py-2 px-3 text-[#52607D] font-mono">{entry.date}</td>
-                                  <td className="py-2 px-3">
+                                  <td className="py-2 px-3 text-[#52607D] font-mono whitespace-nowrap">{entry.date}</td>
+                                  <td className="py-2 px-3 whitespace-nowrap">
                                     <span
                                       className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                         entry.type === "INVOICE"
@@ -905,13 +931,21 @@ export function PlastCustomersPage() {
                                       {entry.type}
                                     </span>
                                   </td>
-                                  <td className="py-2 px-3 text-right font-mono text-[#14213D]">
+                                  <td className="py-2 px-3 text-[#52607D] max-w-[200px] break-words">
+                                    <div className="font-medium text-[#14213D]">{entry.description || "—"}</div>
+                                    {entry.metadata?.notes && (
+                                      <div className="text-[11px] text-emerald-700 mt-0.5 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded inline-block font-sans">
+                                        Note: {entry.metadata.notes}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-[#14213D] whitespace-nowrap">
                                     {entry.debit > 0 ? formatCurrency(entry.debit) : "—"}
                                   </td>
-                                  <td className="py-2 px-3 text-right font-mono text-emerald-700 font-medium">
+                                  <td className="py-2 px-3 text-right font-mono text-emerald-700 font-medium whitespace-nowrap">
                                     {entry.credit > 0 ? formatCurrency(entry.credit) : "—"}
                                   </td>
-                                  <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D]">
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-[#14213D] whitespace-nowrap">
                                     {formatCurrency(entry.running_balance)}
                                   </td>
                                 </tr>

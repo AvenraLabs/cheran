@@ -17,7 +17,11 @@ import {
   Edit3,
   Trash2,
   AlertTriangle,
+  FileText,
+  Download,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import api from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { toast } from "sonner";
@@ -37,6 +41,7 @@ export function ProjectsPage() {
   const [dealers, setDealers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Filter state
   const [search, setSearch] = useState("");
@@ -151,6 +156,174 @@ export function ProjectsPage() {
     setSelectedDealer("");
     setDistrict("");
     setMinStatusDays("");
+  };
+
+  // Indian Rupee currency formatter (e.g. ₹1,60,729)
+  const formatRupees = (val) => {
+    if (val === null || val === undefined || val === "") return "—";
+    const num = typeof val === "number" ? val : parseFloat(val);
+    if (isNaN(num)) return "—";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(num);
+  };
+
+  // Export all pages matching current active filters to PDF
+  const handleExportPDF = async () => {
+    try {
+      setExportingPdf(true);
+      toast.info("Generating PDF for all filtered projects...");
+
+      const params = {
+        all: true,
+        ...(search ? { search: search.trim() } : {}),
+        ...(selectedStatus ? { status: selectedStatus } : {}),
+        ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
+        ...(district ? { district: district.trim() } : {}),
+        ...(minStatusDays !== "" && !isNaN(parseInt(minStatusDays, 10))
+          ? { min_status_days: parseInt(minStatusDays, 10) }
+          : {}),
+      };
+
+      const res = await api.get("/government/projects", { params });
+      const exportList = res?.data?.projects || res?.projects || [];
+
+      if (exportList.length === 0) {
+        toast.warning("No projects found to export");
+        return;
+      }
+
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "pt",
+        format: "a4",
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // Brand Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(20, 33, 61);
+      doc.text("CHERAN IRRIGATION", 30, 36);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(82, 96, 125);
+      doc.text("Government Projects Registry Report", 30, 50);
+
+      // Meta Info
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(20, 33, 61);
+      doc.text(`Status: ${selectedStatus || "All"}`, 30, 68);
+      const curDealerName =
+        dealers.find((d) => String(d.id) === String(selectedDealer))?.name ||
+        (selectedDealer === "UNASSIGNED" ? "Unassigned" : "All Dealers");
+      doc.text(`Dealer: ${curDealerName}`, 170, 68);
+      doc.text(`District: ${district || "All"}`, 340, 68);
+      doc.text(`Min Days: ${minStatusDays ? `>= ${minStatusDays}d` : "All"}`, 480, 68);
+      doc.text(`Total Records: ${exportList.length} (All Pages)`, 590, 68);
+      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 720, 68);
+
+      const tableData = exportList.map((p, idx) => {
+        const invText = p.invoice_number
+          ? `#${p.invoice_number}${p.invoice_date ? `\n${formatDate(p.invoice_date)}` : ""}`
+          : p.invoice_date
+          ? formatDate(p.invoice_date)
+          : "Not Invoiced";
+
+        const farmerDistrictText = [p.farmer_name, p.district].filter(Boolean).join("\n") || "—";
+        const areaText =
+          p.applied_area_ha !== null && p.applied_area_ha !== undefined && p.applied_area_ha !== ""
+            ? `${parseFloat(p.applied_area_ha).toFixed(2)} Ha`
+            : "—";
+        const subsidyText = formatRupees(p.quotation_subsidy_amount);
+        const dealerText = p.dealer?.name || p.dealer_name || "—";
+        const statusDateText = p.current_status_date ? formatDate(p.current_status_date) : "—";
+
+        return [
+          idx + 1,
+          p.application_id || "—",
+          invText,
+          farmerDistrictText,
+          areaText,
+          subsidyText,
+          p.current_status || "—",
+          statusDateText,
+          dealerText,
+        ];
+      });
+
+      autoTable(doc, {
+        head: [
+          [
+            "#",
+            "Application ID",
+            "Invoice",
+            "Farmer / District",
+            "Area (Ha)",
+            "Quotation Subsidy",
+            "Current Status",
+            "Status Date",
+            "Dealer",
+          ],
+        ],
+        body: tableData,
+        startY: 78,
+        styles: {
+          fontSize: 7.5,
+          font: "helvetica",
+          cellPadding: 4,
+          textColor: [20, 33, 61],
+          lineColor: [228, 225, 216],
+          lineWidth: 0.5,
+          valign: "middle",
+        },
+        headStyles: {
+          fillColor: [20, 33, 61],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8,
+          halign: "left",
+        },
+        alternateRowStyles: {
+          fillColor: [250, 250, 248],
+        },
+        columnStyles: {
+          0: { cellWidth: 22, halign: "center" },
+          1: { cellWidth: 120, fontStyle: "bold" },
+          2: { cellWidth: 80 },
+          3: { cellWidth: 125 },
+          4: { cellWidth: 55, halign: "right", fontStyle: "bold" },
+          5: { cellWidth: 85, halign: "right", fontStyle: "bold" },
+          6: { cellWidth: 125 },
+          7: { cellWidth: 70, halign: "center" },
+          8: { cellWidth: 100 },
+        },
+        didDrawPage: (data) => {
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(140, 151, 171);
+          doc.text(
+            `Total Records: ${exportList.length}  |  Page ${data.pageNumber} of ${doc.internal.getNumberOfPages()}`,
+            pageWidth - 30,
+            doc.internal.pageSize.getHeight() - 15,
+            { align: "right" }
+          );
+        },
+      });
+
+      doc.save(`cheran_govt_projects_${new Date().toISOString().split("T")[0]}.pdf`);
+      toast.success(`PDF exported successfully (${exportList.length} records across all pages)`);
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to generate PDF export");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   // Calculate days elapsed for project in current status
@@ -313,14 +486,25 @@ export function ProjectsPage() {
       <Navbar
         title="Government Projects Registry"
         actions={
-          <Button
-            variant="secondary"
-            icon={RefreshCw}
-            loading={loading}
-            onClick={() => fetchProjects(pagination.page, pagination.limit)}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              icon={FileText}
+              loading={exportingPdf}
+              onClick={handleExportPDF}
+              title="Download PDF of all matching projects across all pages"
+            >
+              Export PDF
+            </Button>
+            <Button
+              variant="secondary"
+              icon={RefreshCw}
+              loading={loading}
+              onClick={() => fetchProjects(pagination.page, pagination.limit)}
+            >
+              Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -448,6 +632,28 @@ export function ProjectsPage() {
           </div>
         )}
 
+        {/* Table Header Bar with Count & Export Button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-[#14213D]">
+              Government Projects
+            </span>
+            <span className="text-xs bg-[#EAF3F0] text-[#2F6F5E] font-mono font-semibold px-2 py-0.5 rounded-full">
+              {pagination.total} Records
+            </span>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={FileText}
+            loading={exportingPdf}
+            onClick={handleExportPDF}
+            title="Download PDF of all matching projects across all pages"
+          >
+            Export All Pages ({pagination.total})
+          </Button>
+        </div>
+
         {/* Data Table Container */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
           {loading ? (
@@ -478,8 +684,9 @@ export function ProjectsPage() {
                     <tr>
                       <th className="py-3 px-4">Application ID</th>
                       <th className="py-3 px-4">Invoice</th>
-                      <th className="py-3 px-4">Farmer Details</th>
-                      <th className="py-3 px-4">Location</th>
+                      <th className="py-3 px-4">Farmer / District</th>
+                      <th className="py-3 px-4 text-right">Area (Ha)</th>
+                      <th className="py-3 px-4 text-right">Quotation Subsidy</th>
                       <th className="py-3 px-4">Current Status</th>
                       <th className="py-3 px-4">Status Date</th>
                       <th className="py-3 px-4">Dealer</th>
@@ -526,13 +733,21 @@ export function ProjectsPage() {
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-semibold text-[#14213D]">{proj.farmer_name || "—"}</div>
-                            {proj.mobile && <div className="text-[11px] text-[#52607D]">{proj.mobile}</div>}
+                            {proj.district && (
+                              <div className="text-[11px] text-[#52607D]">{proj.district}</div>
+                            )}
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="text-[#14213D] font-medium">{proj.village || "—"}</div>
-                            <div className="text-[11px] text-[#52607D]">
-                              {[proj.block, proj.district].filter(Boolean).join(", ")}
-                            </div>
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <span className="font-mono font-bold text-[#14213D] text-xs">
+                              {proj.applied_area_ha !== null && proj.applied_area_ha !== undefined && proj.applied_area_ha !== ""
+                                ? `${parseFloat(proj.applied_area_ha).toFixed(2)} Ha`
+                                : "—"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <span className="font-mono font-bold text-[#2F6F5E] text-xs">
+                              {formatRupees(proj.quotation_subsidy_amount)}
+                            </span>
                           </td>
                           <td className="py-3 px-4">
                             <StatusBadge status={proj.current_status} size="sm" />

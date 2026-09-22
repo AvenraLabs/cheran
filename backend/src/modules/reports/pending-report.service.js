@@ -393,10 +393,21 @@ export async function getPendingFunnelSummary({ year, dealer_id, district } = {}
     }
   }
 
+  // Fetch distinct districts for dropdown filter
+  const districtRows = await db.query(
+    `SELECT DISTINCT TRIM(district) AS district 
+     FROM government_projects 
+     WHERE district IS NOT NULL AND TRIM(district) != '' 
+     ORDER BY district ASC`,
+    { type: db.QueryTypes.SELECT }
+  );
+  const availableDistricts = districtRows.map((r) => r.district).filter(Boolean);
+
   return {
     grandTotals,
     categories: categoriesMap,
     available_years: availableYears,
+    available_districts: availableDistricts,
     all_overrides: allOverrides,
   };
 }

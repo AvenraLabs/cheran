@@ -35,6 +35,11 @@ const PlastItem = db.define(
       allowNull: false,
       defaultValue: 0.0,
     },
+    weight_per_unit: {
+      type: DataTypes.DECIMAL(14, 3),
+      allowNull: true,
+      defaultValue: 0.0,
+    },
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

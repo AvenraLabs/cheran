@@ -14,6 +14,7 @@ export const listProjectsSchema = z.object({
     orphan_only: z.union([z.string(), z.boolean()]).optional(),
     search: z.string().optional(),
     min_status_days: z.string().optional(),
+    all: z.union([z.string(), z.boolean()]).optional(),
     page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
     limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 20)),
     sort_by: z.string().optional().default("created_at"),
