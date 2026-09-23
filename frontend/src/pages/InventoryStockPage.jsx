@@ -25,6 +25,7 @@ import Button from "../components/common/Button.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
 import Pagination from "../components/common/Pagination.jsx";
 import Modal from "../components/common/Modal.jsx";
+import DateInput from "../components/common/DateInput.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 import { formatDate } from "../utils/dates.js";
 
@@ -493,11 +494,10 @@ export function InventoryStockPage() {
                 <label className="block text-xs font-semibold text-[#14213D] mb-1">
                   Opening Date <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="date"
+                <DateInput
                   value={openingDate}
                   onChange={(e) => setOpeningDate(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E]"
+                  className="px-3 py-2 text-xs font-mono border border-[#E4E1D8] rounded-[7px] focus:outline-none focus:border-[#2F6F5E]"
                   required
                 />
               </div>
@@ -615,21 +615,23 @@ export function InventoryStockPage() {
             <div className="flex flex-wrap items-center gap-2 bg-white p-2.5 rounded-[8px] border border-[#E4E1D8]">
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-[#52607D] font-semibold">From:</span>
-                <input
-                  type="date"
+                <DateInput
                   value={ledgerStartDate}
                   onChange={(e) => setLedgerStartDate(e.target.value)}
+                  placeholder="dd-mm-yyyy"
                   className="px-2 py-1 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[6px] focus:outline-none focus:ring-1 focus:ring-[#2F6F5E]"
+                  wrapperClassName="w-32"
                 />
               </div>
 
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-[#52607D] font-semibold">To:</span>
-                <input
-                  type="date"
+                <DateInput
                   value={ledgerEndDate}
                   onChange={(e) => setLedgerEndDate(e.target.value)}
+                  placeholder="dd-mm-yyyy"
                   className="px-2 py-1 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[6px] focus:outline-none focus:ring-1 focus:ring-[#2F6F5E]"
+                  wrapperClassName="w-32"
                 />
               </div>
 

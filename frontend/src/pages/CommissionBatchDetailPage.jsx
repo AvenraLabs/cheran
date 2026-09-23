@@ -31,6 +31,7 @@ import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader } from "../components/common/SkeletonLoader.jsx";
 import Pagination from "../components/common/Pagination.jsx";
+import { formatDate } from "../utils/dates.js";
 
 export function CommissionBatchDetailPage() {
   const { id } = useParams();
@@ -113,13 +114,6 @@ export function CommissionBatchDetailPage() {
     fetchBatchDetail();
   }, [id]);
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    return isNaN(d.getTime())
-      ? "—"
-      : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  };
 
   const formatRupees = (val) => {
     const num = Math.floor(parseFloat(val || 0));
@@ -475,7 +469,7 @@ export function CommissionBatchDetailPage() {
           doc.setFont("helvetica", "normal");
           doc.setTextColor(140, 151, 171);
           doc.text(
-            `Cheran Irrigation · Exported on ${new Date().toLocaleDateString("en-IN")} · Page ${data.pageNumber} of ${pageCount}`,
+            `Cheran Irrigation · Exported on ${formatDate(new Date())} · Page ${data.pageNumber} of ${pageCount}`,
             pageWidth / 2,
             doc.internal.pageSize.getHeight() - 12,
             { align: "center" }

@@ -121,7 +121,11 @@ export const previewLoadOrder = asyncHandler(async (req, res) => {
  * Load Order Commit Controller
  */
 export const commitLoadOrder = asyncHandler(async (req, res) => {
-  const result = await commitLoadOrderService(req.body);
+  const result = await commitLoadOrderService({
+    ...req.body,
+    created_by: req.user?.id || null,
+    created_by_name: req.user?.name || req.user?.username || "Admin",
+  });
   res.status(200).json({
     status: "success",
     message: "Load Order batch committed successfully",

@@ -310,8 +310,8 @@ export function PlastItemsPage() {
               description="Add raw materials (resin, PVC, dyes) or finished goods (pipes, fittings) to get started."
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full min-w-[850px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
                   <tr>
                     <th className="py-3 px-4">Item Name</th>

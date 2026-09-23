@@ -65,6 +65,14 @@ const LoadOrderBatch = db.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    created_by: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    created_by_name: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
   },
   {
     tableName: "load_order_batches",

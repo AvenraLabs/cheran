@@ -67,6 +67,34 @@ input[type="number"] {
   appearance: textfield !important;
 }
 
+/* Date inputs on mobile & desktop */
+input[type="date"] {
+  min-height: 32px;
+  font-family: inherit;
+}
+
+/* Fix iOS Safari empty date input height and alignment */
+input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.4em;
+  text-align: left;
+}
+
+/* Ensure empty DateInput hides Chromium's internal dd/mm/yyyy so custom placeholder shows */
+.date-input-empty::-webkit-datetime-edit {
+  color: transparent !important;
+}
+
+/* Keep the calendar indicator icon visible and styled */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

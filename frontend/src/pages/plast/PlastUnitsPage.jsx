@@ -221,8 +221,8 @@ export function PlastUnitsPage() {
               }
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full min-w-[550px] text-left text-xs">
                 <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
                   <tr>
                     <th className="py-3 px-4">Unit Name</th>

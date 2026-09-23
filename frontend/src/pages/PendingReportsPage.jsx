@@ -337,10 +337,10 @@ export function PendingReportsPage() {
             p.applied_area_ha ? parseFloat(p.applied_area_ha).toFixed(2) : "0.00",
             `"${(p.dealer_name || "Unassigned").replace(/"/g, '""')}"`,
             isJvrView
-              ? `"${p.first_fund_utr_date || ""}"`
-              : `"${p.work_order_date || ""}"`,
+              ? `"${p.first_fund_utr_date ? formatDate(p.first_fund_utr_date) : ""}"`
+              : `"${p.work_order_date ? formatDate(p.work_order_date) : ""}"`,
             `"${p.invoice_number || ""}"`,
-            `"${p.invoice_date || ""}"`,
+            `"${p.invoice_date ? formatDate(p.invoice_date) : ""}"`,
             `"${p.current_status || ""}"`,
             p.days_pending || 0,
           ].join(",")
@@ -431,7 +431,7 @@ export function PendingReportsPage() {
       const curDealerName = dealers.find((d) => d.id === selectedDealer)?.name || "All Dealers";
       doc.text(`Dealer: ${curDealerName}`, 420, 68);
       doc.text(`Min Days: ${minDaysPending ? `>= ${minDaysPending}d` : "All"}`, 560, 68);
-      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 690, 68);
+      doc.text(`Generated: ${formatDate(new Date())}`, 690, 68);
 
       const isJvrView = pendencyType === "PENDING_JVR_COMPLETION";
 

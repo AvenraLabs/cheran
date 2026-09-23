@@ -17,6 +17,7 @@ import Button from "../../components/common/Button.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
 import { toast } from "sonner";
+import { formatDate } from "../../utils/dates.js";
 
 export function PlastProductionPage() {
   const [entries, setEntries] = useState([]);
@@ -477,7 +478,7 @@ export function PlastProductionPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-0.5 rounded bg-[#EAF3F0] text-[#2F6F5E] font-mono text-xs font-bold border border-[#D3E6E0]">
-                          {entry.production_date}
+                          {formatDate(entry.production_date)}
                         </span>
                         {entry.reference_number && (
                           <span className="text-xs font-bold text-[#14213D]">

@@ -23,9 +23,11 @@ import Button from "../../components/common/Button.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
+import DateInput from "../../components/common/DateInput.jsx";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatDate } from "../../utils/dates.js";
 
 export function PlastPaymentsPage() {
   const [activeTab, setActiveTab] = useState("COLLECTIONS"); // "COLLECTIONS" or "BALANCES"
@@ -185,11 +187,7 @@ export function PlastPaymentsPage() {
       doc.text("PVC & Polymer Pipes Manufacturing Division", 14, 18);
       doc.text("Customer Account Ledger / Statement of Account", 14, 23);
 
-      const todayStr = new Date().toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+      const todayStr = formatDate(new Date());
       doc.setFontSize(9);
       doc.setTextColor(255, 255, 255);
       doc.text(`Date: ${todayStr}`, pageWidth - 14, 12, { align: "right" });
@@ -232,7 +230,7 @@ export function PlastPaymentsPage() {
       doc.text(`Rs. ${Math.round(ledger.summary.current_balance).toLocaleString("en-IN")}`, pageWidth - 16, 52, { align: "right" });
 
       const tableRows = (ledger.entries || []).map((entry) => [
-        entry.date || "",
+        formatDate(entry.date),
         entry.type || "",
         entry.description || "",
         entry.debit > 0 ? `Rs. ${Math.round(entry.debit).toLocaleString("en-IN")}` : "—",
@@ -289,7 +287,7 @@ export function PlastPaymentsPage() {
     const msg = `📋 *CHERAN PLAST - STATEMENT OF ACCOUNT*\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `*Customer:* ${customer.name}\n` +
-      `*Statement Date:* ${new Date().toISOString().split("T")[0]}\n\n` +
+      `*Statement Date:* ${formatDate(new Date())}\n\n` +
       `*Opening Pending Balance:* ₹${opening.toLocaleString("en-IN")}\n` +
       `*Total Invoices Billed:* ₹${billed.toLocaleString("en-IN")}\n` +
       `*Total Payments Received:* ₹${paid.toLocaleString("en-IN")}\n` +
@@ -399,19 +397,19 @@ export function PlastPaymentsPage() {
             />
 
             <div className="flex items-center gap-2">
-              <input
-                type="date"
+              <DateInput
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                className="px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                placeholder="From: dd-mm-yyyy"
                 title="From Date"
               />
               <span className="text-[#8C97AB] text-xs">to</span>
-              <input
-                type="date"
+              <DateInput
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="w-full px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                className="px-2 py-1 text-xs bg-white border border-[#E4E1D8] rounded-[7px] text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                placeholder="To: dd-mm-yyyy"
                 title="To Date"
               />
             </div>
@@ -431,8 +429,8 @@ export function PlastPaymentsPage() {
                 description="Use '+ Record Payment' above to record collections from customers."
               />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              <div className="overflow-x-auto w-full">
+                <table className="w-full min-w-[780px] text-left text-xs">
                   <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
                     <tr>
                       <th className="py-3 px-4">Date</th>
@@ -448,7 +446,7 @@ export function PlastPaymentsPage() {
                     {payments.map((p) => (
                       <tr key={p.id} className="hover:bg-[#FAFAF8] transition-colors">
                         <td className="py-3 px-4 font-mono text-[#52607D] whitespace-nowrap">
-                          {p.payment_date}
+                          {formatDate(p.payment_date)}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-[#14213D]">
                           {p.reference_number || `REC-${p.id.slice(0, 8).toUpperCase()}`}
@@ -547,11 +545,10 @@ export function PlastPaymentsPage() {
               <label className="block text-xs font-semibold text-[#14213D] mb-1">
                 Payment Date
               </label>
-              <input
-                type="date"
+              <DateInput
                 value={recordForm.payment_date}
                 onChange={(e) => setRecordForm({ ...recordForm, payment_date: e.target.value })}
-                className="w-full px-2 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
+                className="px-2 py-1.5 text-xs bg-white border border-[#E4E1D8] rounded-[6px] text-[#14213D] font-mono focus:outline-none focus:border-[#2F6F5E]"
               />
             </div>
           </div>
@@ -642,7 +639,7 @@ export function PlastPaymentsPage() {
                           : "hover:bg-[#FAFAF8] transition-colors"
                       }
                     >
-                      <td className="py-2 px-3 font-mono text-[#52607D]">{row.date}</td>
+                      <td className="py-2 px-3 font-mono text-[#52607D]">{formatDate(row.date)}</td>
                       <td className="py-2 px-3">
                         <span
                           className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${

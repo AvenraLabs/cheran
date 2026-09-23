@@ -17,6 +17,7 @@ import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
 import { toast } from "sonner";
+import { formatDate } from "../../utils/dates.js";
 
 export function PlastPurchasesPage() {
   const [purchases, setPurchases] = useState([]);
@@ -279,7 +280,7 @@ export function PlastPurchasesPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono text-xs font-bold">
-                        {p.receipt_date}
+                        {formatDate(p.receipt_date)}
                       </span>
                       <span className="text-xs font-bold text-[#14213D]">
                         {p.supplier_name || p.supplier?.name || "Direct Supplier"}

@@ -18,14 +18,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
-
-const formatDate = (d) =>
-  new Date(d + "T00:00:00").toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+import { formatDate } from "../../utils/dates.js";
 
 const formatQty = (val) => {
   const n = Number(val || 0);

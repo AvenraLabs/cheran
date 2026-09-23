@@ -9,6 +9,7 @@ import Unit from "../units/unit.model.js";
 import InventoryMovement from "../inventory/inventory-movement.model.js";
 import { recalculateItemStock, applyStockMovement } from "../inventory/inventory.service.js";
 import { normalizeApplicationId } from "../../utils/normalization.js";
+import User from "../auth/user.model.js";
 import AppError from "../../shared/appError.js";
 
 /**
@@ -23,6 +24,8 @@ export async function commitLoadOrder({
   govt_items = [],
   actual_items = [],
   notes = null,
+  created_by = null,
+  created_by_name = null,
 }) {
   if (!invoice_date) {
     throw new AppError("Dispatch / Invoice Date is required.", 400);
@@ -105,6 +108,8 @@ export async function commitLoadOrder({
         govt_items_snapshot: sanitizedGovtItems,
         actual_items_snapshot: sanitizedActualItems,
         notes: notes ? notes.trim() : null,
+        created_by: created_by || null,
+        created_by_name: created_by_name || null,
       },
       { transaction }
     );
@@ -279,6 +284,14 @@ export async function listLoadOrderBatches({
 
   const { count, rows } = await LoadOrderBatch.findAndCountAll({
     where,
+    include: [
+      {
+        model: User,
+        as: "creator",
+        attributes: ["id", "name", "username"],
+        required: false,
+      },
+    ],
     order: [["created_at", "DESC"]],
     limit: parseInt(limit, 10),
     offset: parseInt(offset, 10),
@@ -299,7 +312,16 @@ export async function listLoadOrderBatches({
  * Get single Load Order Batch details
  */
 export async function getLoadOrderBatchById(id) {
-  const batch = await LoadOrderBatch.findByPk(id);
+  const batch = await LoadOrderBatch.findByPk(id, {
+    include: [
+      {
+        model: User,
+        as: "creator",
+        attributes: ["id", "name", "username"],
+        required: false,
+      },
+    ],
+  });
   if (!batch) {
     throw new AppError(`Load Order Batch #${id} not found`, 404);
   }

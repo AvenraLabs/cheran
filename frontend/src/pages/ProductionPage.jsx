@@ -363,7 +363,7 @@ export function ProductionPage() {
       const displayWaste = entryWaste > 0 ? entryWaste : legacyWaste;
       const outDesc = (e.outputs || []).map((o) => `${o.item?.name || "Fin"}: ${o.quantity_produced} ${o.unit?.symbol || "NOS"}`).join("; ");
       const totalOut = (e.outputs || []).reduce((acc, o) => acc + (parseFloat(o.quantity_produced) || 0), 0);
-      csvContent += `"${e.production_date}","${e.reference_number || ""}","${rawDesc}","${totalRaw}","${displayWaste}","${outDesc}","${totalOut}","${(e.notes || "").replace(/"/g, '""')}"\n`;
+      csvContent += `"${formatDate(e.production_date)}","${e.reference_number || ""}","${rawDesc}","${totalRaw}","${displayWaste}","${outDesc}","${totalOut}","${(e.notes || "").replace(/"/g, '""')}"\n`;
     });
 
     const encodedUri = encodeURI(csvContent);

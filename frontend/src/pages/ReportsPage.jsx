@@ -25,6 +25,7 @@ import Navbar from "../components/layout/Navbar.jsx";
 import MetricCard from "../components/common/MetricCard.jsx";
 import Button from "../components/common/Button.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
+import DateInput from "../components/common/DateInput.jsx";
 import { formatDate } from "../utils/dates.js";
 
 export function ReportsPage() {
@@ -348,18 +349,20 @@ export function ReportsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <input
-                        type="date"
+                      <DateInput
                         value={procStartDate}
                         onChange={(e) => setProcStartDate(e.target.value)}
+                        placeholder="From: dd-mm-yyyy"
                         className="px-2.5 py-1.5 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none text-[#14213D]"
+                        wrapperClassName="w-36"
                       />
                       <span className="text-xs text-[#52607D]">to</span>
-                      <input
-                        type="date"
+                      <DateInput
                         value={procEndDate}
                         onChange={(e) => setProcEndDate(e.target.value)}
+                        placeholder="To: dd-mm-yyyy"
                         className="px-2.5 py-1.5 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none text-[#14213D]"
+                        wrapperClassName="w-36"
                       />
                     </div>
                   </div>

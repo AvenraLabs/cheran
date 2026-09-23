@@ -19,9 +19,11 @@ import Button from "../../components/common/Button.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
+import DateInput from "../../components/common/DateInput.jsx";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatDate } from "../../utils/dates.js";
 
 export function PlastReportsPage() {
   const [activeTab, setActiveTab] = useState("sales"); // sales | purchases | production | stock
@@ -111,7 +113,7 @@ export function PlastReportsPage() {
       doc.text(fullSale.sale_number || "INVOICE", pageWidth - 14, 12, { align: "right" });
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
-      doc.text(`Date: ${fullSale.sale_date || ""}`, pageWidth - 14, 18, { align: "right" });
+      doc.text(`Date: ${formatDate(fullSale.sale_date)}`, pageWidth - 14, 18, { align: "right" });
 
       // Customer Info Box
       doc.setFillColor(248, 250, 252);
@@ -311,12 +313,12 @@ export function PlastReportsPage() {
     if (activeTab === "sales") {
       csvContent += "Invoice No,Date,Customer,Phone,Items Count,Subtotal,Discount,Taxable,GST Rate,GST Amount,Grand Total\n";
       list.forEach((s) => {
-        csvContent += `"${s.sale_number}","${s.sale_date}","${s.customer_name}","${s.customer_phone || ""}","${s.items?.length || s.items_count || 0}","${s.subtotal}","${s.total_discount}","${s.taxable_amount}","${s.gst_rate}%","${s.gst_amount}","${s.grand_total}"\n`;
+        csvContent += `"${s.sale_number}","${formatDate(s.sale_date)}","${s.customer_name}","${s.customer_phone || ""}","${s.items?.length || s.items_count || 0}","${s.subtotal}","${s.total_discount}","${s.taxable_amount}","${s.gst_rate}%","${s.gst_amount}","${s.grand_total}"\n`;
       });
     } else if (activeTab === "purchases") {
       csvContent += "Receipt Date,Supplier,Reference,Items Count,Total Amount\n";
       list.forEach((p) => {
-        csvContent += `"${p.receipt_date}","${p.supplier_name || p.supplier?.name || ""}","${p.reference_number || ""}","${p.items_count || 0}","${p.total_amount}"\n`;
+        csvContent += `"${formatDate(p.receipt_date)}","${p.supplier_name || p.supplier?.name || ""}","${p.reference_number || ""}","${p.items_count || 0}","${p.total_amount}"\n`;
       });
     } else if (activeTab === "production") {
       csvContent += "Date,Batch Reference,Raw Materials Consumed,Total Raw Qty (Kg),Common Wastage (Kg),Finished Outputs,Total Finished Qty,Notes\n";
@@ -326,7 +328,7 @@ export function PlastReportsPage() {
         const wasteQty = Number(e.wastage_quantity || 0);
         const outDesc = (e.outputs || []).map((o) => `${o.item?.name || "Fin"}: ${o.quantity_produced} ${o.unit?.symbol || "Nos"}`).join("; ");
         const totalOut = (e.outputs || []).reduce((acc, o) => acc + Number(o.quantity_produced || 0), 0);
-        csvContent += `"${e.production_date}","${e.reference_number || ""}","${rawDesc}","${totalRaw}","${wasteQty}","${outDesc}","${totalOut}","${(e.notes || "").replace(/"/g, '""')}"\n`;
+        csvContent += `"${formatDate(e.production_date)}","${e.reference_number || ""}","${rawDesc}","${totalRaw}","${wasteQty}","${outDesc}","${totalOut}","${(e.notes || "").replace(/"/g, '""')}"\n`;
       });
     } else if (activeTab === "stock") {
       csvContent += summary.has_date_filter
@@ -441,18 +443,20 @@ export function PlastReportsPage() {
 
           {datePreset === "CUSTOM" && (
             <div className="flex items-center gap-2">
-              <input
-                type="date"
+              <DateInput
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
+                placeholder="From: dd-mm-yyyy"
                 className="px-2.5 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                wrapperClassName="w-36"
               />
               <span className="text-[#52607D]">to</span>
-              <input
-                type="date"
+              <DateInput
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
+                placeholder="To: dd-mm-yyyy"
                 className="px-2.5 py-1 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                wrapperClassName="w-36"
               />
             </div>
           )}
@@ -633,8 +637,8 @@ export function PlastReportsPage() {
               description="Try adjusting your date range or filter options to view historical records."
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full min-w-[850px] text-left text-xs">
                 {activeTab === "sales" && (
                   <>
                     <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
@@ -654,7 +658,7 @@ export function PlastReportsPage() {
                       {safeDataList.map((s) => (
                         <tr key={s.id} className="hover:bg-[#FAFAF8] transition-colors">
                           <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">{s.sale_number}</td>
-                          <td className="py-3 px-3 text-[#52607D]">{s.sale_date}</td>
+                          <td className="py-3 px-3 text-[#52607D]">{formatDate(s.sale_date)}</td>
                           <td className="py-3 px-4 font-bold text-[#14213D]">{s.customer_name}</td>
                           <td className="py-3 px-3 text-right text-[#52607D]">{formatCurrency(s.subtotal)}</td>
                           <td className="py-3 px-3 text-right text-emerald-700 font-mono">
@@ -693,7 +697,7 @@ export function PlastReportsPage() {
                     <tbody className="divide-y divide-[#EDEAE1]">
                       {safeDataList.map((p) => (
                         <tr key={p.id} className="hover:bg-[#FAFAF8] transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-[#14213D]">{p.receipt_date}</td>
+                          <td className="py-3 px-4 font-mono font-bold text-[#14213D]">{formatDate(p.receipt_date)}</td>
                           <td className="py-3 px-4 font-medium text-[#14213D]">{p.supplier_name || p.supplier?.name || "Direct"}</td>
                           <td className="py-3 px-3 text-[#52607D] font-mono">{p.reference_number || "—"}</td>
                           <td className="py-3 px-3 text-center text-[#52607D]">{p.items?.length || 0}</td>
@@ -721,7 +725,7 @@ export function PlastReportsPage() {
                         const wasteQty = Number(e.wastage_quantity || 0);
                         return (
                           <tr key={e.id} className="hover:bg-[#FAFAF8] transition-colors">
-                            <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">{e.production_date}</td>
+                            <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">{formatDate(e.production_date)}</td>
                             <td className="py-3 px-3 text-[#52607D] font-mono">{e.reference_number || "—"}</td>
                             <td className="py-3 px-4 text-[#52607D]">
                               {(e.materials || []).map((m) => `${m.item?.name || "Raw"}: ${m.quantity_used} ${m.unit?.symbol || "Kg"}`).join(", ") || "None"}
@@ -840,7 +844,7 @@ export function PlastReportsPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-mono font-bold text-[#14213D]">{selectedSale.sale_number}</div>
-                  <div className="text-[#52607D]">Date: {selectedSale.sale_date}</div>
+                  <div className="text-[#52607D]">Date: {formatDate(selectedSale.sale_date)}</div>
                 </div>
               </div>
 

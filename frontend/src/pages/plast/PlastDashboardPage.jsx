@@ -20,6 +20,7 @@ import Button from "../../components/common/Button.jsx";
 import StatusBadge from "../../components/common/StatusBadge.jsx";
 import { SkeletonLoader } from "../../components/common/SkeletonLoader.jsx";
 import { toast } from "sonner";
+import { formatDate } from "../../utils/dates.js";
 
 export function PlastDashboardPage() {
   const [stats, setStats] = useState(null);
@@ -211,7 +212,7 @@ export function PlastDashboardPage() {
                             <td className="py-2.5 px-4 font-mono font-bold text-[#2F6F5E]">
                               {sale.sale_number}
                             </td>
-                            <td className="py-2.5 px-3 text-[#52607D]">{sale.sale_date}</td>
+                            <td className="py-2.5 px-3 text-[#52607D]">{formatDate(sale.sale_date)}</td>
                             <td className="py-2.5 px-3 font-medium text-[#14213D] truncate max-w-[120px]">
                               {sale.customer_name}
                             </td>

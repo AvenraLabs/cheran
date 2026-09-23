@@ -415,6 +415,11 @@ Invoice.belongsTo(Dealer, {
   foreignKey: "dealer_id",
   as: "dealer",
 });
+
+LoadOrderBatch.belongsTo(User, {
+  foreignKey: "created_by",
+  as: "creator",
+});
 // ==========================================
 // 8. Proceedings Associations
 // ==========================================

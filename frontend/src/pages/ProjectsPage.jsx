@@ -18,10 +18,12 @@ import {
   Trash2,
   AlertTriangle,
   FileText,
+  FileSpreadsheet,
   Download,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import api from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { toast } from "sonner";
@@ -42,6 +44,7 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // Filter state
   const [search, setSearch] = useState("");
@@ -170,30 +173,46 @@ export function ProjectsPage() {
     }).format(num);
   };
 
+  // Reusable fetch for all projects matching current active filters (across all pages)
+  const fetchFilteredProjects = async () => {
+    const params = {
+      all: true,
+      ...(search ? { search: search.trim() } : {}),
+      ...(selectedStatus ? { status: selectedStatus } : {}),
+      ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
+      ...(district ? { district: district.trim() } : {}),
+      ...(minStatusDays !== "" && !isNaN(parseInt(minStatusDays, 10))
+        ? { min_status_days: parseInt(minStatusDays, 10) }
+        : {}),
+    };
+
+    const res = await api.get("/government/projects", { params });
+    return res?.data?.projects || res?.projects || [];
+  };
+
+  // Safe ASCII currency for PDF export (jsPDF standard fonts lack Unicode ₹ symbol)
+  const formatPdfMoney = (val) => {
+    if (val === null || val === undefined || val === "") return "—";
+    const num = typeof val === "number" ? val : parseFloat(val);
+    if (isNaN(num)) return "—";
+    return `Rs. ${Math.round(num).toLocaleString("en-IN")}`;
+  };
+
   // Export all pages matching current active filters to PDF
   const handleExportPDF = async () => {
     try {
       setExportingPdf(true);
       toast.info("Generating PDF for all filtered projects...");
 
-      const params = {
-        all: true,
-        ...(search ? { search: search.trim() } : {}),
-        ...(selectedStatus ? { status: selectedStatus } : {}),
-        ...(selectedDealer ? { dealer_id: selectedDealer } : {}),
-        ...(district ? { district: district.trim() } : {}),
-        ...(minStatusDays !== "" && !isNaN(parseInt(minStatusDays, 10))
-          ? { min_status_days: parseInt(minStatusDays, 10) }
-          : {}),
-      };
-
-      const res = await api.get("/government/projects", { params });
-      const exportList = res?.data?.projects || res?.projects || [];
+      const exportList = await fetchFilteredProjects();
 
       if (exportList.length === 0) {
         toast.warning("No projects found to export");
         return;
       }
+
+      const totalHa = exportList.reduce((sum, p) => sum + (parseFloat(p.applied_area_ha) || 0), 0);
+      const totalSubsidy = exportList.reduce((sum, p) => sum + (parseFloat(p.quotation_subsidy_amount) || 0), 0);
 
       const doc = new jsPDF({
         orientation: "landscape",
@@ -226,7 +245,7 @@ export function ProjectsPage() {
       doc.text(`District: ${district || "All"}`, 340, 68);
       doc.text(`Min Days: ${minStatusDays ? `>= ${minStatusDays}d` : "All"}`, 480, 68);
       doc.text(`Total Records: ${exportList.length} (All Pages)`, 590, 68);
-      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 720, 68);
+      doc.text(`Generated: ${formatDate(new Date())}`, 720, 68);
 
       const tableData = exportList.map((p, idx) => {
         const invText = p.invoice_number
@@ -240,7 +259,7 @@ export function ProjectsPage() {
           p.applied_area_ha !== null && p.applied_area_ha !== undefined && p.applied_area_ha !== ""
             ? `${parseFloat(p.applied_area_ha).toFixed(2)} Ha`
             : "—";
-        const subsidyText = formatRupees(p.quotation_subsidy_amount);
+        const subsidyText = formatPdfMoney(p.quotation_subsidy_amount);
         const dealerText = p.dealer?.name || p.dealer_name || "—";
         const statusDateText = p.current_status_date ? formatDate(p.current_status_date) : "—";
 
@@ -272,6 +291,22 @@ export function ProjectsPage() {
           ],
         ],
         body: tableData,
+        foot: [
+          [
+            { content: `Total (${exportList.length} Records)`, colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
+            { content: `${totalHa.toFixed(2)} Ha`, styles: { halign: "right", fontStyle: "bold" } },
+            { content: `Rs. ${Math.round(totalSubsidy).toLocaleString("en-IN")}`, styles: { halign: "right", fontStyle: "bold" } },
+            { content: "", colSpan: 3 },
+          ],
+        ],
+        footStyles: {
+          fillColor: [240, 244, 248],
+          textColor: [20, 33, 61],
+          fontStyle: "bold",
+          fontSize: 8,
+          lineColor: [200, 205, 215],
+          lineWidth: 0.5,
+        },
         startY: 78,
         styles: {
           fontSize: 7.5,
@@ -294,14 +329,14 @@ export function ProjectsPage() {
         },
         columnStyles: {
           0: { cellWidth: 22, halign: "center" },
-          1: { cellWidth: 120, fontStyle: "bold" },
+          1: { cellWidth: 125, fontStyle: "bold" },
           2: { cellWidth: 80 },
-          3: { cellWidth: 125 },
-          4: { cellWidth: 55, halign: "right", fontStyle: "bold" },
+          3: { cellWidth: 110 },
+          4: { cellWidth: 50, halign: "right", fontStyle: "bold" },
           5: { cellWidth: 85, halign: "right", fontStyle: "bold" },
-          6: { cellWidth: 125 },
-          7: { cellWidth: 70, halign: "center" },
-          8: { cellWidth: 100 },
+          6: { cellWidth: 130 },
+          7: { cellWidth: 65, halign: "center" },
+          8: { cellWidth: 110 },
         },
         didDrawPage: (data) => {
           doc.setFontSize(8);
@@ -323,6 +358,87 @@ export function ProjectsPage() {
       toast.error("Failed to generate PDF export");
     } finally {
       setExportingPdf(false);
+    }
+  };
+
+  // Export all pages matching current active filters to Excel (.xlsx) with totals
+  const handleExportExcel = async () => {
+    try {
+      setExportingExcel(true);
+      toast.info("Generating Excel for all filtered projects...");
+
+      const exportList = await fetchFilteredProjects();
+
+      if (exportList.length === 0) {
+        toast.warning("No projects found to export");
+        return;
+      }
+
+      const totalHa = exportList.reduce((sum, p) => sum + (parseFloat(p.applied_area_ha) || 0), 0);
+      const totalSubsidy = exportList.reduce((sum, p) => sum + (parseFloat(p.quotation_subsidy_amount) || 0), 0);
+
+      const rows = exportList.map((p, idx) => ({
+        "S.No": idx + 1,
+        "Application ID": p.application_id || "—",
+        "Invoice Number": p.invoice_number || (p.invoice_date ? "Invoiced" : "Not Invoiced"),
+        "Invoice Date": p.invoice_date ? formatDate(p.invoice_date) : "—",
+        "Farmer Name": p.farmer_name || "—",
+        "District": p.district || "—",
+        "Area (Ha)": p.applied_area_ha !== null && p.applied_area_ha !== undefined && p.applied_area_ha !== ""
+          ? parseFloat(parseFloat(p.applied_area_ha).toFixed(2))
+          : 0,
+        "Quotation Subsidy (Rs)": p.quotation_subsidy_amount !== null && p.quotation_subsidy_amount !== undefined
+          ? Math.round(parseFloat(p.quotation_subsidy_amount) || 0)
+          : 0,
+        "Current Status": p.current_status || "—",
+        "Status Date": p.current_status_date ? formatDate(p.current_status_date) : "—",
+        "Dealer": p.dealer?.name || p.dealer_name || "—",
+      }));
+
+      // Append Total Row at the bottom
+      rows.push({
+        "S.No": "Total",
+        "Application ID": `${exportList.length} Records`,
+        "Invoice Number": "",
+        "Invoice Date": "",
+        "Farmer Name": "",
+        "District": "",
+        "Area (Ha)": parseFloat(totalHa.toFixed(2)),
+        "Quotation Subsidy (Rs)": Math.round(totalSubsidy),
+        "Current Status": "",
+        "Status Date": "",
+        "Dealer": "",
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+
+      // Auto column widths
+      worksheet["!cols"] = [
+        { wch: 8 },  // S.No
+        { wch: 28 }, // Application ID
+        { wch: 16 }, // Invoice Number
+        { wch: 14 }, // Invoice Date
+        { wch: 26 }, // Farmer Name
+        { wch: 16 }, // District
+        { wch: 12 }, // Area (Ha)
+        { wch: 22 }, // Quotation Subsidy (Rs)
+        { wch: 32 }, // Current Status
+        { wch: 14 }, // Status Date
+        { wch: 24 }, // Dealer
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Government Projects");
+
+      const datePart = new Date().toISOString().split("T")[0];
+      XLSX.writeFile(workbook, `cheran_govt_projects_${datePart}.xlsx`);
+
+      toast.success(`Excel exported successfully (${exportList.length} records across all pages)`);
+    } catch (err) {
+      console.error("Excel export error:", err);
+      toast.error(err?.response?.data?.message || err.message || "Failed to export Excel");
+    } finally {
+      setExportingExcel(false);
     }
   };
 
@@ -489,6 +605,15 @@ export function ProjectsPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
+              icon={FileSpreadsheet}
+              loading={exportingExcel}
+              onClick={handleExportExcel}
+              title="Download Excel of all matching projects across all pages"
+            >
+              Export Excel
+            </Button>
+            <Button
+              variant="secondary"
               icon={FileText}
               loading={exportingPdf}
               onClick={handleExportPDF}
@@ -627,13 +752,12 @@ export function ProjectsPage() {
             <Clock size={14} className="text-[#2F6F5E]" />
             <span>
               Filtering projects in current status for <strong>≥ {minStatusDays} days</strong> (Status Date on or before{" "}
-              {new Date(Date.now() - parseInt(minStatusDays, 10) * 86400000).toISOString().split("T")[0]})
+              {formatDate(new Date(Date.now() - parseInt(minStatusDays, 10) * 86400000))})
             </span>
           </div>
         )}
 
-        {/* Table Header Bar with Count & Export Button */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-[#14213D]">
               Government Projects
@@ -642,16 +766,28 @@ export function ProjectsPage() {
               {pagination.total} Records
             </span>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={FileText}
-            loading={exportingPdf}
-            onClick={handleExportPDF}
-            title="Download PDF of all matching projects across all pages"
-          >
-            Export All Pages ({pagination.total})
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={FileSpreadsheet}
+              loading={exportingExcel}
+              onClick={handleExportExcel}
+              title="Download Excel of all matching projects across all pages"
+            >
+              Export Excel ({pagination.total})
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={FileText}
+              loading={exportingPdf}
+              onClick={handleExportPDF}
+              title="Download PDF of all matching projects across all pages"
+            >
+              Export PDF ({pagination.total})
+            </Button>
+          </div>
         </div>
 
         {/* Data Table Container */}
@@ -822,6 +958,20 @@ export function ProjectsPage() {
                       );
                     })}
                   </tbody>
+                  <tfoot className="bg-[#F8FAFC] border-t-2 border-[#D1D5DB] font-semibold text-[#14213D]">
+                    <tr>
+                      <td colSpan={3} className="py-3 px-4 text-right font-bold text-xs uppercase tracking-wider text-[#52607D]">
+                        Page Total ({projects.length} records):
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-xs text-[#14213D] whitespace-nowrap">
+                        {projects.reduce((sum, p) => sum + (parseFloat(p.applied_area_ha) || 0), 0).toFixed(2)} Ha
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-xs text-[#2F6F5E] whitespace-nowrap">
+                        {formatRupees(projects.reduce((sum, p) => sum + (parseFloat(p.quotation_subsidy_amount) || 0), 0))}
+                      </td>
+                      <td colSpan={4}></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
 

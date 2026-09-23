@@ -19,6 +19,7 @@ import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatDate } from "../../utils/dates.js";
 
 const GST_OPTIONS = [
   { rate: 0, label: "0% (Nil / Exempt)" },
@@ -193,7 +194,7 @@ export function PlastCreateSalePage() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
       doc.setTextColor(82, 96, 125);
-      doc.text(`Date: ${sale.sale_date || ""}`, pageWidth - 14, 21, { align: "right" });
+      doc.text(`Date: ${formatDate(sale.sale_date)}`, pageWidth - 14, 21, { align: "right" });
       const enteredBy = sale.creator?.username || sale.created_by_name || "admin";
       doc.text(`Entered By: @${enteredBy}`, pageWidth - 14, 26, { align: "right" });
 
@@ -413,7 +414,7 @@ export function PlastCreateSalePage() {
     let msg = `🧾 *CHERAN PLAST - INVOICE*\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `*Invoice No:* #${sale.sale_number}\n` +
-      `*Date:* ${sale.sale_date}\n` +
+      `*Date:* ${formatDate(sale.sale_date)}\n` +
       `*Customer:* ${sale.customer_name || "Valued Customer"}\n\n`;
 
     if (itemsListText) {
@@ -841,7 +842,7 @@ export function PlastCreateSalePage() {
                 </div>
                 <div className="text-right">
                   <div className="font-mono font-bold text-[#14213D]">{createdSale.sale_number}</div>
-                  <div className="text-[#52607D]">Date: {createdSale.sale_date}</div>
+                  <div className="text-[#52607D]">Date: {formatDate(createdSale.sale_date)}</div>
                   <div className="text-[10px] text-[#52607D] mt-0.5">
                     Entered By: <strong className="font-mono text-[#2F6F5E]">@{createdSale.creator?.username || createdSale.created_by_name || "admin"}</strong>
                   </div>

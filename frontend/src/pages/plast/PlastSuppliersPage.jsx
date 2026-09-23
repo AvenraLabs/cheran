@@ -199,8 +199,8 @@ export function PlastSuppliersPage() {
               description="Add raw material & polymer suppliers to record inward material purchases."
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full min-w-[650px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
                   <tr>
                     <th className="py-3 px-4">Supplier Name</th>

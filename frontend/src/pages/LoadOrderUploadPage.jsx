@@ -36,6 +36,7 @@ import Button from "../components/common/Button.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
 import Modal from "../components/common/Modal.jsx";
 import Pagination from "../components/common/Pagination.jsx";
+import DateInput from "../components/common/DateInput.jsx";
 import { SkeletonLoader, EmptyState } from "../components/common/SkeletonLoader.jsx";
 import { formatDate, formatDateTime } from "../utils/dates.js";
 import { toast } from "sonner";
@@ -645,8 +646,7 @@ export function LoadOrderUploadPage() {
                     <label className="block text-[11px] font-semibold text-[#52607D] mb-1">
                       Dispatch / INVOICED Date <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={dispatchDate}
                       onChange={(e) => setDispatchDate(e.target.value)}
                       className="px-3 py-1.5 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
@@ -1250,18 +1250,20 @@ H-DPR-dpr-6428267253-2025-26`}
                   />
                 </div>
 
-                <input
-                  type="date"
+                <DateInput
+                  placeholder="From: dd-mm-yyyy"
                   value={historyStartDate}
                   onChange={(e) => setHistoryStartDate(e.target.value)}
                   className="px-2.5 py-1.5 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none text-[#14213D]"
+                  wrapperClassName="w-36"
                 />
 
-                <input
-                  type="date"
+                <DateInput
+                  placeholder="To: dd-mm-yyyy"
                   value={historyEndDate}
                   onChange={(e) => setHistoryEndDate(e.target.value)}
                   className="px-2.5 py-1.5 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none text-[#14213D]"
+                  wrapperClassName="w-36"
                 />
 
                 <Button
@@ -1284,95 +1286,110 @@ H-DPR-dpr-6428267253-2025-26`}
               />
             ) : (
               <div className="border border-[#EDEAE1] rounded-[10px] overflow-hidden">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
-                    <tr>
-                      <th className="py-3 px-4">Batch Number</th>
-                      <th className="py-3 px-4">Dispatch Date</th>
-                      <th className="py-3 px-4 text-center">Status</th>
-                      <th className="py-3 px-4 text-center">Projects</th>
-                      <th className="py-3 px-4 text-right">Govt Qty</th>
-                      <th className="py-3 px-4 text-right">Actual Qty</th>
-                      <th className="py-3 px-4">Notes</th>
-                      <th className="py-3 px-4 text-center w-36">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#EDEAE1]">
-                    {batches.map((b) => (
-                      <tr key={b.id} className={`hover:bg-[#F9F8F5] ${b.is_cancelled ? "opacity-60 bg-gray-50/50" : ""}`}>
-                        <td className="py-3 px-4">
-                          <span className="font-mono font-bold text-[#14213D]">
-                            {b.batch_number}
-                          </span>
-                          <div className="text-[10px] text-[#8C97AB]">
-                            {formatDateTime(b.created_at)}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-4 font-mono font-semibold text-[#14213D]">
-                          {formatDate(b.dispatch_date)}
-                        </td>
-
-                        <td className="py-3 px-4 text-center">
-                          {b.is_cancelled ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                              ✕ Cancelled
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full min-w-[980px] text-left text-xs border-collapse">
+                    <thead className="bg-[#FAFAF8] border-b border-[#EDEAE1] text-[#52607D] uppercase font-semibold text-[10px] tracking-wider">
+                      <tr>
+                        <th className="py-3 px-4">Batch Number</th>
+                        <th className="py-3 px-4">Dispatch Date</th>
+                        <th className="py-3 px-4">Uploaded By</th>
+                        <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 text-center">Projects</th>
+                        <th className="py-3 px-4 text-right">Govt Qty</th>
+                        <th className="py-3 px-4 text-right">Actual Qty</th>
+                        <th className="py-3 px-4">Notes</th>
+                        <th className="py-3 px-4 text-center w-36">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EDEAE1]">
+                      {batches.map((b) => (
+                        <tr key={b.id} className={`hover:bg-[#F9F8F5] ${b.is_cancelled ? "opacity-60 bg-gray-50/50" : ""}`}>
+                          <td className="py-3 px-4">
+                            <span className="font-mono font-bold text-[#14213D]">
+                              {b.batch_number}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              ✓ Invoiced
+                            <div className="text-[10px] text-[#8C97AB]">
+                              {formatDateTime(b.created_at)}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-4 font-mono font-semibold text-[#14213D]">
+                            {formatDate(b.dispatch_date)}
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1.5">
+                              <User size={13} className="text-[#2F6F5E] shrink-0" />
+                              <span className="font-semibold text-[#14213D]">
+                                {b.creator?.name || b.created_by_name || b.creator?.username || "Admin"}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-[#8C97AB] pl-4">
+                              {formatDateTime(b.created_at)}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-4 text-center">
+                            {b.is_cancelled ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                ✕ Cancelled
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                ✓ Invoiced
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                              {b.total_projects_count} Projects
                             </span>
-                          )}
-                        </td>
+                          </td>
 
-                        <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                            {b.total_projects_count} Projects
-                          </span>
-                        </td>
+                          <td className="py-3 px-4 text-right font-mono text-amber-900 font-semibold">
+                            {b.total_govt_quantity}
+                          </td>
 
-                        <td className="py-3 px-4 text-right font-mono text-amber-900 font-semibold">
-                          {b.total_govt_quantity}
-                        </td>
+                          <td className="py-3 px-4 text-right font-mono text-emerald-800 font-bold">
+                            {b.total_actual_quantity}
+                          </td>
 
-                        <td className="py-3 px-4 text-right font-mono text-emerald-800 font-bold">
-                          {b.total_actual_quantity}
-                        </td>
+                          <td className="py-3 px-4 text-[#52607D] truncate max-w-xs">
+                            {b.is_cancelled && b.cancellation_reason
+                              ? `Cancelled: ${b.cancellation_reason}`
+                              : b.notes || "—"}
+                          </td>
 
-                        <td className="py-3 px-4 text-[#52607D] truncate max-w-xs">
-                          {b.is_cancelled && b.cancellation_reason
-                            ? `Cancelled: ${b.cancellation_reason}`
-                            : b.notes || "—"}
-                        </td>
-
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenBatchDetails(b.id)}
-                              className="px-2 py-1 text-xs font-bold text-[#2F6F5E] bg-[#EAF3F0] hover:bg-[#d8ece6] rounded-[6px] transition-colors cursor-pointer inline-flex items-center gap-1"
-                            >
-                              <Eye size={12} />
-                              <span>Details</span>
-                            </button>
-
-                            {!b.is_cancelled && (
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => handleOpenCancelModal(b)}
-                                className="px-2 py-1 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-[6px] transition-colors cursor-pointer inline-flex items-center gap-1"
-                                title="Cancel batch, reverse inventory stock & unlink invoices"
+                                onClick={() => handleOpenBatchDetails(b.id)}
+                                className="px-2 py-1 text-xs font-bold text-[#2F6F5E] bg-[#EAF3F0] hover:bg-[#d8ece6] rounded-[6px] transition-colors cursor-pointer inline-flex items-center gap-1"
                               >
-                                <Trash2 size={12} />
-                                <span>Cancel</span>
+                                <Eye size={12} />
+                                <span>Details</span>
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+                              {!b.is_cancelled && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCancelModal(b)}
+                                  className="px-2 py-1 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-[6px] transition-colors cursor-pointer inline-flex items-center gap-1"
+                                  title="Cancel batch, reverse inventory stock & unlink invoices"
+                                >
+                                  <Trash2 size={12} />
+                                  <span>Cancel</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -1409,12 +1426,21 @@ H-DPR-dpr-6428267253-2025-26`}
             )}
 
             {/* Top Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
               <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#E4E1D8]">
                 <span className="text-[#52607D]">Dispatch Date:</span>
                 <p className="font-bold text-[#14213D] text-sm">
                   {formatDate(selectedBatchModal.dispatch_date)}
                 </p>
+              </div>
+              <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#E4E1D8]">
+                <span className="text-[#52607D]">Uploaded By:</span>
+                <p className="font-bold text-[#14213D] text-sm truncate">
+                  {selectedBatchModal.creator?.name || selectedBatchModal.created_by_name || selectedBatchModal.creator?.username || "Admin"}
+                </p>
+                <div className="text-[10px] text-[#8C97AB]">
+                  {formatDateTime(selectedBatchModal.created_at)}
+                </div>
               </div>
               <div className="bg-[#FAFAF8] p-3 rounded-[8px] border border-[#E4E1D8]">
                 <span className="text-[#52607D]">Total Projects:</span>
@@ -1449,14 +1475,15 @@ H-DPR-dpr-6428267253-2025-26`}
                 Linked Government Project IDs & Invoices (
                 {selectedBatchModal.projects_snapshot?.length || 0})
               </h4>
-              <div className="border border-[#EDEAE1] rounded-[8px] max-h-48 overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#FAFAF8] text-[#52607D] text-[10px] uppercase font-semibold">
+              <div className="border border-[#EDEAE1] rounded-[8px] max-h-60 overflow-y-auto overflow-x-auto">
+                <table className="w-full min-w-[620px] text-left text-xs">
+                  <thead className="bg-[#FAFAF8] text-[#52607D] text-[10px] uppercase font-semibold sticky top-0 z-10 border-b border-[#EDEAE1]">
                     <tr>
                       <th className="py-2 px-3">#</th>
                       <th className="py-2 px-3">Application ID</th>
                       <th className="py-2 px-3">Farmer & Location</th>
                       <th className="py-2 px-3">Invoice Number</th>
+                      <th className="py-2 px-3">Invoice Date</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EDEAE1]">
@@ -1473,6 +1500,9 @@ H-DPR-dpr-6428267253-2025-26`}
                         <td className="py-1.5 px-3 font-mono font-bold text-[#2F6F5E]">
                           {p.invoice_number ? `#${p.invoice_number}` : "—"}
                         </td>
+                        <td className="py-1.5 px-3 font-mono font-semibold text-[#14213D]">
+                          {formatDate(p.invoice_date || selectedBatchModal.dispatch_date)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1485,9 +1515,9 @@ H-DPR-dpr-6428267253-2025-26`}
               <h4 className="text-xs font-bold text-[#14213D] uppercase tracking-wider">
                 Batch Materials Breakdown (Govt vs Actual)
               </h4>
-              <div className="border border-[#EDEAE1] rounded-[8px] max-h-56 overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#FAFAF8] text-[#52607D] text-[10px] uppercase font-semibold">
+              <div className="border border-[#EDEAE1] rounded-[8px] max-h-60 overflow-y-auto overflow-x-auto">
+                <table className="w-full min-w-[550px] text-left text-xs">
+                  <thead className="bg-[#FAFAF8] text-[#52607D] text-[10px] uppercase font-semibold sticky top-0 z-10 border-b border-[#EDEAE1]">
                     <tr>
                       <th className="py-2 px-3">Material Item</th>
                       <th className="py-2 px-3 text-center">Unit</th>

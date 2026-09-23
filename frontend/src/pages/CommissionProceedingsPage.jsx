@@ -36,7 +36,9 @@ import Modal from "../components/common/Modal.jsx";
 import CustomSelect from "../components/common/CustomSelect.jsx";
 import { SkeletonLoader } from "../components/common/SkeletonLoader.jsx";
 import Pagination from "../components/common/Pagination.jsx";
+import DateInput from "../components/common/DateInput.jsx";
 import { toast } from "sonner";
+import { formatDate } from "../utils/dates.js";
 
 export function CommissionProceedingsPage() {
   const navigate = useNavigate();
@@ -326,7 +328,7 @@ export function CommissionProceedingsPage() {
       doc.text(`Period: ${periodText}`, 210, 68);
       doc.text(`Release: ${releaseText}`, 390, 68);
       doc.text(`Status: ${payoutStatus || "ALL PAYOUTS"}`, 520, 68);
-      doc.text(`Generated: ${new Date().toLocaleDateString("en-IN")}`, 670, 68);
+      doc.text(`Generated: ${formatDate(new Date())}`, 670, 68);
 
       // Table Headers (Subsidy Eligible, Now Released, and Net Payout excluded from PDF export)
       const headers = [
@@ -727,13 +729,6 @@ export function CommissionProceedingsPage() {
     }
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    return isNaN(d.getTime())
-      ? "—"
-      : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  };
 
   const formatRupees = (val) => {
     const num = Math.floor(parseFloat(val || 0));
@@ -1058,11 +1053,10 @@ export function CommissionProceedingsPage() {
                       <label className="block text-xs font-semibold text-[#14213D] mb-1">
                         Proceeding Date <span className="text-rose-500">*</span>
                       </label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={formData.proceeding_date}
                         onChange={(e) => setFormData({ ...formData, proceeding_date: e.target.value })}
-                        className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                        className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                         required
                       />
                     </div>
@@ -1085,11 +1079,10 @@ export function CommissionProceedingsPage() {
                       <label className="block text-xs font-semibold text-[#14213D] mb-1">
                         Payment Received Date (Optional)
                       </label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={formData.payment_received_date}
                         onChange={(e) => setFormData({ ...formData, payment_received_date: e.target.value })}
-                        className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                        className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                       />
                     </div>
 
@@ -1478,22 +1471,22 @@ export function CommissionProceedingsPage() {
 
                     {/* Date Range: From */}
                     <div className="relative lg:col-span-2">
-                      <input
-                        type="date"
+                      <DateInput
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                        placeholder="From: dd-mm-yyyy"
+                        className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                         title="Filter by Proceeding From Date"
                       />
                     </div>
 
                     {/* Date Range: To */}
                     <div className="relative lg:col-span-2">
-                      <input
-                        type="date"
+                      <DateInput
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                        placeholder="To: dd-mm-yyyy"
+                        className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                         title="Filter by Proceeding To Date"
                       />
                     </div>
@@ -1834,22 +1827,22 @@ export function CommissionProceedingsPage() {
 
                     {/* Date Range: From */}
                     <div className="relative lg:col-span-2">
-                      <input
-                        type="date"
+                      <DateInput
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                        placeholder="From: dd-mm-yyyy"
+                        className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                         title="Filter from Proceeding Date"
                       />
                     </div>
 
                     {/* Date Range: To */}
                     <div className="relative lg:col-span-2">
-                      <input
-                        type="date"
+                      <DateInput
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+                        placeholder="To: dd-mm-yyyy"
+                        className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
                         title="Filter to Proceeding Date"
                       />
                     </div>
@@ -2201,11 +2194,10 @@ export function CommissionProceedingsPage() {
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
               Payment Received Date <span className="text-rose-500">*</span>
             </label>
-            <input
-              type="date"
+            <DateInput
               value={bankReceiptDate}
               onChange={(e) => setBankReceiptDate(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
               required
             />
           </div>
@@ -2267,11 +2259,10 @@ export function CommissionProceedingsPage() {
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
               New Proceeding Date <span className="text-rose-500">*</span>
             </label>
-            <input
-              type="date"
+            <DateInput
               value={editProceedingDate}
               onChange={(e) => setEditProceedingDate(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
               required
             />
           </div>

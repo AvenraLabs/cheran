@@ -4,6 +4,7 @@ import Modal from "../common/Modal.jsx";
 import Button from "../common/Button.jsx";
 import { plastApi } from "../../api/plastApi.js";
 import { toast } from "sonner";
+import { formatDate } from "../../utils/dates.js";
 
 export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess }) {
   const [amount, setAmount] = useState("");
@@ -93,7 +94,7 @@ export default function RecordPaymentModal({ isOpen, onClose, sale, onSuccess })
               <span className="text-[10px] font-bold text-[#52607D] uppercase tracking-wider">
                 Invoice Date
               </span>
-              <div className="font-mono text-[#14213D]">{sale.sale_date}</div>
+              <div className="font-mono text-[#14213D]">{formatDate(sale.sale_date)}</div>
             </div>
           </div>
 

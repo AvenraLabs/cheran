@@ -28,6 +28,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Pagination } from "../../components/common/Pagination.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { formatDate } from "../../utils/dates.js";
 
 
 export function PlastCustomersPage() {
@@ -249,11 +250,7 @@ export function PlastCustomersPage() {
       doc.text("PVC & Polymer Pipes Manufacturing Division", 14, 18);
       doc.text("Customer Account Ledger / Statement of Account", 14, 23);
 
-      const todayStr = new Date().toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+      const todayStr = formatDate(new Date());
       doc.setFontSize(9);
       doc.setTextColor(255, 255, 255);
       doc.text(`Date: ${todayStr}`, pageWidth - 14, 12, { align: "right" });
@@ -317,7 +314,7 @@ export function PlastCustomersPage() {
           .join("\n") || "—";
 
         return [
-          entry.date || "",
+          formatDate(entry.date),
           entry.type || "",
           descText,
           debitStr,
@@ -393,7 +390,7 @@ export function PlastCustomersPage() {
     const msg = `📋 *CHERAN PLAST - STATEMENT OF ACCOUNT*\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `*Customer:* ${customer.name}\n` +
-      `*Statement Date:* ${new Date().toISOString().split("T")[0]}\n\n` +
+      `*Statement Date:* ${formatDate(new Date())}\n\n` +
       `*Opening Pending Balance:* ₹${opening.toLocaleString("en-IN")}\n` +
       `*Total Invoices Billed:* ₹${billed.toLocaleString("en-IN")}\n` +
       `*Total Payments Received:* ₹${paid.toLocaleString("en-IN")}\n` +
@@ -521,8 +518,8 @@ export function PlastCustomersPage() {
               description="Add customers with their existing opening pending balance to begin tracking their running ledger."
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full min-w-[780px] text-left text-xs">
                 <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
                   <tr>
                     <th className="py-3 px-4">Customer</th>
@@ -895,8 +892,8 @@ export function PlastCustomersPage() {
 
                   return (
                     <div className="space-y-2">
-                      <div className="border border-[#EDEAE1] rounded-[6px] overflow-hidden max-h-80 overflow-y-auto">
-                        <table className="w-full text-left text-xs">
+                      <div className="border border-[#EDEAE1] rounded-[6px] max-h-80 overflow-y-auto overflow-x-auto w-full">
+                        <table className="w-full min-w-[550px] text-left text-xs">
                           <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold sticky top-0">
                             <tr>
                               <th className="py-2.5 px-3">Date</th>
@@ -917,7 +914,7 @@ export function PlastCustomersPage() {
                             ) : (
                               currentEntries.map((entry, idx) => (
                                 <tr key={idx} className="hover:bg-[#FAFAF8]">
-                                  <td className="py-2 px-3 text-[#52607D] font-mono whitespace-nowrap">{entry.date}</td>
+                                  <td className="py-2 px-3 text-[#52607D] font-mono whitespace-nowrap">{formatDate(entry.date)}</td>
                                   <td className="py-2 px-3 whitespace-nowrap">
                                     <span
                                       className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${

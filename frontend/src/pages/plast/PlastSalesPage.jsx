@@ -19,10 +19,12 @@ import Button from "../../components/common/Button.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import CustomSelect from "../../components/common/CustomSelect.jsx";
 import { SkeletonLoader, EmptyState } from "../../components/common/SkeletonLoader.jsx";
+import DateInput from "../../components/common/DateInput.jsx";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext.jsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatDate } from "../../utils/dates.js";
 
 export function PlastSalesPage() {
   const { user } = useAuth();
@@ -137,7 +139,7 @@ export function PlastSalesPage() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
       doc.setTextColor(82, 96, 125);
-      doc.text(`Date: ${sale.sale_date || ""}`, pageWidth - 14, 21, { align: "right" });
+      doc.text(`Date: ${formatDate(sale.sale_date)}`, pageWidth - 14, 21, { align: "right" });
       const enteredBy = sale.creator?.username || sale.created_by_name || "admin";
       doc.text(`Entered By: @${enteredBy}`, pageWidth - 14, 26, { align: "right" });
 
@@ -347,7 +349,7 @@ export function PlastSalesPage() {
     let msg = `🧾 *CHERAN PLAST - INVOICE*\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `*Invoice No:* #${targetSale.sale_number}\n` +
-      `*Date:* ${targetSale.sale_date}\n` +
+      `*Date:* ${formatDate(targetSale.sale_date)}\n` +
       `*Customer:* ${targetSale.customer_name || "Valued Customer"}\n\n`;
 
     if (itemsList) {
@@ -479,7 +481,7 @@ export function PlastSalesPage() {
                           <div className="font-mono font-bold text-base text-[#2F6F5E]">
                             {last.sale_number}
                           </div>
-                          <div className="text-xs text-[#52607D]">{last.sale_date}</div>
+                          <div className="text-xs text-[#52607D]">{formatDate(last.sale_date)}</div>
                         </div>
                         <div className="sm:text-right">
                           <div className="text-xs text-[#52607D]">Grand Total</div>
@@ -598,19 +600,21 @@ export function PlastSalesPage() {
               </div>
 
               <div className="flex gap-2">
-                <input
-                  type="date"
+                <DateInput
                   title="From Date"
+                  placeholder="From: dd-mm-yyyy"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="w-1/2 px-2 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  className="px-2 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  wrapperClassName="w-1/2"
                 />
-                <input
-                  type="date"
+                <DateInput
                   title="To Date"
+                  placeholder="To: dd-mm-yyyy"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="w-1/2 px-2 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  className="px-2 py-1.5 bg-white border border-[#E4E1D8] rounded-[6px] text-xs text-[#14213D] focus:outline-none focus:border-[#2F6F5E]"
+                  wrapperClassName="w-1/2"
                 />
               </div>
             </div>
@@ -628,8 +632,8 @@ export function PlastSalesPage() {
                   description="Click '+ New Sale Bill' above to issue a customer invoice."
                 />
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full min-w-[700px] text-left text-xs">
                     <thead className="bg-[#F8FAFC] border-b border-[#EDEAE1] text-[#52607D] font-semibold">
                       <tr>
                         <th className="py-3 px-4">Invoice No</th>
@@ -649,7 +653,7 @@ export function PlastSalesPage() {
                             <td className="py-3 px-4 font-mono font-bold text-[#2F6F5E]">
                               {sale.sale_number}
                             </td>
-                            <td className="py-3 px-3 text-[#52607D]">{sale.sale_date}</td>
+                            <td className="py-3 px-3 text-[#52607D]">{formatDate(sale.sale_date)}</td>
                             <td className="py-3 px-4">
                               <div className="font-bold text-[#14213D]">{sale.customer_name}</div>
                               {sale.customer_phone && (
@@ -707,7 +711,7 @@ export function PlastSalesPage() {
                 </div>
                 <div className="text-right">
                   <div className="font-mono font-bold text-[#14213D]">{selectedSale.sale_number}</div>
-                  <div className="text-[#52607D]">Date: {selectedSale.sale_date}</div>
+                  <div className="text-[#52607D]">Date: {formatDate(selectedSale.sale_date)}</div>
                   <div className="text-[10px] text-[#52607D] mt-0.5">
                     Entered By: <strong className="font-mono text-[#2F6F5E]">@{selectedSale.creator?.username || selectedSale.created_by_name || "admin"}</strong>
                   </div>
