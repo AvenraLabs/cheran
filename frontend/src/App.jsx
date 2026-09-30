@@ -147,6 +147,11 @@ function AdminRoute({ children }) {
   return children;
 }
 
+const isGovtOrOperationsRole = (role) => {
+  const r = (role || "").toUpperCase();
+  return r === "USER" || r === "GOVT" || r === "OPERATIONS";
+};
+
 /**
  * Route guard for User + Admin pages (excludes DEALER)
  */
@@ -162,13 +167,13 @@ function UserOrAdminRoute({ children }) {
 }
 
 /**
- * Route guard for Dealer + Admin pages (excludes USER)
+ * Route guard for Dealer + Admin pages (excludes USER, GOVT, OPERATIONS)
  */
 function DealerOrAdminRoute({ children }) {
   const { user } = useAuth();
   const role = (user?.role || "USER").toUpperCase();
 
-  if (role === "USER") {
+  if (isGovtOrOperationsRole(role)) {
     return <Navigate to="/projects" replace />;
   }
 
@@ -201,12 +206,29 @@ export function App() {
           {/* Index Route */}
           <Route index element={<IndexRoute />} />
 
-          {/* Projects & Excel Imports (Allowed for ADMIN, USER, DEALER) */}
+          {/* Govt Projects (Allowed for ADMIN, DEALER, and USER/GOVT/OPERATIONS) */}
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
-          <Route path="imports" element={<ImportsPage />} />
 
-          {/* Pendency Reports (Allowed for DEALER & ADMIN, Forbidden for USER) */}
+          {/* Excel Imports (Allowed ONLY for DEALER & ADMIN, Forbidden for USER/GOVT/OPERATIONS) */}
+          <Route
+            path="imports"
+            element={
+              <DealerOrAdminRoute>
+                <ImportsPage />
+              </DealerOrAdminRoute>
+            }
+          />
+          <Route
+            path="imports/:id"
+            element={
+              <DealerOrAdminRoute>
+                <ImportBatchDetailPage />
+              </DealerOrAdminRoute>
+            }
+          />
+
+          {/* Pendency Reports (Allowed for DEALER & ADMIN, Forbidden for USER/GOVT/OPERATIONS) */}
           <Route
             path="pending-reports"
             element={
@@ -216,7 +238,7 @@ export function App() {
             }
           />
 
-          {/* Load Order Import & Commission Overview (Allowed for USER & ADMIN, Forbidden for DEALER) */}
+          {/* Load Order Upload (Allowed for ADMIN, USER, GOVT, OPERATIONS, Forbidden for DEALER) */}
           <Route
             path="imports/load-order"
             element={
@@ -225,37 +247,38 @@ export function App() {
               </UserOrAdminRoute>
             }
           />
-          <Route path="imports/:id" element={<ImportBatchDetailPage />} />
+
+          {/* Commission & Proceedings (Admin Only) */}
           <Route
             path="commissions"
             element={
-              <UserOrAdminRoute>
+              <AdminRoute>
                 <CommissionProceedingsPage />
-              </UserOrAdminRoute>
+              </AdminRoute>
             }
           />
           <Route
             path="commission"
             element={
-              <UserOrAdminRoute>
+              <AdminRoute>
                 <CommissionProceedingsPage />
-              </UserOrAdminRoute>
+              </AdminRoute>
             }
           />
           <Route
             path="dealers/commissions"
             element={
-              <UserOrAdminRoute>
+              <AdminRoute>
                 <CommissionProceedingsPage />
-              </UserOrAdminRoute>
+              </AdminRoute>
             }
           />
           <Route
             path="dealers/commission"
             element={
-              <UserOrAdminRoute>
+              <AdminRoute>
                 <CommissionProceedingsPage />
-              </UserOrAdminRoute>
+              </AdminRoute>
             }
           />
 

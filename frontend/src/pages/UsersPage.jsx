@@ -263,9 +263,17 @@ export function UsersPage() {
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                               <UsersIcon size={12} /> Dealer (Projects & Imports)
                             </span>
+                          ) : u.role === "GOVT" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
+                              <User size={12} /> Govt (Projects & Load Order)
+                            </span>
+                          ) : u.role === "OPERATIONS" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-800 border border-indigo-200">
+                              <User size={12} /> Operations (Projects & Load Order)
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
-                              <User size={12} /> User (Operations & Sales)
+                              <User size={12} /> User (Govt Projects & Load Order)
                             </span>
                           )}
                         </td>
@@ -402,7 +410,9 @@ export function UsersPage() {
                 onChange={(val) => setFormData({ ...formData, role: val })}
                 options={[
                   { value: "ADMIN", label: "Admin (Full Access)" },
-                  { value: "USER", label: "User (Govt & Operations)" },
+                  { value: "USER", label: "User (Govt & Operations - Projects & Load Order Only)" },
+                  { value: "GOVT", label: "Govt (Projects & Load Order Only)" },
+                  { value: "OPERATIONS", label: "Operations (Projects & Load Order Only)" },
                   { value: "DEALER", label: "Dealer (Projects & Imports)" },
                   { value: "PLAST_USER", label: "Plast (User) - Sales, Items & Production" },
                   { value: "PLAST_PAYMENTS", label: "Plast (Payments) - Sales, Payments, Items & Production" },

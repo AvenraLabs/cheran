@@ -100,15 +100,13 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
       },
     ];
   } else {
-    // 'USER' role: Restricted to 4 modules (Govt Projects, Load Order Import, Excel Imports, Commission)
+    // 'USER' / 'GOVT' / 'OPERATIONS' role: Strictly restricted to 2 pages (Govt Projects & Load Order Upload)
     navigationSections = [
       {
         title: "Operations & Govt",
         items: [
           { label: "Govt Projects", path: "/projects", icon: FileSpreadsheet },
           { label: "Load Order Upload", path: "/imports/load-order", icon: UploadCloud },
-          { label: "Excel Imports", path: "/imports", icon: FileText },
-          { label: "Commission", path: "/commissions", icon: Receipt },
         ],
       },
     ];
