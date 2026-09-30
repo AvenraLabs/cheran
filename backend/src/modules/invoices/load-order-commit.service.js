@@ -90,6 +90,54 @@ export async function commitLoadOrder({
   const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
   const batchNumber = `LOB-${dateTag}-${randomSuffix}`;
 
+  // Robustly resolve user ID for created_by to prevent FK constraint failures or UUID cast errors
+  let resolvedUserId = null;
+  let resolvedUserName = created_by_name || "Admin";
+
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (created_by && uuidRegex.test(String(created_by).trim())) {
+    const existingUser = await User.findByPk(String(created_by).trim(), {
+      attributes: ["id", "name", "username"],
+    });
+    if (existingUser) {
+      resolvedUserId = existingUser.id;
+      resolvedUserName = existingUser.name || existingUser.username || resolvedUserName;
+    }
+  }
+
+  // If created_by wasn't a valid/found UUID, try finding by name or username
+  if (!resolvedUserId) {
+    const searchName =
+      typeof created_by === "string" && !uuidRegex.test(created_by)
+        ? created_by.trim()
+        : (created_by_name || "admin").trim();
+
+    const userByName = await User.findOne({
+      where: {
+        [Op.or]: [{ username: searchName }, { name: searchName }],
+        is_active: true,
+      },
+      attributes: ["id", "name", "username"],
+    });
+
+    if (userByName) {
+      resolvedUserId = userByName.id;
+      resolvedUserName = userByName.name || userByName.username;
+    } else {
+      // Fallback to active admin or first active user
+      const defaultUser = await User.findOne({
+        where: { is_active: true },
+        order: [["role", "ASC"], ["created_at", "ASC"]],
+        attributes: ["id", "name", "username"],
+      });
+      if (defaultUser) {
+        resolvedUserId = defaultUser.id;
+        resolvedUserName = defaultUser.name || defaultUser.username;
+      }
+    }
+  }
+
   const transaction = await db.transaction();
   let newProjectsCreated = 0;
   let existingProjectsUpdated = 0;
@@ -108,8 +156,8 @@ export async function commitLoadOrder({
         govt_items_snapshot: sanitizedGovtItems,
         actual_items_snapshot: sanitizedActualItems,
         notes: notes ? notes.trim() : null,
-        created_by: created_by || null,
-        created_by_name: created_by_name || null,
+        created_by: resolvedUserId,
+        created_by_name: resolvedUserName,
       },
       { transaction }
     );

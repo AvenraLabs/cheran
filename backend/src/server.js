@@ -11,14 +11,13 @@ async function startServer() {
     await db.authenticate();
     console.log("✅ PostgreSQL connected successfully.");
 
-    // Run versioned database migrations (Umzug with PostgreSQL advisory locks)
-    await runAutomatedMigrations();
-
-    // Sync schema with models (creates any missing tables)
+    // Sync schema with models (creates any missing base tables)
     console.log("🔄 Synchronizing database tables...");
     await db.sync({ force: false });
-
     console.log("✅ Database schema synchronized.");
+
+    // Run versioned database migrations (Umzug with PostgreSQL advisory locks)
+    await runAutomatedMigrations();
 
     // Ensure government statuses are seeded
     await seedGovernmentStatuses();

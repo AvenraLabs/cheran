@@ -1,11 +1,12 @@
 import jwt from "jsonwebtoken";
 import env from "../../config/env.js";
 import AppError from "../appError.js";
+import User from "../../modules/auth/user.model.js";
 
 /**
  * Require valid JWT authentication token
  */
-export const requireAuth = (req, res, next) => {
+export const requireAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return next(new AppError("Authentication required. Please login.", 401));
@@ -14,7 +15,28 @@ export const requireAuth = (req, res, next) => {
   const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET);
-    req.user = decoded;
+    
+    // Resolve user from DB to guarantee valid active user record & UUID
+    let user = null;
+    if (decoded?.id) {
+      user = await User.findByPk(decoded.id, {
+        attributes: ["id", "username", "name", "role", "is_active"],
+      });
+    }
+
+    // Auto-heal fallback by username if database was freshly initialized/cloned
+    if (!user && decoded?.username) {
+      user = await User.findOne({
+        where: { username: decoded.username, is_active: true },
+        attributes: ["id", "username", "name", "role", "is_active"],
+      });
+    }
+
+    if (!user || !user.is_active) {
+      return next(new AppError("Invalid or expired session. Please login again.", 401));
+    }
+
+    req.user = user.toJSON();
     next();
   } catch (err) {
     return next(new AppError("Invalid or expired session. Please login again.", 401));
@@ -24,13 +46,27 @@ export const requireAuth = (req, res, next) => {
 /**
  * Optional JWT authentication (populates req.user if token present)
  */
-export const optionalAuth = (req, res, next) => {
+export const optionalAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.split(" ")[1];
     try {
       const decoded = jwt.verify(token, env.JWT_SECRET);
-      req.user = decoded;
+      let user = null;
+      if (decoded?.id) {
+        user = await User.findByPk(decoded.id, {
+          attributes: ["id", "username", "name", "role", "is_active"],
+        });
+      }
+      if (!user && decoded?.username) {
+        user = await User.findOne({
+          where: { username: decoded.username, is_active: true },
+          attributes: ["id", "username", "name", "role", "is_active"],
+        });
+      }
+      if (user && user.is_active) {
+        req.user = user.toJSON();
+      }
     } catch {
       // ignore invalid optional token
     }
@@ -126,27 +162,27 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     return next();
   }
 
-  // 'USER' role: Restricted to 4 modules (Govt Projects, Load Order Import, Excel Imports, and Commissions)
-  if (role === "USER") {
-    const userAllowedPrefixes = [
-      "/api/government/projects",
-      "/api/government/statuses",
-      "/api/government/imports",
-      "/api/invoices",
-      "/api/proceedings",
-      "/api/dealers",
-    ];
+  // 'USER' / 'GOVT' / 'OPERATIONS' role: Strictly restricted to Govt Projects and Load Order Upload only (2 pages)
+  if (role === "USER" || role === "GOVT" || role === "OPERATIONS") {
+    const isLoadOrderRoute = fullPath.startsWith("/api/invoices/load-order");
+    const isGovtProjectRoute =
+      fullPath.startsWith("/api/government/projects") ||
+      fullPath.startsWith("/api/government/statuses");
+    const isDealersOptions = fullPath.startsWith("/api/dealers") && req.method === "GET";
+    const isInventoryForLoadOrder =
+      (fullPath.startsWith("/api/inventory/stock") || fullPath.startsWith("/api/items")) &&
+      req.method === "GET";
 
-    const isAllowed = userAllowedPrefixes.some((prefix) => fullPath.startsWith(prefix));
-    if (!isAllowed) {
-      return next(
-        new AppError(
-          `Access forbidden. User role is restricted to Govt Projects, Load Order Import, Excel Imports, and Commission modules.`,
-          403
-        )
-      );
+    if (isLoadOrderRoute || isGovtProjectRoute || isDealersOptions || isInventoryForLoadOrder) {
+      return next();
     }
-    return next();
+
+    return next(
+      new AppError(
+        `Access forbidden. Role '${req.user.role}' is restricted to Govt Projects and Load Order Upload only.`,
+        403
+      )
+    );
   }
 
   // 'PLAST_USER' (or legacy 'PLAST') role: Sales & Billing, Customers, Items, Daily Production, Units, and Stock On-Hand
