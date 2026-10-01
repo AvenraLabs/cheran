@@ -420,6 +420,10 @@ LoadOrderBatch.belongsTo(User, {
   foreignKey: "created_by",
   as: "creator",
 });
+User.hasMany(LoadOrderBatch, {
+  foreignKey: "created_by",
+  as: "load_order_batches",
+});
 // ==========================================
 // 8. Proceedings Associations
 // ==========================================

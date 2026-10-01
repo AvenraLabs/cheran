@@ -12,6 +12,22 @@ import { normalizeApplicationId } from "../../utils/normalization.js";
 import User from "../auth/user.model.js";
 import AppError from "../../shared/appError.js";
 
+let columnsEnsured = false;
+export async function ensureLoadOrderBatchColumns() {
+  if (columnsEnsured) return;
+  try {
+    await db.query(`
+      ALTER TABLE IF EXISTS load_order_batches
+        ADD COLUMN IF NOT EXISTS created_by UUID,
+        ADD COLUMN IF NOT EXISTS created_by_name VARCHAR(100);
+      CREATE INDEX IF NOT EXISTS idx_load_order_batches_created_by ON load_order_batches(created_by);
+    `);
+    columnsEnsured = true;
+  } catch (err) {
+    console.warn("Could not auto-verify load_order_batches audit columns:", err.message);
+  }
+}
+
 /**
  * Transactional Commit for Batch-Level Daily Load Order Upload
  * - Creates LoadOrderBatch record with Govt vs Actual items snapshots
@@ -27,6 +43,8 @@ export async function commitLoadOrder({
   created_by = null,
   created_by_name = null,
 }) {
+  await ensureLoadOrderBatchColumns();
+
   if (!invoice_date) {
     throw new AppError("Dispatch / Invoice Date is required.", 400);
   }
@@ -145,22 +163,45 @@ export async function commitLoadOrder({
 
   try {
     // 1. Create LoadOrderBatch record
-    const batch = await LoadOrderBatch.create(
-      {
-        batch_number: batchNumber,
-        dispatch_date: cleanInvoiceDate,
-        total_projects_count: projects.length,
-        total_govt_quantity: totalGovtQty,
-        total_actual_quantity: totalActualQty,
-        projects_snapshot: projects,
-        govt_items_snapshot: sanitizedGovtItems,
-        actual_items_snapshot: sanitizedActualItems,
-        notes: notes ? notes.trim() : null,
-        created_by: resolvedUserId,
-        created_by_name: resolvedUserName,
-      },
-      { transaction }
-    );
+    let batch;
+    try {
+      batch = await LoadOrderBatch.create(
+        {
+          batch_number: batchNumber,
+          dispatch_date: cleanInvoiceDate,
+          total_projects_count: projects.length,
+          total_govt_quantity: totalGovtQty,
+          total_actual_quantity: totalActualQty,
+          projects_snapshot: projects,
+          govt_items_snapshot: sanitizedGovtItems,
+          actual_items_snapshot: sanitizedActualItems,
+          notes: notes ? notes.trim() : null,
+          created_by: resolvedUserId,
+          created_by_name: resolvedUserName,
+        },
+        { transaction }
+      );
+    } catch (createErr) {
+      if (createErr.message && /created_by/i.test(createErr.message)) {
+        console.warn("⚠️ created_by column missing during LoadOrderBatch.create, falling back without audit columns:", createErr.message);
+        batch = await LoadOrderBatch.create(
+          {
+            batch_number: batchNumber,
+            dispatch_date: cleanInvoiceDate,
+            total_projects_count: projects.length,
+            total_govt_quantity: totalGovtQty,
+            total_actual_quantity: totalActualQty,
+            projects_snapshot: projects,
+            govt_items_snapshot: sanitizedGovtItems,
+            actual_items_snapshot: sanitizedActualItems,
+            notes: notes ? notes.trim() : null,
+          },
+          { transaction }
+        );
+      } else {
+        throw createErr;
+      }
+    }
 
     // 2. Deduct physical inventory ONLY for Actual Items
     for (const item of sanitizedActualItems) {
@@ -314,6 +355,8 @@ export async function listLoadOrderBatches({
   start_date,
   end_date,
 } = {}) {
+  await ensureLoadOrderBatchColumns();
+
   const where = {};
 
   if (search && search.trim()) {
@@ -330,20 +373,41 @@ export async function listLoadOrderBatches({
 
   const offset = (page - 1) * limit;
 
-  const { count, rows } = await LoadOrderBatch.findAndCountAll({
-    where,
-    include: [
-      {
-        model: User,
-        as: "creator",
-        attributes: ["id", "name", "username"],
-        required: false,
-      },
-    ],
-    order: [["created_at", "DESC"]],
-    limit: parseInt(limit, 10),
-    offset: parseInt(offset, 10),
-  });
+  let count = 0;
+  let rows = [];
+
+  try {
+    const result = await LoadOrderBatch.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: "creator",
+          attributes: ["id", "name", "username"],
+          required: false,
+        },
+      ],
+      order: [["created_at", "DESC"]],
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+    });
+    count = result.count;
+    rows = result.rows;
+  } catch (queryErr) {
+    if (queryErr.message && /created_by/i.test(queryErr.message)) {
+      console.warn("⚠️ creator include failed in listLoadOrderBatches, querying without creator:", queryErr.message);
+      const fallbackResult = await LoadOrderBatch.findAndCountAll({
+        where,
+        order: [["created_at", "DESC"]],
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+      });
+      count = fallbackResult.count;
+      rows = fallbackResult.rows;
+    } else {
+      throw queryErr;
+    }
+  }
 
   return {
     batches: rows,
@@ -360,16 +424,29 @@ export async function listLoadOrderBatches({
  * Get single Load Order Batch details
  */
 export async function getLoadOrderBatchById(id) {
-  const batch = await LoadOrderBatch.findByPk(id, {
-    include: [
-      {
-        model: User,
-        as: "creator",
-        attributes: ["id", "name", "username"],
-        required: false,
-      },
-    ],
-  });
+  await ensureLoadOrderBatchColumns();
+
+  let batch = null;
+  try {
+    batch = await LoadOrderBatch.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: "creator",
+          attributes: ["id", "name", "username"],
+          required: false,
+        },
+      ],
+    });
+  } catch (queryErr) {
+    if (queryErr.message && /created_by/i.test(queryErr.message)) {
+      console.warn("⚠️ creator include failed in getLoadOrderBatchById, querying without creator:", queryErr.message);
+      batch = await LoadOrderBatch.findByPk(id);
+    } else {
+      throw queryErr;
+    }
+  }
+
   if (!batch) {
     throw new AppError(`Load Order Batch #${id} not found`, 404);
   }
