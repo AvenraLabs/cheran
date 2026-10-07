@@ -519,7 +519,14 @@ export async function applyUniversalCommissionPolicy({
  * In-Memory Helper to Resolve Effective Commission Rate for a Project's Invoice Date
  */
 export function resolveEffectiveDealerCommission(dealer, invoiceDate, dealerSlabs = []) {
-  if (!dealer) return 20.0;
+  if (!dealer) {
+    return {
+      rate: 20.0,
+      source: "DEFAULT",
+      slab_id: null,
+      matched_date: null,
+    };
+  }
 
   const targetDate = invoiceDate
     ? String(invoiceDate).trim().slice(0, 10)

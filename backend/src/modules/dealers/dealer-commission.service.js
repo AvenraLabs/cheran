@@ -151,7 +151,7 @@ export async function calculateProjectDealerCommission(projectId) {
     invoiceDate,
     dealer.commission_slabs || []
   );
-  const basePercentage = rateResolution.rate;
+  const basePercentage = Number.isFinite(rateResolution?.rate) ? rateResolution.rate : 20.0;
 
   const workCompletionHistory = histories.find(
     (h) => h.status?.toUpperCase() === "WORK COMPLETION APPROVED" || h.status?.toUpperCase() === "WORK COMPLETED"
@@ -165,7 +165,7 @@ export async function calculateProjectDealerCommission(projectId) {
   if (invoiceDate && workCompletionDate) {
     const dInv = new Date(invoiceDate);
     const dWc = new Date(workCompletionDate);
-    if (dWc > dInv) {
+    if (!isNaN(dInv.getTime()) && !isNaN(dWc.getTime()) && dWc > dInv) {
       phase1DelayDays = Math.round((dWc.getTime() - dInv.getTime()) / (1000 * 60 * 60 * 24));
       if (phase1DelayDays > 45) {
         phase1Cycles = Math.floor(phase1DelayDays / 45);
@@ -192,7 +192,7 @@ export async function calculateProjectDealerCommission(projectId) {
   if (firstFundDate && jvCompletedDate) {
     const dFf = new Date(firstFundDate);
     const dJv = new Date(jvCompletedDate);
-    if (dJv > dFf) {
+    if (!isNaN(dFf.getTime()) && !isNaN(dJv.getTime()) && dJv > dFf) {
       phase2DelayDays = Math.round((dJv.getTime() - dFf.getTime()) / (1000 * 60 * 60 * 24));
       if (phase2DelayDays > 45) {
         phase2Cycles = Math.floor(phase2DelayDays / 45);

@@ -168,15 +168,12 @@ export async function previewProceedingExcel(
       ? rawInvoiceAmount + rawFarmerContribution
       : rawInvoiceAmount;
 
-    // Subsidy Eligible Amount (from Excel, DB Project, or previous batch)
+    // Subsidy Eligible Amount (strictly from Excel subsidy eligible / state restricted amount or DB state restricted amount)
     const rawSubsidyEligible = Math.floor(
       parseFloat(
         (parseFloat(row.subsidy_eligible_amount) > 0 ? row.subsidy_eligible_amount : null) ||
+        (parseFloat(row.state_restricted_amount) > 0 ? row.state_restricted_amount : null) ||
         (parseFloat(proj?.state_restricted_amount) > 0 ? proj.state_restricted_amount : null) ||
-        (parseFloat(prevBatchItem?.subsidy_amount) > 0 ? prevBatchItem.subsidy_amount : null) ||
-        (parseFloat(prevBatchItem?.state_restricted_amount) > 0 ? prevBatchItem.state_restricted_amount : null) ||
-        (parseFloat(proj?.quotation_subsidy_amount) > 0 ? proj.quotation_subsidy_amount : null) ||
-        rawInvoiceAmount ||
         0
       )
     );
@@ -186,7 +183,14 @@ export async function previewProceedingExcel(
       ? rawSubsidyEligible + rawFarmerContribution
       : rawSubsidyEligible;
 
-    const stateRestricted = Math.floor(parseFloat(proj?.state_restricted_amount || rawSubsidyEligible || 0));
+    const stateRestricted = Math.floor(
+      parseFloat(
+        (parseFloat(row.state_restricted_amount) > 0 ? row.state_restricted_amount : null) ||
+        (parseFloat(proj?.state_restricted_amount) > 0 ? proj.state_restricted_amount : null) ||
+        rawSubsidyEligible ||
+        0
+      )
+    );
     const nowToBeReleased = Math.floor(row.now_to_be_released_amount || 0);
     const excelGst = Math.floor(row.excel_gst_amount || 0);
 
@@ -220,7 +224,13 @@ export async function previewProceedingExcel(
       invoiceDate,
       dealer?.commission_slabs || []
     );
-    const dealerBaseRate = Math.floor(rateResolution.rate);
+    const dealerBaseRate = Math.floor(
+      Number.isFinite(rateResolution?.rate)
+        ? rateResolution.rate
+        : typeof rateResolution === "number" && Number.isFinite(rateResolution)
+        ? rateResolution
+        : 20
+    );
 
     // Milestone 45-day delay penalty analysis & Milestone Dates
     let milestoneType = isFirstFund ? "FIRST_FUND" : "SECOND_FUND";
@@ -251,7 +261,7 @@ export async function previewProceedingExcel(
         if (invDate && wcDate) {
           const dInv = new Date(invDate);
           const dWc = new Date(wcDate);
-          if (dWc > dInv) {
+          if (!isNaN(dInv.getTime()) && !isNaN(dWc.getTime()) && dWc > dInv) {
             delayDays = Math.round((dWc.getTime() - dInv.getTime()) / (1000 * 60 * 60 * 24));
             if (delayDays > 45) {
               penaltyPoints = Math.floor(delayDays / 45); // 1% per 45-day block
@@ -278,7 +288,7 @@ export async function previewProceedingExcel(
         if (ffDate && jvDate) {
           const dFf = new Date(ffDate);
           const dJv = new Date(jvDate);
-          if (dJv > dFf) {
+          if (!isNaN(dFf.getTime()) && !isNaN(dJv.getTime()) && dJv > dFf) {
             delayDays = Math.round((dJv.getTime() - dFf.getTime()) / (1000 * 60 * 60 * 24));
             if (delayDays > 45) {
               penaltyPoints = Math.floor(delayDays / 45);
@@ -460,6 +470,12 @@ export async function importProceedingBatch({
       }
     }
 
+    // Helper to guarantee numbers are strictly finite and never NaN/null
+    const sanitizeNum = (val, fallback = 0) => {
+      const n = typeof val === "number" ? val : parseFloat(val);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
     // 3. Create ProceedingBatchProjects
     const batchProjectsPayload = rowsToSave.map((r, idx) => ({
       proceeding_batch_id: batch.id,
@@ -474,30 +490,30 @@ export async function importProceedingBatch({
       fund_type: `${finalFundPct}% Release`,
       invoice_number: r.invoice_number,
       invoice_date: r.invoice_date,
-      invoice_amount: r.invoice_amount,
-      farmer_contribution: r.farmer_contribution || 0,
-      subsidy_amount: r.subsidy_eligible_amount,
-      state_restricted_amount: r.state_restricted_amount,
-      total_material_cost: r.total_material_cost,
-      now_to_be_released_amount: r.now_to_be_released_amount,
-      excel_gst_amount: r.excel_gst_amount,
-      goi_share_amount: r.goi_share_amount,
-      state_share_amount: r.state_share_amount,
-      addl_state_share_amount: r.addl_state_share_amount,
-      fund_share_amount: r.now_to_be_released_amount,
-      gst_percentage: r.gst_percentage,
-      fittings_percentage: r.fittings_percentage,
-      penalty_percentage: r.penalty_percentage,
-      net_material_base: r.net_material_base,
-      dealer_rate_percentage: r.dealer_rate_percentage,
-      commission_amount: r.commission_amount,
-      fittings_amount: r.fittings_amount,
+      invoice_amount: sanitizeNum(r.invoice_amount, 0),
+      farmer_contribution: sanitizeNum(r.farmer_contribution, 0),
+      subsidy_amount: sanitizeNum(r.subsidy_eligible_amount, 0),
+      state_restricted_amount: sanitizeNum(r.state_restricted_amount, 0),
+      total_material_cost: sanitizeNum(r.total_material_cost, 0),
+      now_to_be_released_amount: sanitizeNum(r.now_to_be_released_amount, 0),
+      excel_gst_amount: sanitizeNum(r.excel_gst_amount, 0),
+      goi_share_amount: sanitizeNum(r.goi_share_amount, 0),
+      state_share_amount: sanitizeNum(r.state_share_amount, 0),
+      addl_state_share_amount: sanitizeNum(r.addl_state_share_amount, 0),
+      fund_share_amount: sanitizeNum(r.now_to_be_released_amount, 0),
+      gst_percentage: sanitizeNum(r.gst_percentage, 12.0),
+      fittings_percentage: sanitizeNum(r.fittings_percentage, 5.0),
+      penalty_percentage: sanitizeNum(r.penalty_percentage, 0),
+      net_material_base: sanitizeNum(r.net_material_base, 0),
+      dealer_rate_percentage: sanitizeNum(r.dealer_rate_percentage, 20),
+      commission_amount: sanitizeNum(r.commission_amount, 0),
+      fittings_amount: sanitizeNum(r.fittings_amount, 0),
       milestone_type: r.milestone_type,
       milestone_start_date: r.milestone_start_date,
       milestone_end_date: r.milestone_end_date,
-      delay_days: r.delay_days,
-      penalty_amount: r.penalty_amount,
-      adjusted_penalty_amount: r.penalty_amount,
+      delay_days: Math.round(sanitizeNum(r.delay_days, 0)),
+      penalty_amount: sanitizeNum(r.penalty_amount, 0),
+      adjusted_penalty_amount: sanitizeNum(r.penalty_amount, 0),
       is_paid_to_dealer: false,
     }));
 
@@ -855,19 +871,25 @@ export async function recalculateProceedingBatch(id) {
       const dealer = proj?.dealer || null;
       const invoiceDate = proj?.invoice_date || item.invoice_date || null;
 
-      let dealerBaseRate = Math.floor(parseFloat(item.dealer_rate_percentage || 20));
+      let dealerBaseRate = Math.floor(parseFloat(item.dealer_rate_percentage || 20) || 20);
       if (dealer) {
         const rateResolution = resolveEffectiveDealerCommission(
           dealer,
           invoiceDate,
           dealer.commission_slabs || []
         );
-        dealerBaseRate = Math.floor(rateResolution.rate);
+        dealerBaseRate = Math.floor(
+          Number.isFinite(rateResolution?.rate)
+            ? rateResolution.rate
+            : typeof rateResolution === "number" && Number.isFinite(rateResolution)
+            ? rateResolution
+            : 20
+        );
       }
       const taxDate = invoiceDate || null;
       const taxSlab = await getEffectiveSchemeTaxSlab(taxDate);
-      const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0);
-      const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0);
+      const gstPct = parseFloat(taxSlab?.gst_percentage ?? 12.0) || 12.0;
+      const fittingsPct = parseFloat(taxSlab?.fittings_percentage ?? 5.0) || 5.0;
 
       // Farmer contribution: resolve across (1) current item, (2) linked GovernmentProject, (3) other batches
       const rawFarmerContribution = Math.floor(
@@ -879,7 +901,7 @@ export async function recalculateProceedingBatch(id) {
         )
       );
 
-      const rawInvoiceAmount = Math.floor(parseFloat(proj?.invoice_amount || item.invoice_amount || 0));
+      const rawInvoiceAmount = Math.floor(parseFloat(proj?.invoice_amount || item.invoice_amount || 0) || 0);
       const effectiveInvoiceAmount = rawFarmerContribution > 0
         ? rawInvoiceAmount + rawFarmerContribution
         : rawInvoiceAmount;
@@ -889,12 +911,8 @@ export async function recalculateProceedingBatch(id) {
           (parseFloat(item.subsidy_amount) > 0 ? item.subsidy_amount : null) ||
           (parseFloat(item.state_restricted_amount) > 0 ? item.state_restricted_amount : null) ||
           (parseFloat(proj?.state_restricted_amount) > 0 ? proj.state_restricted_amount : null) ||
-          (parseFloat(otherBatch?.subsidy_amount) > 0 ? otherBatch.subsidy_amount : null) ||
-          (parseFloat(otherBatch?.state_restricted_amount) > 0 ? otherBatch.state_restricted_amount : null) ||
-          (parseFloat(proj?.quotation_subsidy_amount) > 0 ? proj.quotation_subsidy_amount : null) ||
-          rawInvoiceAmount ||
           0
-        )
+        ) || 0
       );
 
       // Gross calculation base ALWAYS includes farmer contribution across all fund releases (40%, 45%, 55%, 60%)
@@ -902,8 +920,8 @@ export async function recalculateProceedingBatch(id) {
         ? rawSubsidyEligible + rawFarmerContribution
         : rawSubsidyEligible;
 
-      const nowToBeReleased = Math.floor(parseFloat(item.now_to_be_released_amount || item.fund_share_amount || 0));
-      const fundPct = batch.fund_percentage_value || 55.0;
+      const nowToBeReleased = Math.floor(parseFloat(item.now_to_be_released_amount || item.fund_share_amount || 0) || 0);
+      const fundPct = parseFloat(batch.fund_percentage_value || 55.0) || 55.0;
 
       // 1. Total Project Material Cost (Calculated from Gross Calculation Base)
       // Sequentially back out GST percentage (/ 1 + GST%), then back out 5% fittings (/ 1 + Fittings%)
@@ -940,7 +958,7 @@ export async function recalculateProceedingBatch(id) {
           if (invDate && wcDate) {
             const dInv = new Date(invDate);
             const dWc = new Date(wcDate);
-            if (dWc > dInv) {
+            if (!isNaN(dInv.getTime()) && !isNaN(dWc.getTime()) && dWc > dInv) {
               delayDays = Math.round((dWc.getTime() - dInv.getTime()) / (1000 * 60 * 60 * 24));
               if (delayDays > 45) {
                 penaltyPoints = Math.floor(delayDays / 45);
@@ -966,7 +984,7 @@ export async function recalculateProceedingBatch(id) {
           if (ffDate && jvDate) {
             const dFf = new Date(ffDate);
             const dJv = new Date(jvDate);
-            if (dJv > dFf) {
+            if (!isNaN(dFf.getTime()) && !isNaN(dJv.getTime()) && dJv > dFf) {
               delayDays = Math.round((dJv.getTime() - dFf.getTime()) / (1000 * 60 * 60 * 24));
               if (delayDays > 45) {
                 penaltyPoints = Math.floor(delayDays / 45);
@@ -979,23 +997,23 @@ export async function recalculateProceedingBatch(id) {
       const commissionAmt = Math.floor((releasedNetMaterial * dealerBaseRate) / 100);
       const penaltyAmt = Math.floor((releasedNetMaterial * penaltyPoints) / 100);
 
-      item.invoice_amount = effectiveInvoiceAmount;
-      item.farmer_contribution = rawFarmerContribution;
-      item.subsidy_amount = rawSubsidyEligible;
-      item.total_material_cost = totalMaterialCost;
-      item.gst_percentage = gstPct;
-      item.fittings_percentage = fittingsPct;
-      item.net_material_base = releasedNetMaterial;
-      item.dealer_rate_percentage = dealerBaseRate;
-      item.commission_amount = commissionAmt;
-      item.fittings_amount = fittingsAmt;
+      item.invoice_amount = Number.isFinite(effectiveInvoiceAmount) ? effectiveInvoiceAmount : 0;
+      item.farmer_contribution = Number.isFinite(rawFarmerContribution) ? rawFarmerContribution : 0;
+      item.subsidy_amount = Number.isFinite(rawSubsidyEligible) ? rawSubsidyEligible : 0;
+      item.total_material_cost = Number.isFinite(totalMaterialCost) ? totalMaterialCost : 0;
+      item.gst_percentage = Number.isFinite(gstPct) ? gstPct : 12.0;
+      item.fittings_percentage = Number.isFinite(fittingsPct) ? fittingsPct : 5.0;
+      item.net_material_base = Number.isFinite(releasedNetMaterial) ? releasedNetMaterial : 0;
+      item.dealer_rate_percentage = Number.isFinite(dealerBaseRate) ? dealerBaseRate : 20;
+      item.commission_amount = Number.isFinite(commissionAmt) ? commissionAmt : 0;
+      item.fittings_amount = Number.isFinite(fittingsAmt) ? fittingsAmt : 0;
       item.milestone_type = milestoneType;
       item.milestone_start_date = milestoneStartDate;
       item.milestone_end_date = milestoneEndDate;
-      item.delay_days = delayDays;
-      item.penalty_percentage = penaltyPoints;
-      item.penalty_amount = penaltyAmt;
-      item.adjusted_penalty_amount = penaltyAmt;
+      item.delay_days = Number.isFinite(delayDays) ? delayDays : 0;
+      item.penalty_percentage = Number.isFinite(penaltyPoints) ? penaltyPoints : 0;
+      item.penalty_amount = Number.isFinite(penaltyAmt) ? penaltyAmt : 0;
+      item.adjusted_penalty_amount = Number.isFinite(penaltyAmt) ? penaltyAmt : 0;
 
       // Link project_id if it was unlinked
       if (!item.project_id && proj?.id) {
