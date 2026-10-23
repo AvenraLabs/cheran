@@ -168,12 +168,12 @@ export async function previewProceedingExcel(
       ? rawInvoiceAmount + rawFarmerContribution
       : rawInvoiceAmount;
 
-    // Subsidy Eligible Amount (strictly from Excel subsidy eligible / state restricted amount or DB state restricted amount)
+    // Subsidy Eligible Amount (strictly from Excel subsidy eligible / invoice amount or DB)
     const rawSubsidyEligible = Math.floor(
       parseFloat(
         (parseFloat(row.subsidy_eligible_amount) > 0 ? row.subsidy_eligible_amount : null) ||
-        (parseFloat(row.state_restricted_amount) > 0 ? row.state_restricted_amount : null) ||
-        (parseFloat(proj?.state_restricted_amount) > 0 ? proj.state_restricted_amount : null) ||
+        (parseFloat(row.invoice_amount) > 0 ? row.invoice_amount : null) ||
+        (parseFloat(proj?.invoice_amount) > 0 ? proj.invoice_amount : null) ||
         0
       )
     );
@@ -544,11 +544,11 @@ export async function listProceedingBatches(query = {}) {
   const where = {};
 
   if (start_date && end_date) {
-    where.proceeding_date = { [Op.between]: [start_date, end_date] };
+    where.payment_received_date = { [Op.between]: [start_date, end_date] };
   } else if (start_date) {
-    where.proceeding_date = { [Op.gte]: start_date };
+    where.payment_received_date = { [Op.gte]: start_date };
   } else if (end_date) {
-    where.proceeding_date = { [Op.lte]: end_date };
+    where.payment_received_date = { [Op.lte]: end_date };
   }
 
   if (fund_percentage_value) {
@@ -556,7 +556,9 @@ export async function listProceedingBatches(query = {}) {
   }
 
   if (payment_status === "RECEIVED") {
-    where.payment_received_date = { [Op.ne]: null };
+    if (!where.payment_received_date) {
+      where.payment_received_date = { [Op.ne]: null };
+    }
   } else if (payment_status === "PENDING") {
     where.payment_received_date = null;
   }
@@ -909,8 +911,8 @@ export async function recalculateProceedingBatch(id) {
       const rawSubsidyEligible = Math.floor(
         parseFloat(
           (parseFloat(item.subsidy_amount) > 0 ? item.subsidy_amount : null) ||
-          (parseFloat(item.state_restricted_amount) > 0 ? item.state_restricted_amount : null) ||
-          (parseFloat(proj?.state_restricted_amount) > 0 ? proj.state_restricted_amount : null) ||
+          (parseFloat(item.invoice_amount) > 0 ? item.invoice_amount : null) ||
+          (parseFloat(proj?.invoice_amount) > 0 ? proj.invoice_amount : null) ||
           0
         ) || 0
       );
@@ -1268,11 +1270,11 @@ export async function getDealerCommissionStatement(query = {}) {
   }
 
   if (start_date && end_date) {
-    batchWhere.proceeding_date = { [Op.between]: [start_date, end_date] };
+    batchWhere.payment_received_date = { [Op.between]: [start_date, end_date] };
   } else if (start_date) {
-    batchWhere.proceeding_date = { [Op.gte]: start_date };
+    batchWhere.payment_received_date = { [Op.gte]: start_date };
   } else if (end_date) {
-    batchWhere.proceeding_date = { [Op.lte]: end_date };
+    batchWhere.payment_received_date = { [Op.lte]: end_date };
   }
 
   if (search && search.trim()) {
@@ -1411,3 +1413,169 @@ export async function getDealerCommissionStatement(query = {}) {
     },
   };
 }
+
+/**
+ * Monthly Dealer Commission Summary Report
+ * Aggregates all dealers with commissions in the selected month
+ * strictly filtered by bank payment_received_date (NO fallback to proceeding_date).
+ * Columns: 55% (Material Cost, Fittings Cost, Commission), 45% (Material Cost, Commission), 40% (Material Cost, Commission), Net Commission
+ */
+export async function getMonthlyCommissionReport(query = {}) {
+  const { year, month, start_date, end_date } = query;
+
+  let startDate = start_date;
+  let endDate = end_date;
+
+  if (!startDate || !endDate) {
+    const targetYear = parseInt(year, 10) || new Date().getFullYear();
+    const targetMonth = parseInt(month, 10) || new Date().getMonth() + 1;
+    const paddedMonth = String(targetMonth).padStart(2, "0");
+    const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+    startDate = `${targetYear}-${paddedMonth}-01`;
+    endDate = `${targetYear}-${paddedMonth}-${String(lastDay).padStart(2, "0")}`;
+  }
+
+  // Strictly filter batches where payment was received in bank within the date range
+  const batchWhere = {
+    payment_received_date: {
+      [Op.between]: [startDate, endDate],
+      [Op.ne]: null,
+    },
+  };
+
+  const projects = await ProceedingBatchProject.findAll({
+    include: [
+      {
+        model: ProceedingBatch,
+        as: "batch",
+        where: batchWhere,
+        required: true,
+        attributes: [
+          "id",
+          "proceeding_no",
+          "proceeding_date",
+          "fund_percentage_value",
+          "include_fittings",
+          "payment_received_date",
+          "payment_received_ref",
+        ],
+      },
+      {
+        model: Dealer,
+        as: "dealer",
+        attributes: ["id", "name", "commission_percentage"],
+      },
+    ],
+    order: [
+      ["created_at", "ASC"],
+    ],
+  });
+
+  const dealerMap = new Map();
+
+  for (const item of projects) {
+    const dKey = item.dealer_id || "unassigned";
+    const dName = item.dealer?.name || (item.project_id ? "Unassigned Dealer" : "Unassigned");
+    const dDistrict = item.district || "—";
+
+    if (!dealerMap.has(dKey)) {
+      dealerMap.set(dKey, {
+        dealer_id: item.dealer_id || null,
+        dealer_name: dName,
+        dealer_district: dDistrict,
+        projects_count: 0,
+        // 55% Release
+        fund_55: {
+          material_cost: 0,
+          fittings_cost: 0,
+          commission: 0,
+        },
+        // 45% Release
+        fund_45: {
+          material_cost: 0,
+          commission: 0,
+        },
+        // 40% Release
+        fund_40: {
+          material_cost: 0,
+          commission: 0,
+        },
+        total_penalty: 0,
+        net_commission: 0,
+      });
+    }
+
+    const d = dealerMap.get(dKey);
+    d.projects_count += 1;
+
+    const fundPct = Math.round(parseFloat(item.batch?.fund_percentage_value || 0));
+    const matCost = Math.floor(parseFloat(item.total_material_cost || 0));
+    const fitCost = Math.floor(parseFloat(item.fittings_amount || 0));
+    const commAmt = Math.floor(parseFloat(item.commission_amount || 0));
+    const penAmt = Math.floor(
+      parseFloat(
+        item.adjusted_penalty_amount !== undefined && item.adjusted_penalty_amount !== null
+          ? item.adjusted_penalty_amount
+          : item.penalty_amount || 0
+      )
+    );
+
+    if (fundPct === 55) {
+      d.fund_55.material_cost += matCost;
+      d.fund_55.fittings_cost += fitCost;
+      d.fund_55.commission += commAmt;
+    } else if (fundPct === 45) {
+      d.fund_45.material_cost += matCost;
+      d.fund_45.commission += commAmt;
+    } else if (fundPct === 40) {
+      d.fund_40.material_cost += matCost;
+      d.fund_40.commission += commAmt;
+    }
+
+    d.total_penalty += penAmt;
+  }
+
+  // Calculate Net Dealer Commission matching breakdown: (55% Comm + 55% Fittings + 45% Comm + 40% Comm) - Penalty
+  const dealers = Array.from(dealerMap.values()).map((d) => {
+    const grossComm = Math.floor(
+      d.fund_55.commission +
+      d.fund_55.fittings_cost +
+      d.fund_45.commission +
+      d.fund_40.commission
+    );
+    d.net_commission = Math.max(0, grossComm - d.total_penalty);
+    return d;
+  });
+
+  // Sort alphabetically by dealer name
+  dealers.sort((a, b) => a.dealer_name.localeCompare(b.dealer_name));
+
+  // Compute Grand Totals across all dealers
+  const totals = {
+    total_dealers_count: dealers.length,
+    total_projects_count: dealers.reduce((acc, d) => acc + d.projects_count, 0),
+    fund_55: {
+      material_cost: dealers.reduce((acc, d) => acc + d.fund_55.material_cost, 0),
+      fittings_cost: dealers.reduce((acc, d) => acc + d.fund_55.fittings_cost, 0),
+      commission: dealers.reduce((acc, d) => acc + d.fund_55.commission, 0),
+    },
+    fund_45: {
+      material_cost: dealers.reduce((acc, d) => acc + d.fund_45.material_cost, 0),
+      commission: dealers.reduce((acc, d) => acc + d.fund_45.commission, 0),
+    },
+    fund_40: {
+      material_cost: dealers.reduce((acc, d) => acc + d.fund_40.material_cost, 0),
+      commission: dealers.reduce((acc, d) => acc + d.fund_40.commission, 0),
+    },
+    total_penalty: dealers.reduce((acc, d) => acc + d.total_penalty, 0),
+    total_net_commission: dealers.reduce((acc, d) => acc + d.net_commission, 0),
+  };
+
+  return {
+    start_date: startDate,
+    end_date: endDate,
+    dealers,
+    totals,
+  };
+}
+

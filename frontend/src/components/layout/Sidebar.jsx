@@ -51,6 +51,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse }) {
           { label: "Excel Imports", path: "/imports", icon: FileText },
           { label: "Dealers Directory", path: "/dealers", icon: Users },
           { label: "Commission", path: "/commissions", icon: Receipt },
+          { label: "Commission Reports", path: "/commission-reports", icon: BarChart3 },
         ],
       },
       {

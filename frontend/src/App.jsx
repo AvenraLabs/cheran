@@ -18,6 +18,7 @@ import CreateDirectSalePage from "./pages/CreateDirectSalePage.jsx";
 import DealersPage from "./pages/DealersPage.jsx";
 import CommissionProceedingsPage from "./pages/CommissionProceedingsPage.jsx";
 import CommissionBatchDetailPage from "./pages/CommissionBatchDetailPage.jsx";
+import CommissionReportsPage from "./pages/CommissionReportsPage.jsx";
 
 // Core ERP Pages
 import ItemsPage from "./pages/ItemsPage.jsx";
@@ -278,6 +279,32 @@ export function App() {
             element={
               <AdminRoute>
                 <CommissionProceedingsPage />
+              </AdminRoute>
+            }
+          />
+
+          {/* Commission Reports (Admin Only) */}
+          <Route
+            path="commission-reports"
+            element={
+              <AdminRoute>
+                <CommissionReportsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="commission/reports"
+            element={
+              <AdminRoute>
+                <CommissionReportsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="commissions/reports"
+            element={
+              <AdminRoute>
+                <CommissionReportsPage />
               </AdminRoute>
             }
           />

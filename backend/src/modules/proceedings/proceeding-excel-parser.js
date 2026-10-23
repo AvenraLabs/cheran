@@ -192,9 +192,8 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
     "invoice value",
   ]);
 
-  // Subsidy Eligible: Prioritize State Restricted Amount as per Cheran business rules, then subsidy eligible headers, then quotation subsidy, fallback invoice amount
+  // Subsidy Eligible: Takes explicit subsidy eligible column if present, otherwise defaults to invoice amount
   const subsidyEligibleCol =
-    stateRestrictedCol ||
     findCol([
       "subsidy eligible amount (in rs)",
       "subsidy eligible amount in rs",
@@ -203,8 +202,12 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
       "quotation subsidy amount",
       "quotation subsidy",
       "total subsidy amount",
-    ]) ||
-    invoiceAmtCol;
+      "invoice amount (in rs)",
+      "invoice amount in rs",
+      "invoice amount",
+      "total invoice amount",
+      "inv amount",
+    ]) || invoiceAmtCol;
 
   const gstAmtCol = findCol([
     "gst amount",
@@ -284,8 +287,8 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
       village,
       invoice_number: invoiceNo,
       invoice_date: parsedInvDate,
-      subsidy_eligible_amount: Math.round((stateRestrictedAmt || subsidyEligibleAmt) * 100) / 100,
-      state_restricted_amount: Math.round((stateRestrictedAmt || subsidyEligibleAmt) * 100) / 100,
+      subsidy_eligible_amount: Math.round((subsidyEligibleAmt || invoiceAmt) * 100) / 100,
+      state_restricted_amount: Math.round((stateRestrictedAmt || subsidyEligibleAmt || invoiceAmt) * 100) / 100,
       invoice_amount: Math.round(invoiceAmt * 100) / 100,
       farmer_contribution: Math.round(farmerContribAmt * 100) / 100,
       now_to_be_released_amount: Math.round(releasedAmt * 100) / 100,

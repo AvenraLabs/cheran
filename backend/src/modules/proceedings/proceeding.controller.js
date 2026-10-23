@@ -239,3 +239,19 @@ export async function getDealerCommissionStatement(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * GET /api/proceedings/monthly-report
+ */
+export async function getMonthlyCommissionReport(req, res, next) {
+  try {
+    const report = await proceedingService.getMonthlyCommissionReport(req.query);
+    res.json({
+      status: "success",
+      report,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

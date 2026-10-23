@@ -1474,9 +1474,9 @@ export function CommissionProceedingsPage() {
                       <DateInput
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        placeholder="From: dd-mm-yyyy"
+                        placeholder="Payment From: dd-mm-yyyy"
                         className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
-                        title="Filter by Proceeding From Date"
+                        title="Filter by Bank Payment Received From Date"
                       />
                     </div>
 
@@ -1485,9 +1485,9 @@ export function CommissionProceedingsPage() {
                       <DateInput
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        placeholder="To: dd-mm-yyyy"
+                        placeholder="Payment To: dd-mm-yyyy"
                         className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
-                        title="Filter by Proceeding To Date"
+                        title="Filter by Bank Payment Received To Date"
                       />
                     </div>
 
@@ -1830,9 +1830,9 @@ export function CommissionProceedingsPage() {
                       <DateInput
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        placeholder="From: dd-mm-yyyy"
+                        placeholder="Payment From: dd-mm-yyyy"
                         className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
-                        title="Filter from Proceeding Date"
+                        title="Filter from Bank Payment Received Date"
                       />
                     </div>
 
@@ -1841,9 +1841,9 @@ export function CommissionProceedingsPage() {
                       <DateInput
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        placeholder="To: dd-mm-yyyy"
+                        placeholder="Payment To: dd-mm-yyyy"
                         className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
-                        title="Filter to Proceeding Date"
+                        title="Filter to Bank Payment Received Date"
                       />
                     </div>
 
