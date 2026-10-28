@@ -162,24 +162,31 @@ export const enforceRoleModuleAccess = (req, res, next) => {
     return next();
   }
 
-  // 'USER' / 'GOVT' / 'OPERATIONS' role: Strictly restricted to Govt Projects and Load Order Upload only (2 pages)
+  // 'USER' / 'GOVT' / 'OPERATIONS' role: Govt Projects, Excel Imports, and Load Order Upload
   if (role === "USER" || role === "GOVT" || role === "OPERATIONS") {
     const isLoadOrderRoute = fullPath.startsWith("/api/invoices/load-order");
     const isGovtProjectRoute =
       fullPath.startsWith("/api/government/projects") ||
       fullPath.startsWith("/api/government/statuses");
+    const isGovtImportRoute = fullPath.startsWith("/api/government/imports");
     const isDealersOptions = fullPath.startsWith("/api/dealers") && req.method === "GET";
     const isInventoryForLoadOrder =
       (fullPath.startsWith("/api/inventory/stock") || fullPath.startsWith("/api/items")) &&
       req.method === "GET";
 
-    if (isLoadOrderRoute || isGovtProjectRoute || isDealersOptions || isInventoryForLoadOrder) {
+    if (
+      isLoadOrderRoute ||
+      isGovtProjectRoute ||
+      isGovtImportRoute ||
+      isDealersOptions ||
+      isInventoryForLoadOrder
+    ) {
       return next();
     }
 
     return next(
       new AppError(
-        `Access forbidden. Role '${req.user.role}' is restricted to Govt Projects and Load Order Upload only.`,
+        `Access forbidden. Role '${req.user.role}' is restricted to Govt Projects, Excel Imports, and Load Order Upload.`,
         403
       )
     );

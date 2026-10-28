@@ -211,23 +211,9 @@ export function App() {
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:id" element={<ProjectDetailPage />} />
 
-          {/* Excel Imports (Allowed ONLY for DEALER & ADMIN, Forbidden for USER/GOVT/OPERATIONS) */}
-          <Route
-            path="imports"
-            element={
-              <DealerOrAdminRoute>
-                <ImportsPage />
-              </DealerOrAdminRoute>
-            }
-          />
-          <Route
-            path="imports/:id"
-            element={
-              <DealerOrAdminRoute>
-                <ImportBatchDetailPage />
-              </DealerOrAdminRoute>
-            }
-          />
+          {/* Excel Imports (Allowed for ADMIN, DEALER, and USER) */}
+          <Route path="imports" element={<ImportsPage />} />
+          <Route path="imports/:id" element={<ImportBatchDetailPage />} />
 
           {/* Pendency Reports (Allowed for DEALER & ADMIN, Forbidden for USER/GOVT/OPERATIONS) */}
           <Route

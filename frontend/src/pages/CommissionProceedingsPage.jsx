@@ -302,10 +302,10 @@ export function CommissionProceedingsPage() {
         startDate && endDate
           ? `${formatDate(startDate)} to ${formatDate(endDate)}`
           : startDate
-          ? `From ${formatDate(startDate)}`
-          : endDate
-          ? `Until ${formatDate(endDate)}`
-          : "All Historical Proceedings";
+            ? `From ${formatDate(startDate)}`
+            : endDate
+              ? `Until ${formatDate(endDate)}`
+              : "All Historical Proceedings";
 
       const releaseText = selectedFundPct ? `${selectedFundPct}% Release` : "ALL RELEASES";
 
@@ -467,15 +467,15 @@ export function CommissionProceedingsPage() {
         },
       });
 
-    const safeDealerName = (currentDealerName || "Statement").replace(/[/\\?%*:|"<> ]/g, "_");
-    doc.save(`Dealer_Statement_${safeDealerName}_${new Date().toISOString().split("T")[0]}.pdf`);
-  } catch (err) {
-    console.error("PDF export error:", err);
-    toast.error("Failed to export PDF: " + (err?.message || "Unknown error"));
-  } finally {
-    setExportingPDF(false);
-  }
-};
+      const safeDealerName = (currentDealerName || "Statement").replace(/[/\\?%*:|"<> ]/g, "_");
+      doc.save(`Dealer_Statement_${safeDealerName}_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (err) {
+      console.error("PDF export error:", err);
+      toast.error("Failed to export PDF: " + (err?.message || "Unknown error"));
+    } finally {
+      setExportingPDF(false);
+    }
+  };
 
   // Handle File Select & Preview
   const handleFileChange = async (file, overrideFittings = null, overrideFundPct = null) => {
@@ -671,8 +671,8 @@ export function CommissionProceedingsPage() {
     } catch (err) {
       setEditDateError(
         err?.message ||
-          err?.response?.data?.message ||
-          "Failed to update proceeding date"
+        err?.response?.data?.message ||
+        "Failed to update proceeding date"
       );
     } finally {
       setSavingProceedingDate(false);
@@ -911,15 +911,14 @@ export function CommissionProceedingsPage() {
                 <div className="bg-white border border-[#2F6F5E]/40 rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.04)] bg-gradient-to-r from-[#EAF3F0]/60 to-white flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <span
-                      className={`px-3 py-1.5 rounded-full font-extrabold font-mono text-sm shadow-sm ${
-                        previewData.detected_fund_percentage === 40
+                      className={`px-3 py-1.5 rounded-full font-extrabold font-mono text-sm shadow-sm ${previewData.detected_fund_percentage === 40
                           ? "bg-indigo-700 text-white"
                           : previewData.detected_fund_percentage === 45
-                          ? "bg-blue-700 text-white"
-                          : previewData.detected_fund_percentage === 60
-                          ? "bg-purple-700 text-white"
-                          : "bg-[#2F6F5E] text-white"
-                      }`}
+                            ? "bg-blue-700 text-white"
+                            : previewData.detected_fund_percentage === 60
+                              ? "bg-purple-700 text-white"
+                              : "bg-[#2F6F5E] text-white"
+                        }`}
                     >
                       {previewData.detected_fund_percentage}% Fund Release
                     </span>
@@ -1159,151 +1158,150 @@ export function CommissionProceedingsPage() {
                             const netComm = Math.max(0, commAmt - penAmt);
 
                             return (
-                            <tr key={r.application_id || i} className="hover:bg-[#FAFAF8] transition-colors">
-                              <td className="py-2.5 px-3 text-center font-mono text-[#8C97AB]">{r.row_index}</td>
-                              <td className="py-2.5 px-3">
-                                <div className="font-mono font-bold text-[#14213D] text-xs">
-                                  {r.application_id}
-                                </div>
-                                <div className="mt-1 flex items-center gap-1.5">
-                                  <span className="text-[10px] text-[#52607D] font-medium">Inv No:</span>
-                                  {r.invoice_number && r.invoice_number !== "—" ? (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold text-[10px]">
-                                      #{r.invoice_number}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] text-[#8C97AB] italic">—</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3">
-                                <div className="font-semibold text-[#14213D]">{r.farmer_name}</div>
-                                <div className="text-[10px] text-[#52607D]">
-                                  {[r.village, r.block, r.district].filter(Boolean).join(", ") || "—"}
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3 text-[#14213D] font-medium">
-                                <div>{r.dealer_name}</div>
-                                {r.dealer_rate_percentage > 0 && (
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <span
-                                      className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
-                                        r.dealer_rate_percentage >= 19
-                                          ? "bg-amber-100 text-amber-900 border border-amber-200"
-                                          : "bg-emerald-100 text-[#2F6F5E] border border-emerald-200"
-                                      }`}
-                                    >
-                                      {r.dealer_rate_percentage}% Rate
-                                    </span>
-                                    {r.invoice_date && (
-                                      <span className="text-[10px] text-[#52607D]">
-                                        ({formatDate(r.invoice_date)})
+                              <tr key={r.application_id || i} className="hover:bg-[#FAFAF8] transition-colors">
+                                <td className="py-2.5 px-3 text-center font-mono text-[#8C97AB]">{r.row_index}</td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-mono font-bold text-[#14213D] text-xs">
+                                    {r.application_id}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-1.5">
+                                    <span className="text-[10px] text-[#52607D] font-medium">Inv No:</span>
+                                    {r.invoice_number && r.invoice_number !== "—" ? (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold text-[10px]">
+                                        #{r.invoice_number}
                                       </span>
+                                    ) : (
+                                      <span className="text-[10px] text-[#8C97AB] italic">—</span>
                                     )}
                                   </div>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
-                                {formatRupees(r.invoice_amount)}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
-                                {formatRupees(r.subsidy_eligible_amount)}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-medium text-[#14213D]">
-                                <div>{formatRupees(r.total_material_cost)}</div>
-                                <div className="text-[10px] text-[#8C97AB] font-sans font-medium">
-                                  GST: {r.gst_percentage || 12}%
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E] bg-emerald-50/50">
-                                <div>{formatRupees(r.now_to_be_released_amount)}</div>
-                                <div className="text-[10px] text-[#2F6F5E]/70 font-sans font-medium">
-                                  GST: {r.gst_percentage || 12}%
-                                </div>
-                              </td>
-
-                              {/* Penalty Dates */}
-                              <td className="py-2.5 px-3 text-[11px] font-mono whitespace-nowrap min-w-[170px]">
-                                <div className="space-y-1">
-                                  <div>
-                                    <div className="text-[10px] text-[#52607D] font-medium leading-tight">
-                                      {r.milestone_start_label}:
-                                    </div>
-                                    <div className="font-semibold text-[#14213D] leading-tight">
-                                      {formatDate(r.milestone_start_date)}
-                                    </div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-semibold text-[#14213D]">{r.farmer_name}</div>
+                                  <div className="text-[10px] text-[#52607D]">
+                                    {[r.village, r.block, r.district].filter(Boolean).join(", ") || "—"}
                                   </div>
-                                  <div>
-                                    <div className="text-[10px] text-[#52607D] font-medium leading-tight">
-                                      {r.milestone_end_label}:
-                                    </div>
-                                    <div className="font-semibold text-[#14213D] leading-tight">
-                                      {formatDate(r.milestone_end_date)}
-                                    </div>
-                                  </div>
-                                  {r.delay_days > 45 ? (
-                                    <div className="text-rose-600 font-bold text-[10px] pt-0.5">
-                                      {r.delay_days}d ({r.penalty_percentage}% penalty)
-                                    </div>
-                                  ) : (
-                                    <div className="text-emerald-700 font-bold text-[10px] pt-0.5">
-                                      {r.delay_days || 0}d
+                                </td>
+                                <td className="py-2.5 px-3 text-[#14213D] font-medium">
+                                  <div>{r.dealer_name}</div>
+                                  {r.dealer_rate_percentage > 0 && (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <span
+                                        className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${r.dealer_rate_percentage >= 19
+                                            ? "bg-amber-100 text-amber-900 border border-amber-200"
+                                            : "bg-emerald-100 text-[#2F6F5E] border border-emerald-200"
+                                          }`}
+                                      >
+                                        {r.dealer_rate_percentage}% Rate
+                                      </span>
+                                      {r.invoice_date && (
+                                        <span className="text-[10px] text-[#52607D]">
+                                          ({formatDate(r.invoice_date)})
+                                        </span>
+                                      )}
                                     </div>
                                   )}
-                                </div>
-                              </td>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
+                                  {formatRupees(r.invoice_amount)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono text-[#52607D]">
+                                  {formatRupees(r.subsidy_eligible_amount)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-medium text-[#14213D]">
+                                  <div>{formatRupees(r.total_material_cost)}</div>
+                                  <div className="text-[10px] text-[#8C97AB] font-sans font-medium">
+                                    GST: {r.gst_percentage || 12}%
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E] bg-emerald-50/50">
+                                  <div>{formatRupees(r.now_to_be_released_amount)}</div>
+                                  <div className="text-[10px] text-[#2F6F5E]/70 font-sans font-medium">
+                                    GST: {r.gst_percentage || 12}%
+                                  </div>
+                                </td>
 
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E]">
-                                {formatRupees(r.commission_amount)}
-                              </td>
+                                {/* Penalty Dates */}
+                                <td className="py-2.5 px-3 text-[11px] font-mono whitespace-nowrap min-w-[170px]">
+                                  <div className="space-y-1">
+                                    <div>
+                                      <div className="text-[10px] text-[#52607D] font-medium leading-tight">
+                                        {r.milestone_start_label}:
+                                      </div>
+                                      <div className="font-semibold text-[#14213D] leading-tight">
+                                        {formatDate(r.milestone_start_date)}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] text-[#52607D] font-medium leading-tight">
+                                        {r.milestone_end_label}:
+                                      </div>
+                                      <div className="font-semibold text-[#14213D] leading-tight">
+                                        {formatDate(r.milestone_end_date)}
+                                      </div>
+                                    </div>
+                                    {r.delay_days > 45 ? (
+                                      <div className="text-rose-600 font-bold text-[10px] pt-0.5">
+                                        {r.delay_days}d ({r.penalty_percentage}% penalty)
+                                      </div>
+                                    ) : (
+                                      <div className="text-emerald-700 font-bold text-[10px] pt-0.5">
+                                        {r.delay_days || 0}d
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
 
-                              {/* Penalty with manual edit button - strictly single line */}
-                              <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap min-w-[110px]">
-                                <div className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
-                                  {r.penalty_amount > 0 ? (
-                                    <span className="text-rose-600 font-bold whitespace-nowrap">
-                                      -{formatRupees(r.penalty_amount)}
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2F6F5E]">
+                                  {formatRupees(r.commission_amount)}
+                                </td>
+
+                                {/* Penalty with manual edit button - strictly single line */}
+                                <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap min-w-[110px]">
+                                  <div className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                    {r.penalty_amount > 0 ? (
+                                      <span className="text-rose-600 font-bold whitespace-nowrap">
+                                        -{formatRupees(r.penalty_amount)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[#8C97AB] whitespace-nowrap">₹0</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPreviewPenalty(r)}
+                                      className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                                      title="Edit delay penalty amount"
+                                    >
+                                      <Pencil size={11} />
+                                    </button>
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-[#14213D]">
+                                  {formatRupees(netComm)}
+                                </td>
+
+                                {formData.include_fittings && (
+                                  <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
+                                    {formatRupees(r.fittings_amount)}
+                                  </td>
+                                )}
+
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
+                                  {formatRupees(r.net_dealer_payout)}
+                                </td>
+
+                                <td className="py-2.5 px-3 text-center">
+                                  {r.is_matched_in_db ? (
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                                      ✓ Linked
                                     </span>
                                   ) : (
-                                    <span className="text-[#8C97AB] whitespace-nowrap">₹0</span>
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                                      Unlinked
+                                    </span>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenPreviewPenalty(r)}
-                                    className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
-                                    title="Edit delay penalty amount"
-                                  >
-                                    <Pencil size={11} />
-                                  </button>
-                                </div>
-                              </td>
-
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-[#14213D]">
-                                {formatRupees(netComm)}
-                              </td>
-
-                              {formData.include_fittings && (
-                                <td className="py-2.5 px-3 text-right font-mono text-[#7C3AED] font-semibold">
-                                  {formatRupees(r.fittings_amount)}
                                 </td>
-                              )}
-
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800 text-sm">
-                                {formatRupees(r.net_dealer_payout)}
-                              </td>
-
-                              <td className="py-2.5 px-3 text-center">
-                                {r.is_matched_in_db ? (
-                                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
-                                    ✓ Linked
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                                    Unlinked
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
+                              </tr>
                             );
                           })
                         )}
@@ -1355,11 +1353,10 @@ export function CommissionProceedingsPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("batches")}
-                  className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-[8px] transition-all cursor-pointer ${
-                    activeTab === "batches"
+                  className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-[8px] transition-all cursor-pointer ${activeTab === "batches"
                       ? "bg-[#2F6F5E] text-white shadow-xs"
                       : "bg-white text-[#52607D] border border-[#E4E1D8] hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   <FileSpreadsheet size={15} />
                   <span>Proceeding Batches ({pagination.total || batches.length})</span>
@@ -1369,11 +1366,10 @@ export function CommissionProceedingsPage() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("dealer_statements")}
-                    className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-[8px] transition-all cursor-pointer ${
-                      activeTab === "dealer_statements"
+                    className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-[8px] transition-all cursor-pointer ${activeTab === "dealer_statements"
                         ? "bg-[#2F6F5E] text-white shadow-xs"
                         : "bg-white text-[#52607D] border border-[#E4E1D8] hover:bg-gray-100"
-                    }`}
+                      }`}
                   >
                     <Users size={15} />
                     <span>Dealer Statements & Payouts</span>
@@ -1613,13 +1609,12 @@ export function CommissionProceedingsPage() {
                                 <td className="py-3 px-3">
                                   <div className="flex items-center gap-1.5">
                                     <span
-                                      className={`px-2 py-0.5 rounded-full font-bold font-mono text-[11px] ${
-                                        b.fund_percentage_value === 40
+                                      className={`px-2 py-0.5 rounded-full font-bold font-mono text-[11px] ${b.fund_percentage_value === 40
                                           ? "bg-indigo-50 text-indigo-800 border border-indigo-200"
                                           : b.fund_percentage_value === 45
-                                          ? "bg-blue-50 text-blue-800 border border-blue-200"
-                                          : "bg-emerald-50 text-[#2F6F5E] border border-emerald-200"
-                                      }`}
+                                            ? "bg-blue-50 text-blue-800 border border-blue-200"
+                                            : "bg-emerald-50 text-[#2F6F5E] border border-emerald-200"
+                                        }`}
                                     >
                                       {b.fund_percentage_value}% Fund
                                     </span>

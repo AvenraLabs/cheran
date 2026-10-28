@@ -69,11 +69,16 @@ export async function createUser({ username, password, name, role = "USER", is_a
   const salt = await bcrypt.genSalt(10);
   const password_hash = await bcrypt.hash(password, salt);
 
+  let userRole = role ? role.toUpperCase() : "USER";
+  if (userRole === "GOVT" || userRole === "OPERATIONS") {
+    userRole = "USER";
+  }
+
   const newUser = await User.create({
     username: cleanUsername,
     password_hash,
     name: name.trim(),
-    role: role.toUpperCase(),
+    role: userRole,
     is_active: is_active ?? true,
   });
 
@@ -122,7 +127,11 @@ export async function updateUser(id, updates, currentUserId) {
   }
 
   if (updates.role !== undefined) {
-    user.role = updates.role.toUpperCase();
+    let userRole = updates.role.toUpperCase();
+    if (userRole === "GOVT" || userRole === "OPERATIONS") {
+      userRole = "USER";
+    }
+    user.role = userRole;
   }
 
   if (updates.is_active !== undefined) {

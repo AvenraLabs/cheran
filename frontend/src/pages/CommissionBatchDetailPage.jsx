@@ -31,6 +31,7 @@ import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import { SkeletonLoader } from "../components/common/SkeletonLoader.jsx";
 import Pagination from "../components/common/Pagination.jsx";
+import DateInput from "../components/common/DateInput.jsx";
 import { formatDate } from "../utils/dates.js";
 
 export function CommissionBatchDetailPage() {
@@ -638,9 +639,28 @@ export function CommissionBatchDetailPage() {
             <span className="text-[10px] text-[#52607D] uppercase font-semibold block">Payment Received</span>
             <div className="mt-1 flex items-center gap-2">
               {batch.payment_received_date ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold font-mono">
-                  ✓ Received ({formatDate(batch.payment_received_date)})
-                </span>
+                <div className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold font-mono">
+                    ✓ Received ({formatDate(batch.payment_received_date)})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentDate(
+                        batch.payment_received_date
+                          ? batch.payment_received_date.split("T")[0]
+                          : new Date().toISOString().split("T")[0]
+                      );
+                      setPaymentRef(batch.payment_received_ref || "");
+                      setPaymentError("");
+                      setPaymentModalOpen(true);
+                    }}
+                    className="p-1 text-[#52607D] hover:text-[#2F6F5E] hover:bg-gray-100 rounded transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                    title="Edit bank payment received date or reference"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                </div>
               ) : (
                 <Button
                   size="xs"
@@ -1340,7 +1360,7 @@ export function CommissionBatchDetailPage() {
       <Modal
         isOpen={paymentModalOpen}
         onClose={() => setPaymentModalOpen(false)}
-        title="Record Payment Received Date"
+        title={batch?.payment_received_date ? "Edit Bank Payment Received" : "Record Payment Received Date"}
       >
         <form onSubmit={handleSavePaymentReceipt} className="space-y-4">
           {paymentError && (
@@ -1354,11 +1374,10 @@ export function CommissionBatchDetailPage() {
             <label className="block text-xs font-semibold text-[#14213D] mb-1">
               Payment Received Date <span className="text-rose-500">*</span>
             </label>
-            <input
-              type="date"
+            <DateInput
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E] text-[#14213D]"
+              className="px-3 py-2 text-xs font-mono bg-[#FAFAF8] border border-[#E4E1D8] rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#2F6F5E]"
               required
             />
           </div>
@@ -1376,13 +1395,39 @@ export function CommissionBatchDetailPage() {
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-[#EDEAE1]">
-            <Button variant="secondary" type="button" onClick={() => setPaymentModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={savingPayment} icon={CheckCircle2}>
-              Confirm Payment Received
-            </Button>
+          <div className="flex justify-between items-center gap-2 pt-4 border-t border-[#EDEAE1]">
+            {batch?.payment_received_date ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm("Are you sure you want to clear/remove the bank payment received status for this batch?")) return;
+                  try {
+                    setSavingPayment(true);
+                    await api.patch(`/proceedings/${id}/bank-receipt`, {
+                      payment_received_date: null,
+                      payment_received_ref: null,
+                    });
+                    setPaymentModalOpen(false);
+                    fetchBatchDetail();
+                  } catch (err) {
+                    setPaymentError(err?.message || "Failed to clear payment received");
+                  } finally {
+                    setSavingPayment(false);
+                  }
+                }}
+                className="text-xs text-rose-600 hover:text-rose-700 font-semibold cursor-pointer underline flex items-center gap-1"
+              >
+                Clear / Remove Payment
+              </button>
+            ) : <div />}
+            <div className="flex gap-2">
+              <Button variant="secondary" type="button" onClick={() => setPaymentModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={savingPayment} icon={CheckCircle2}>
+                {batch?.payment_received_date ? "Update Payment" : "Confirm Payment Received"}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
