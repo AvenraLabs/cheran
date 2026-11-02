@@ -338,76 +338,105 @@ export function CommissionReportsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] text-[#14213D] pb-16">
+    <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF8] text-[#14213D] overflow-hidden print:overflow-visible print:h-auto">
       {/* Top Navbar */}
-      <div className="print:hidden">
-        <Navbar />
+      <div className="print:hidden shrink-0">
+        <Navbar
+          title="Monthly Commission Report"
+          subtitle="Net dealer commission aggregated across 55%, 45%, and 40% releases based strictly on bank payment date."
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                disabled={loading || filteredDealers.length === 0}
+                className="flex items-center gap-1.5 cursor-pointer text-xs"
+                title="Print Monthly Commission Report"
+              >
+                <Printer size={14} />
+                Print
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleExportPDF}
+                disabled={loading || filteredDealers.length === 0 || exportingPDF}
+                className="flex items-center gap-1.5 cursor-pointer bg-[#2F6F5E] hover:bg-[#25584A] text-white text-xs"
+                title="Download PDF format"
+              >
+                <Download size={14} />
+                {exportingPDF ? "Generating PDF..." : "Export PDF"}
+              </Button>
+            </div>
+          }
+        />
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        {/* Printable Only Report Header */}
-        <div className="hidden print:block pb-4 border-b border-[#E4E1D8]">
-          <div className="flex justify-between items-start">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 w-full print:overflow-visible print:h-auto print:p-0">
+        <div className="max-w-7xl mx-auto space-y-6 pb-20">
+          {/* Printable Only Report Header */}
+          <div className="hidden print:block pb-4 border-b border-[#E4E1D8]">
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="text-xl font-bold text-[#14213D]">CHERAN IRRIGATION</h1>
+                <p className="text-xs text-[#52607D]">MONTHLY DEALER COMMISSION REPORT</p>
+              </div>
+              <div className="text-right text-xs text-[#52607D]">
+                <p className="font-bold text-[#14213D]">
+                  {monthName} {selectedYear}
+                </p>
+                <p>
+                  Period: {formatDate(reportData.start_date)} to {formatDate(reportData.end_date)}
+                </p>
+                <p>Generated: {formatDate(new Date())}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Page Navigation & Title Header (Screen) */}
+          <div className="print:hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-xl font-bold text-[#14213D]">CHERAN IRRIGATION</h1>
-              <p className="text-xs text-[#52607D]">MONTHLY DEALER COMMISSION REPORT</p>
-            </div>
-            <div className="text-right text-xs text-[#52607D]">
-              <p className="font-bold text-[#14213D]">
-                {monthName} {selectedYear}
+              <div className="flex items-center gap-2 text-xs text-[#52607D] mb-1">
+                <Link to="/commissions" className="hover:text-[#2F6F5E] transition-colors">
+                  Commissions
+                </Link>
+                <span>/</span>
+                <span className="text-[#14213D] font-semibold">Commission Reports</span>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-[#14213D] flex items-center gap-2">
+                <Receipt size={24} className="text-[#2F6F5E]" />
+                Monthly Commission Report
+              </h1>
+              <p className="text-xs text-[#52607D] mt-0.5">
+                Net dealer commission aggregated across 55%, 45%, and 40% releases based strictly on bank payment date.
               </p>
-              <p>
-                Period: {formatDate(reportData.start_date)} to {formatDate(reportData.end_date)}
-              </p>
-              <p>Generated: {formatDate(new Date())}</p>
+            </div>
+
+            {/* Action Buttons: PDF & Print */}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                disabled={loading || filteredDealers.length === 0}
+                className="flex items-center gap-1.5 cursor-pointer text-xs"
+                title="Print Monthly Commission Report"
+              >
+                <Printer size={14} />
+                Print
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleExportPDF}
+                disabled={loading || filteredDealers.length === 0 || exportingPDF}
+                className="flex items-center gap-1.5 cursor-pointer bg-[#2F6F5E] hover:bg-[#25584A] text-white text-xs"
+                title="Download PDF format"
+              >
+                <Download size={14} />
+                {exportingPDF ? "Generating PDF..." : "Export PDF"}
+              </Button>
             </div>
           </div>
-        </div>
-
-        {/* Page Header (Screen) */}
-        <div className="print:hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs text-[#52607D] mb-1">
-              <Link to="/commissions" className="hover:text-[#2F6F5E] transition-colors">
-                Commissions
-              </Link>
-              <span>/</span>
-              <span className="text-[#14213D] font-semibold">Commission Reports</span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-[#14213D] flex items-center gap-2">
-              <Receipt size={24} className="text-[#2F6F5E]" />
-              Monthly Commission Report
-            </h1>
-            <p className="text-xs text-[#52607D] mt-0.5">
-              Net dealer commission aggregated across 55%, 45%, and 40% releases based strictly on bank payment date.
-            </p>
-          </div>
-
-          {/* Action Buttons: PDF & Print */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              disabled={loading || filteredDealers.length === 0}
-              className="flex items-center gap-1.5 cursor-pointer text-xs"
-              title="Print Monthly Commission Report"
-            >
-              <Printer size={14} />
-              Print
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleExportPDF}
-              disabled={loading || filteredDealers.length === 0 || exportingPDF}
-              className="flex items-center gap-1.5 cursor-pointer bg-[#2F6F5E] hover:bg-[#25584A] text-white text-xs"
-              title="Download PDF format"
-            >
-              <Download size={14} />
-              {exportingPDF ? "Generating PDF..." : "Export PDF"}
-            </Button>
-          </div>
-        </div>
 
         {/* Filter Bar (Month & Year Selector) */}
         <div className="print:hidden bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.03)] space-y-3">
@@ -555,6 +584,11 @@ export function CommissionReportsPage() {
 
         {/* Main Monthly Report Table */}
         <div className="bg-white border border-[#E4E1D8] rounded-[10px] shadow-[0_1px_2px_rgba(20,33,61,0.04)] overflow-hidden">
+          {/* Mobile swipe helper hint */}
+          <div className="sm:hidden px-3 py-2 bg-[#F4F9F7] border-b border-[#E4E1D8] text-[11px] text-[#2F6F5E] flex items-center justify-between font-medium">
+            <span>Swipe table sideways to view all release columns</span>
+            <span aria-hidden="true">&rarr;</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -730,8 +764,9 @@ export function CommissionReportsPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
+    </main>
+  </div>
+);
 }
 
 export default CommissionReportsPage;
