@@ -1489,16 +1489,19 @@ export async function getMonthlyCommissionReport(query = {}) {
           material_cost: 0,
           fittings_cost: 0,
           commission: 0,
+          penalty: 0,
         },
         // 45% Release
         fund_45: {
           material_cost: 0,
           commission: 0,
+          penalty: 0,
         },
         // 40% Release
         fund_40: {
           material_cost: 0,
           commission: 0,
+          penalty: 0,
         },
         total_penalty: 0,
         net_commission: 0,
@@ -1509,7 +1512,13 @@ export async function getMonthlyCommissionReport(query = {}) {
     d.projects_count += 1;
 
     const fundPct = Math.round(parseFloat(item.batch?.fund_percentage_value || 0));
-    const matCost = Math.floor(parseFloat(item.total_material_cost || 0));
+    const matCost = Math.floor(
+      parseFloat(
+        item.net_material_base ||
+        (parseFloat(item.total_material_cost || 0) * fundPct) / 100.0 ||
+        0
+      )
+    );
     const fitCost = Math.floor(parseFloat(item.fittings_amount || 0));
     const commAmt = Math.floor(parseFloat(item.commission_amount || 0));
     const penAmt = Math.floor(
@@ -1524,18 +1533,21 @@ export async function getMonthlyCommissionReport(query = {}) {
       d.fund_55.material_cost += matCost;
       d.fund_55.fittings_cost += fitCost;
       d.fund_55.commission += commAmt;
+      d.fund_55.penalty += penAmt;
     } else if (fundPct === 45) {
       d.fund_45.material_cost += matCost;
       d.fund_45.commission += commAmt;
+      d.fund_45.penalty += penAmt;
     } else if (fundPct === 40) {
       d.fund_40.material_cost += matCost;
       d.fund_40.commission += commAmt;
+      d.fund_40.penalty += penAmt;
     }
 
     d.total_penalty += penAmt;
   }
 
-  // Calculate Net Dealer Commission matching breakdown: (55% Comm + 55% Fittings + 45% Comm + 40% Comm) - Penalty
+  // Calculate Net Dealer Commission matching breakdown: (55% Comm + 55% Fittings - 55% Penalty) + (45% Comm - 45% Penalty) + (40% Comm - 40% Penalty)
   const dealers = Array.from(dealerMap.values()).map((d) => {
     const grossComm = Math.floor(
       d.fund_55.commission +
@@ -1558,14 +1570,17 @@ export async function getMonthlyCommissionReport(query = {}) {
       material_cost: dealers.reduce((acc, d) => acc + d.fund_55.material_cost, 0),
       fittings_cost: dealers.reduce((acc, d) => acc + d.fund_55.fittings_cost, 0),
       commission: dealers.reduce((acc, d) => acc + d.fund_55.commission, 0),
+      penalty: dealers.reduce((acc, d) => acc + d.fund_55.penalty, 0),
     },
     fund_45: {
       material_cost: dealers.reduce((acc, d) => acc + d.fund_45.material_cost, 0),
       commission: dealers.reduce((acc, d) => acc + d.fund_45.commission, 0),
+      penalty: dealers.reduce((acc, d) => acc + d.fund_45.penalty, 0),
     },
     fund_40: {
       material_cost: dealers.reduce((acc, d) => acc + d.fund_40.material_cost, 0),
       commission: dealers.reduce((acc, d) => acc + d.fund_40.commission, 0),
+      penalty: dealers.reduce((acc, d) => acc + d.fund_40.penalty, 0),
     },
     total_penalty: dealers.reduce((acc, d) => acc + d.total_penalty, 0),
     total_net_commission: dealers.reduce((acc, d) => acc + d.net_commission, 0),

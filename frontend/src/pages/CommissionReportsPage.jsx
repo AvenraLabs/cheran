@@ -56,9 +56,9 @@ export function CommissionReportsPage() {
     totals: {
       total_dealers_count: 0,
       total_projects_count: 0,
-      fund_55: { material_cost: 0, fittings_cost: 0, commission: 0 },
-      fund_45: { material_cost: 0, commission: 0 },
-      fund_40: { material_cost: 0, commission: 0 },
+      fund_55: { material_cost: 0, fittings_cost: 0, commission: 0, penalty: 0 },
+      fund_45: { material_cost: 0, commission: 0, penalty: 0 },
+      fund_40: { material_cost: 0, commission: 0, penalty: 0 },
       total_penalty: 0,
       total_net_commission: 0,
     },
@@ -92,9 +92,9 @@ export function CommissionReportsPage() {
         totals: report.totals || {
           total_dealers_count: 0,
           total_projects_count: 0,
-          fund_55: { material_cost: 0, fittings_cost: 0, commission: 0 },
-          fund_45: { material_cost: 0, commission: 0 },
-          fund_40: { material_cost: 0, commission: 0 },
+          fund_55: { material_cost: 0, fittings_cost: 0, commission: 0, penalty: 0 },
+          fund_45: { material_cost: 0, commission: 0, penalty: 0 },
+          fund_40: { material_cost: 0, commission: 0, penalty: 0 },
           total_penalty: 0,
           total_net_commission: 0,
         },
@@ -216,27 +216,30 @@ export function CommissionReportsPage() {
         200,
         68
       );
-      doc.text(`Dealers with Commission: ${displayedTotals.total_dealers_count}`, 490, 68);
-      doc.text(`Total Net Commission: ${formatRupees(displayedTotals.total_net_commission)}`, 640, 68);
+      doc.text(`Dealers with Commission: ${displayedTotals.total_dealers_count}`, 480, 68);
+      doc.text(`Total Net Commission: Rs. ${formatNum(displayedTotals.total_net_commission)}`, 635, 68);
 
-      // Two-tier header structure
+      // Two-tier header structure with Individual Penalty Columns per release
       const headers = [
         [
           { content: "S.No", rowSpan: 2, styles: { valign: "middle", halign: "center" } },
           { content: "Dealer Name", rowSpan: 2, styles: { valign: "middle" } },
-          { content: "55% Release", colSpan: 3, styles: { halign: "center" } },
-          { content: "45% Release", colSpan: 2, styles: { halign: "center" } },
-          { content: "40% Release", colSpan: 2, styles: { halign: "center" } },
+          { content: "55% Release", colSpan: 4, styles: { halign: "center" } },
+          { content: "45% Release", colSpan: 3, styles: { halign: "center" } },
+          { content: "40% Release", colSpan: 3, styles: { halign: "center" } },
           { content: "Net Commission", rowSpan: 2, styles: { valign: "middle", halign: "right" } },
         ],
         [
           { content: "Material Cost", styles: { halign: "right" } },
           { content: "Fittings Cost", styles: { halign: "right" } },
           { content: "Commission", styles: { halign: "right" } },
+          { content: "Penalty", styles: { halign: "right" } },
           { content: "Material Cost", styles: { halign: "right" } },
           { content: "Commission", styles: { halign: "right" } },
+          { content: "Penalty", styles: { halign: "right" } },
           { content: "Material Cost", styles: { halign: "right" } },
           { content: "Commission", styles: { halign: "right" } },
+          { content: "Penalty", styles: { halign: "right" } },
         ],
       ];
 
@@ -246,10 +249,13 @@ export function CommissionReportsPage() {
         formatNum(d.fund_55?.material_cost),
         formatNum(d.fund_55?.fittings_cost),
         formatNum(d.fund_55?.commission),
+        d.fund_55?.penalty > 0 ? `-${formatNum(d.fund_55.penalty)}` : "—",
         formatNum(d.fund_45?.material_cost),
         formatNum(d.fund_45?.commission),
+        d.fund_45?.penalty > 0 ? `-${formatNum(d.fund_45.penalty)}` : "—",
         formatNum(d.fund_40?.material_cost),
         formatNum(d.fund_40?.commission),
+        d.fund_40?.penalty > 0 ? `-${formatNum(d.fund_40.penalty)}` : "—",
         formatNum(d.net_commission),
       ]);
 
@@ -259,10 +265,13 @@ export function CommissionReportsPage() {
           formatNum(displayedTotals.fund_55?.material_cost),
           formatNum(displayedTotals.fund_55?.fittings_cost),
           formatNum(displayedTotals.fund_55?.commission),
+          displayedTotals.fund_55?.penalty > 0 ? `-${formatNum(displayedTotals.fund_55.penalty)}` : "—",
           formatNum(displayedTotals.fund_45?.material_cost),
           formatNum(displayedTotals.fund_45?.commission),
+          displayedTotals.fund_45?.penalty > 0 ? `-${formatNum(displayedTotals.fund_45.penalty)}` : "—",
           formatNum(displayedTotals.fund_40?.material_cost),
           formatNum(displayedTotals.fund_40?.commission),
+          displayedTotals.fund_40?.penalty > 0 ? `-${formatNum(displayedTotals.fund_40.penalty)}` : "—",
           formatNum(displayedTotals.total_net_commission),
         ],
       ];
@@ -275,8 +284,8 @@ export function CommissionReportsPage() {
         margin: { left: 24, right: 24 },
         theme: "grid",
         styles: {
-          fontSize: 7.5,
-          cellPadding: { top: 4, bottom: 4, left: 3, right: 3 },
+          fontSize: 7.2,
+          cellPadding: { top: 4, bottom: 4, left: 2.5, right: 2.5 },
           textColor: [20, 33, 61],
           lineColor: [228, 225, 216],
           lineWidth: 0.5,
@@ -286,25 +295,28 @@ export function CommissionReportsPage() {
           fillColor: [245, 245, 243],
           textColor: [50, 60, 80],
           fontStyle: "bold",
-          fontSize: 7.5,
+          fontSize: 7.2,
         },
         footStyles: {
           fillColor: [238, 246, 242],
           textColor: [47, 111, 94],
           fontStyle: "bold",
-          fontSize: 7.8,
+          fontSize: 7.5,
         },
         columnStyles: {
-          0: { cellWidth: 26, halign: "center" },
-          1: { cellWidth: 150 },
-          2: { cellWidth: 65, halign: "right" },
-          3: { cellWidth: 65, halign: "right" },
-          4: { cellWidth: 65, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          5: { cellWidth: 65, halign: "right" },
-          6: { cellWidth: 65, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          7: { cellWidth: 65, halign: "right" },
-          8: { cellWidth: 65, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
-          9: { cellWidth: 80, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
+          0: { cellWidth: 24, halign: "center" },
+          1: { cellWidth: 120 },
+          2: { cellWidth: 54, halign: "right" },
+          3: { cellWidth: 52, halign: "right" },
+          4: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          5: { cellWidth: 46, halign: "right", textColor: [225, 29, 72] },
+          6: { cellWidth: 54, halign: "right" },
+          7: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          8: { cellWidth: 46, halign: "right", textColor: [225, 29, 72] },
+          9: { cellWidth: 54, halign: "right" },
+          10: { cellWidth: 52, halign: "right", fontStyle: "bold", textColor: [47, 111, 94] },
+          11: { cellWidth: 46, halign: "right", textColor: [225, 29, 72] },
+          12: { cellWidth: 74, halign: "right", fontStyle: "bold", textColor: [20, 33, 61] },
         },
         didDrawPage: (data) => {
           const pageCount = doc.internal.getNumberOfPages();
@@ -372,10 +384,9 @@ export function CommissionReportsPage() {
         />
       </div>
 
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 w-full print:overflow-visible print:h-auto print:p-0">
-        <div className="max-w-7xl mx-auto space-y-6 pb-20">
-          {/* Printable Only Report Header */}
-          <div className="hidden print:block pb-4 border-b border-[#E4E1D8]">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 w-full pb-20 print:overflow-visible print:h-auto print:p-0">
+        {/* Printable Only Report Header */}
+        <div className="hidden print:block pb-4 border-b border-[#E4E1D8]">
             <div className="flex justify-between items-start">
               <div>
                 <h1 className="text-xl font-bold text-[#14213D]">CHERAN IRRIGATION</h1>
@@ -540,44 +551,70 @@ export function CommissionReportsPage() {
             <div className="text-xl font-bold font-mono text-[#2F6F5E]">
               {formatRupees(displayedTotals.total_net_commission)}
             </div>
-            <div className="text-[11px] text-[#8C97AB] mt-1">Across all releases in month</div>
+            <div className="text-[11px] text-[#8C97AB] mt-1">
+              {displayedTotals.total_penalty > 0 ? (
+                <span className="text-rose-600 font-medium">
+                  Total Delay Penalties: -{formatRupees(displayedTotals.total_penalty)}
+                </span>
+              ) : (
+                "Net payout across all releases in month"
+              )}
+            </div>
           </div>
 
           <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.03)]">
             <span className="text-[11px] uppercase font-semibold text-[#52607D] tracking-wider block mb-1">
-              55% Release Net
+              55% Release
             </span>
             <div className="text-xl font-bold font-mono text-[#14213D]">
               {formatRupees(
-                (displayedTotals.fund_55?.commission || 0) + (displayedTotals.fund_55?.fittings_cost || 0)
+                Math.max(
+                  0,
+                  (displayedTotals.fund_55?.commission || 0) +
+                    (displayedTotals.fund_55?.fittings_cost || 0) -
+                    (displayedTotals.fund_55?.penalty || 0)
+                )
               )}
             </div>
-            <div className="text-[11px] text-[#8C97AB] mt-1">
+            <div className="text-[11px] text-[#8C97AB] mt-1 truncate">
               Comm: {formatRupees(displayedTotals.fund_55?.commission)} | Fit: {formatRupees(displayedTotals.fund_55?.fittings_cost)}
+              {displayedTotals.fund_55?.penalty > 0 && ` | Pen: -${formatRupees(displayedTotals.fund_55?.penalty)}`}
             </div>
           </div>
 
           <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.03)]">
             <span className="text-[11px] uppercase font-semibold text-[#52607D] tracking-wider block mb-1">
-              45% Release Comm
+              45% Release
             </span>
             <div className="text-xl font-bold font-mono text-[#14213D]">
-              {formatRupees(displayedTotals.fund_45?.commission)}
+              {formatRupees(
+                Math.max(
+                  0,
+                  (displayedTotals.fund_45?.commission || 0) - (displayedTotals.fund_45?.penalty || 0)
+                )
+              )}
             </div>
-            <div className="text-[11px] text-[#8C97AB] mt-1">
-              Mat Cost: {formatRupees(displayedTotals.fund_45?.material_cost)}
+            <div className="text-[11px] text-[#8C97AB] mt-1 truncate">
+              Comm: {formatRupees(displayedTotals.fund_45?.commission)}
+              {displayedTotals.fund_45?.penalty > 0 && ` | Pen: -${formatRupees(displayedTotals.fund_45?.penalty)}`}
             </div>
           </div>
 
           <div className="bg-white border border-[#E4E1D8] rounded-[10px] p-4 shadow-[0_1px_2px_rgba(20,33,61,0.03)]">
             <span className="text-[11px] uppercase font-semibold text-[#52607D] tracking-wider block mb-1">
-              40% Release Comm
+              40% Release
             </span>
             <div className="text-xl font-bold font-mono text-[#14213D]">
-              {formatRupees(displayedTotals.fund_40?.commission)}
+              {formatRupees(
+                Math.max(
+                  0,
+                  (displayedTotals.fund_40?.commission || 0) - (displayedTotals.fund_40?.penalty || 0)
+                )
+              )}
             </div>
-            <div className="text-[11px] text-[#8C97AB] mt-1">
-              Mat Cost: {formatRupees(displayedTotals.fund_40?.material_cost)}
+            <div className="text-[11px] text-[#8C97AB] mt-1 truncate">
+              Comm: {formatRupees(displayedTotals.fund_40?.commission)}
+              {displayedTotals.fund_40?.penalty > 0 && ` | Pen: -${formatRupees(displayedTotals.fund_40?.penalty)}`}
             </div>
           </div>
         </div>
@@ -600,13 +637,13 @@ export function CommissionReportsPage() {
                   <th rowSpan={2} className="py-3 px-4 min-w-[200px] border-r border-[#E4E1D8]">
                     Dealer Name
                   </th>
-                  <th colSpan={3} className="py-2.5 px-3 text-center border-r border-[#E4E1D8] bg-[#F4F9F7] text-[#2F6F5E] font-bold">
+                  <th colSpan={4} className="py-2.5 px-3 text-center border-r border-[#E4E1D8] bg-[#F4F9F7] text-[#2F6F5E] font-bold">
                     55% Release
                   </th>
-                  <th colSpan={2} className="py-2.5 px-3 text-center border-r border-[#E4E1D8] bg-[#F7F9FC] text-[#3B66A3] font-bold">
+                  <th colSpan={3} className="py-2.5 px-3 text-center border-r border-[#E4E1D8] bg-[#F7F9FC] text-[#3B66A3] font-bold">
                     45% Release
                   </th>
-                  <th colSpan={2} className="py-2.5 px-3 text-center border-r border-[#E4E1D8] bg-[#F9F6FC] text-[#6D28D9] font-bold">
+                  <th colSpan={3} className="py-2.5 px-3 text-center border-r border-[#E4E1D8] bg-[#F9F6FC] text-[#6D28D9] font-bold">
                     40% Release
                   </th>
                   <th rowSpan={2} className="py-3 px-4 text-right font-bold text-[#14213D] bg-[#F0F7F4] min-w-[130px]">
@@ -619,20 +656,29 @@ export function CommissionReportsPage() {
                   {/* 55% Sub-columns */}
                   <th className="py-2 px-3 text-right bg-[#F4F9F7]/70 border-r border-[#EDEAE1]">Material Cost</th>
                   <th className="py-2 px-3 text-right bg-[#F4F9F7]/70 border-r border-[#EDEAE1]">Fittings Cost</th>
-                  <th className="py-2 px-3 text-right bg-[#F4F9F7] text-[#2F6F5E] font-bold border-r border-[#E4E1D8]">
+                  <th className="py-2 px-3 text-right bg-[#F4F9F7] text-[#2F6F5E] font-bold border-r border-[#EDEAE1]">
                     Commission
+                  </th>
+                  <th className="py-2 px-3 text-right bg-[#F4F9F7] text-rose-600 font-bold border-r border-[#E4E1D8]">
+                    Penalty
                   </th>
 
                   {/* 45% Sub-columns */}
                   <th className="py-2 px-3 text-right bg-[#F7F9FC]/70 border-r border-[#EDEAE1]">Material Cost</th>
-                  <th className="py-2 px-3 text-right bg-[#F7F9FC] text-[#3B66A3] font-bold border-r border-[#E4E1D8]">
+                  <th className="py-2 px-3 text-right bg-[#F7F9FC] text-[#3B66A3] font-bold border-r border-[#EDEAE1]">
                     Commission
+                  </th>
+                  <th className="py-2 px-3 text-right bg-[#F7F9FC] text-rose-600 font-bold border-r border-[#E4E1D8]">
+                    Penalty
                   </th>
 
                   {/* 40% Sub-columns */}
                   <th className="py-2 px-3 text-right bg-[#F9F6FC]/70 border-r border-[#EDEAE1]">Material Cost</th>
-                  <th className="py-2 px-3 text-right bg-[#F9F6FC] text-[#6D28D9] font-bold border-r border-[#E4E1D8]">
+                  <th className="py-2 px-3 text-right bg-[#F9F6FC] text-[#6D28D9] font-bold border-r border-[#EDEAE1]">
                     Commission
+                  </th>
+                  <th className="py-2 px-3 text-right bg-[#F9F6FC] text-rose-600 font-bold border-r border-[#E4E1D8]">
+                    Penalty
                   </th>
                 </tr>
               </thead>
@@ -640,7 +686,7 @@ export function CommissionReportsPage() {
               <tbody className="divide-y divide-[#EDEAE1]">
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center">
+                    <td colSpan={13} className="py-12 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="w-8 h-8 border-3 border-[#2F6F5E] border-t-transparent rounded-full animate-spin" />
                         <span className="text-xs text-[#52607D]">Loading {monthName} {selectedYear} commission data...</span>
@@ -649,7 +695,7 @@ export function CommissionReportsPage() {
                   </tr>
                 ) : filteredDealers.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-16 text-center">
+                    <td colSpan={13} className="py-16 text-center">
                       <div className="max-w-md mx-auto flex flex-col items-center justify-center gap-2">
                         <AlertCircle size={36} className="text-[#8C97AB]" />
                         <h4 className="text-sm font-semibold text-[#14213D]">
@@ -689,24 +735,45 @@ export function CommissionReportsPage() {
                       <td className="py-3 px-3 text-right font-mono text-[#52607D] border-r border-[#EDEAE1]">
                         {d.fund_55?.fittings_cost > 0 ? formatRupees(d.fund_55.fittings_cost) : "—"}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E] bg-[#F4F9F7]/30 border-r border-[#E4E1D8]">
+                      <td className="py-3 px-3 text-right font-mono font-bold text-[#2F6F5E] bg-[#F4F9F7]/30 border-r border-[#EDEAE1]">
                         {d.fund_55?.commission > 0 ? formatRupees(d.fund_55.commission) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono border-r border-[#E4E1D8]">
+                        {d.fund_55?.penalty > 0 ? (
+                          <span className="text-rose-600 font-bold">-{formatRupees(d.fund_55.penalty)}</span>
+                        ) : (
+                          <span className="text-[#8C97AB]">—</span>
+                        )}
                       </td>
 
                       {/* 45% Release */}
                       <td className="py-3 px-3 text-right font-mono text-[#52607D] border-r border-[#EDEAE1]">
                         {d.fund_45?.material_cost > 0 ? formatRupees(d.fund_45.material_cost) : "—"}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-[#3B66A3] bg-[#F7F9FC]/30 border-r border-[#E4E1D8]">
+                      <td className="py-3 px-3 text-right font-mono font-bold text-[#3B66A3] bg-[#F7F9FC]/30 border-r border-[#EDEAE1]">
                         {d.fund_45?.commission > 0 ? formatRupees(d.fund_45.commission) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono border-r border-[#E4E1D8]">
+                        {d.fund_45?.penalty > 0 ? (
+                          <span className="text-rose-600 font-bold">-{formatRupees(d.fund_45.penalty)}</span>
+                        ) : (
+                          <span className="text-[#8C97AB]">—</span>
+                        )}
                       </td>
 
                       {/* 40% Release */}
                       <td className="py-3 px-3 text-right font-mono text-[#52607D] border-r border-[#EDEAE1]">
                         {d.fund_40?.material_cost > 0 ? formatRupees(d.fund_40.material_cost) : "—"}
                       </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-[#6D28D9] bg-[#F9F6FC]/30 border-r border-[#E4E1D8]">
+                      <td className="py-3 px-3 text-right font-mono font-bold text-[#6D28D9] bg-[#F9F6FC]/30 border-r border-[#EDEAE1]">
                         {d.fund_40?.commission > 0 ? formatRupees(d.fund_40.commission) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono border-r border-[#E4E1D8]">
+                        {d.fund_40?.penalty > 0 ? (
+                          <span className="text-rose-600 font-bold">-{formatRupees(d.fund_40.penalty)}</span>
+                        ) : (
+                          <span className="text-[#8C97AB]">—</span>
+                        )}
                       </td>
 
                       {/* Net Dealer Commission */}
@@ -733,24 +800,45 @@ export function CommissionReportsPage() {
                     <td className="py-3.5 px-3 text-right font-mono border-r border-[#EDEAE1]">
                       {formatRupees(displayedTotals.fund_55?.fittings_cost)}
                     </td>
-                    <td className="py-3.5 px-3 text-right font-mono text-[#2F6F5E] border-r border-[#E4E1D8]">
+                    <td className="py-3.5 px-3 text-right font-mono text-[#2F6F5E] border-r border-[#EDEAE1]">
                       {formatRupees(displayedTotals.fund_55?.commission)}
+                    </td>
+                    <td className="py-3.5 px-3 text-right font-mono border-r border-[#E4E1D8]">
+                      {displayedTotals.fund_55?.penalty > 0 ? (
+                        <span className="text-rose-600 font-bold">-{formatRupees(displayedTotals.fund_55?.penalty)}</span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
 
                     {/* 45% Totals */}
                     <td className="py-3.5 px-3 text-right font-mono border-r border-[#EDEAE1]">
                       {formatRupees(displayedTotals.fund_45?.material_cost)}
                     </td>
-                    <td className="py-3.5 px-3 text-right font-mono text-[#3B66A3] border-r border-[#E4E1D8]">
+                    <td className="py-3.5 px-3 text-right font-mono text-[#3B66A3] border-r border-[#EDEAE1]">
                       {formatRupees(displayedTotals.fund_45?.commission)}
+                    </td>
+                    <td className="py-3.5 px-3 text-right font-mono border-r border-[#E4E1D8]">
+                      {displayedTotals.fund_45?.penalty > 0 ? (
+                        <span className="text-rose-600 font-bold">-{formatRupees(displayedTotals.fund_45?.penalty)}</span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
 
                     {/* 40% Totals */}
                     <td className="py-3.5 px-3 text-right font-mono border-r border-[#EDEAE1]">
                       {formatRupees(displayedTotals.fund_40?.material_cost)}
                     </td>
-                    <td className="py-3.5 px-3 text-right font-mono text-[#6D28D9] border-r border-[#E4E1D8]">
+                    <td className="py-3.5 px-3 text-right font-mono text-[#6D28D9] border-r border-[#EDEAE1]">
                       {formatRupees(displayedTotals.fund_40?.commission)}
+                    </td>
+                    <td className="py-3.5 px-3 text-right font-mono border-r border-[#E4E1D8]">
+                      {displayedTotals.fund_40?.penalty > 0 ? (
+                        <span className="text-rose-600 font-bold">-{formatRupees(displayedTotals.fund_40?.penalty)}</span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
 
                     {/* Grand Total Net Commission */}
@@ -763,10 +851,9 @@ export function CommissionReportsPage() {
             </table>
           </div>
         </div>
-      </div>
-    </main>
-  </div>
-);
+      </main>
+    </div>
+  );
 }
 
 export default CommissionReportsPage;
