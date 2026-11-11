@@ -24,13 +24,75 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
 
   const sheetName = wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
-  const rawRows = XLSX.utils.sheet_to_json(ws, { defval: null });
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, blankrows: false });
 
-  if (!rawRows || rawRows.length === 0) {
+  if (!grid || grid.length === 0) {
     throw new AppError("No data rows found in Excel sheet", 400);
   }
 
-  const headers = Object.keys(rawRows[0] || {});
+  // Find header row index by scanning first 15 rows for key column headers
+  let headerRowIndex = 0;
+  for (let i = 0; i < Math.min(grid.length, 15); i++) {
+    const row = grid[i];
+    if (!Array.isArray(row)) continue;
+    const hasAppId = row.some((cell) => {
+      const s = String(cell || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      return (
+        s.includes("applicationid") ||
+        s === "appid" ||
+        s.includes("applid") ||
+        s.includes("applicationno") ||
+        s.includes("applicationnum")
+      );
+    });
+
+    if (hasAppId) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  // Extract proceeding number from title/metadata rows above the header if present
+  // e.g. "PROCEEDING NO  :    MI3/2020/2025-112"
+  let topProceedingNo = null;
+  for (let i = 0; i < headerRowIndex; i++) {
+    const row = grid[i];
+    if (!Array.isArray(row)) continue;
+    const fullText = row.map((c) => String(c || "")).join(" ");
+    const m = fullText.match(/proceeding\s*(?:no|number)?\s*[:=#]\s*([A-Za-z0-9\/\-_]+)/i);
+    if (m) {
+      topProceedingNo = m[1].trim();
+      break;
+    }
+  }
+
+  const rawHeaders = grid[headerRowIndex] || [];
+  const headers = rawHeaders.map((h) => (h !== null && h !== undefined ? String(h).trim() : ""));
+
+  // Convert row arrays below header row into objects
+  const rawRows = [];
+  for (let r = headerRowIndex + 1; r < grid.length; r++) {
+    const rowArr = grid[r];
+    if (!Array.isArray(rowArr)) continue;
+    const rowObj = {};
+    let hasAnyData = false;
+    for (let c = 0; c < headers.length; c++) {
+      const colName = headers[c];
+      if (colName) {
+        rowObj[colName] = rowArr[c] !== undefined ? rowArr[c] : null;
+        if (rowObj[colName] !== null && String(rowObj[colName]).trim() !== "") {
+          hasAnyData = true;
+        }
+      }
+    }
+    if (hasAnyData) {
+      rawRows.push(rowObj);
+    }
+  }
+
+  if (rawRows.length === 0) {
+    throw new AppError("No data rows found in Excel sheet", 400);
+  }
 
   // Helper to normalize header string for fuzzy matching
   const cleanHeader = (str) =>
@@ -54,8 +116,14 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
 
   // Tranche release column patterns
   const balanceFundPatterns = [
+    "total amount after deductions in rs",
+    "total amount after deductions",
+    "total amount after deduction",
+    "amount after deductions",
     "balance fund subsidy amount now to be released",
     "balance fund subsidy amount in rs",
+    "balance fund district recommended subsidy amount in rs",
+    "balance fund district recommended subsidy amount",
     "balance fund subsidy amount",
     "balance fund now to be released",
     "balance fund amount",
@@ -274,6 +342,8 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
       firstProceedingNo = procNo;
     }
 
+    const effectiveProceedingNo = procNo || topProceedingNo;
+
     const utrNo = utrNoCol && r[utrNoCol] && r[utrNoCol] !== "-" ? String(r[utrNoCol]).trim() : null;
     const rawUtrDate = utrDateCol ? r[utrDateCol] : null;
     const parsedUtrDate = parseExcelDate(rawUtrDate);
@@ -296,7 +366,7 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
       goi_share_amount: Math.round(goiShare * 100) / 100,
       state_share_amount: Math.round(stateShare * 100) / 100,
       addl_state_share_amount: Math.round(addlStateShare * 100) / 100,
-      proceeding_no: procNo,
+      proceeding_no: effectiveProceedingNo,
       utr_no: utrNo,
       utr_date: parsedUtrDate,
     };
@@ -306,7 +376,7 @@ export function parseProceedingExcel(buffer, originalFilename = "proceeding.xls"
     file_name: originalFilename,
     detected_fund_percentage: detectedPercentage,
     released_column_name: releasedCol || "Now to be Released",
-    proceeding_no: firstProceedingNo,
+    proceeding_no: firstProceedingNo || topProceedingNo,
     total_rows_count: parsedRows.length,
     rows: parsedRows,
   };
